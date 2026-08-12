@@ -2,362 +2,187 @@ import { PrismaClient, LocationArea, Prisma } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+const slug = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+
 const mapsUrl = (name: string) =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     `${name} Dubai`,
   )}`
 
-type SeedRestaurant = Omit<
-  Prisma.RestaurantCreateInput,
-  'googleMapsUrl'
-> & { googleMapsUrl?: string | null }
-
-const RESTAURANTS: SeedRestaurant[] = [
-  // ---- Lebanese (3) ----
+const RESTAURANTS: Prisma.RestaurantCreateInput[] = [
   {
-    name: 'Allo Beirut',
+    name: 'Operation Falafel',
     cuisineType: 'Lebanese',
-    area: LocationArea.JLT,
-    priceMin: 35,
-    priceMax: 70,
-    phone: null,
-    googleMapsUrl: mapsUrl('Allo Beirut JLT'),
-    tags: ['halal', 'late-night', 'comfort-food', 'quick'],
-    ratingScore: 4.6,
-    averageCalories: 720,
-  },
-  {
-    name: 'Em Sherif Café',
-    cuisineType: 'Lebanese',
-    area: LocationArea.DIFC,
-    priceMin: 90,
-    priceMax: 180,
-    phone: null,
-    googleMapsUrl: mapsUrl('Em Sherif Cafe DIFC'),
-    tags: ['halal', 'date-night', 'dine-in'],
-    ratingScore: 4.7,
-    averageCalories: 850,
-  },
-  {
-    name: 'Al Nafoorah',
-    cuisineType: 'Lebanese',
-    area: LocationArea.DOWNTOWN,
-    priceMin: 110,
-    priceMax: 220,
-    phone: null,
-    googleMapsUrl: null,
-    tags: ['halal', 'date-night', 'dine-in', 'vegetarian-friendly'],
-    ratingScore: 4.5,
-    averageCalories: 780,
-  },
-
-  // ---- Japanese (3) ----
-  {
-    name: 'Zuma',
-    cuisineType: 'Japanese',
-    area: LocationArea.DIFC,
-    priceMin: 150,
-    priceMax: 320,
-    phone: null,
-    googleMapsUrl: mapsUrl('Zuma DIFC'),
-    tags: ['date-night', 'dine-in', 'high-protein'],
-    ratingScore: 4.8,
-    averageCalories: 640,
-  },
-  {
-    name: 'Reif Japanese Kushiyaki',
-    cuisineType: 'Japanese',
-    area: LocationArea.MARINA,
-    priceMin: 45,
-    priceMax: 110,
-    phone: null,
-    googleMapsUrl: mapsUrl('Reif Japanese Kushiyaki'),
-    tags: ['high-protein', 'quick', 'dine-in'],
-    ratingScore: 4.7,
-    averageCalories: 560,
-  },
-  {
-    name: 'Tomo',
-    cuisineType: 'Japanese',
-    area: LocationArea.BUSINESS_BAY,
-    priceMin: 90,
-    priceMax: 200,
-    phone: null,
-    googleMapsUrl: null,
-    tags: ['date-night', 'dine-in', 'high-protein'],
-    ratingScore: 4.5,
-    averageCalories: 600,
-  },
-
-  // ---- Indian (3) ----
-  {
-    name: 'Rang Mahal by Atul Kochhar',
-    cuisineType: 'Indian',
-    area: LocationArea.DOWNTOWN,
-    priceMin: 100,
-    priceMax: 210,
-    phone: null,
-    googleMapsUrl: mapsUrl('Rang Mahal Downtown Dubai'),
-    tags: ['halal', 'date-night', 'vegetarian-friendly', 'dine-in'],
-    ratingScore: 4.6,
-    averageCalories: 820,
-  },
-  {
-    name: 'Tresind',
-    cuisineType: 'Indian',
-    area: LocationArea.BUSINESS_BAY,
-    priceMin: 120,
-    priceMax: 260,
-    phone: null,
-    googleMapsUrl: null,
-    tags: ['vegetarian-friendly', 'date-night', 'dine-in'],
-    ratingScore: 4.8,
-    averageCalories: 760,
-  },
-  {
-    name: 'Mint Leaf of London',
-    cuisineType: 'Indian',
-    area: LocationArea.DIFC,
-    priceMin: 95,
-    priceMax: 190,
-    phone: null,
-    googleMapsUrl: mapsUrl('Mint Leaf of London DIFC'),
-    tags: ['halal', 'vegetarian-friendly', 'dine-in'],
-    ratingScore: 4.5,
-    averageCalories: 800,
-  },
-
-  // ---- American (2) ----
-  {
-    name: 'Pickl',
-    cuisineType: 'American',
-    area: LocationArea.JLT,
-    priceMin: 35,
-    priceMax: 65,
-    phone: null,
-    googleMapsUrl: mapsUrl('Pickl JLT'),
-    tags: ['comfort-food', 'quick', 'late-night', 'high-protein'],
-    ratingScore: 4.5,
-    averageCalories: 900,
-  },
-  {
-    name: 'SALT',
-    cuisineType: 'American',
-    area: LocationArea.MARINA,
-    priceMin: 40,
-    priceMax: 80,
-    phone: null,
-    googleMapsUrl: null,
-    tags: ['comfort-food', 'quick', 'late-night'],
-    ratingScore: 4.3,
-    averageCalories: 880,
-  },
-
-  // ---- Italian (2) ----
-  {
-    name: "Roberto's",
-    cuisineType: 'Italian',
-    area: LocationArea.DIFC,
-    priceMin: 120,
-    priceMax: 250,
-    phone: null,
-    googleMapsUrl: mapsUrl("Roberto's DIFC"),
-    tags: ['date-night', 'dine-in', 'vegetarian-friendly'],
-    ratingScore: 4.6,
-    averageCalories: 780,
-  },
-  {
-    name: 'BiCE',
-    cuisineType: 'Italian',
-    area: LocationArea.MARINA,
-    priceMin: 90,
-    priceMax: 190,
-    phone: null,
-    googleMapsUrl: mapsUrl('BiCE Marina Dubai'),
-    tags: ['date-night', 'dine-in', 'comfort-food'],
-    ratingScore: 4.4,
-    averageCalories: 810,
-  },
-
-  // ---- Mexican (1) ----
-  {
-    name: 'Maiz Tacos',
-    cuisineType: 'Mexican',
     area: LocationArea.JLT,
     priceMin: 30,
     priceMax: 55,
-    phone: null,
-    googleMapsUrl: mapsUrl('Maiz Tacos JLT'),
-    tags: ['quick', 'comfort-food', 'vegetarian-friendly', 'delivery-only'],
-    ratingScore: 4.4,
+    phone: '+971 4 431 7778',
+    googleMapsUrl: mapsUrl('Operation Falafel JLT'),
+    talabatUrl: `https://www.talabat.com/uae/${slug('Operation Falafel')}`,
+    deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Operation Falafel')}`,
+    isActive: true,
+    isFeatured: true,
+    tags: ['halal', 'quick', 'vegetarian-friendly', 'cheap'],
+    ratingScore: 8.6,
     averageCalories: 650,
   },
-
-  // ---- Emirati (2) ----
   {
-    name: 'Milas',
-    cuisineType: 'Emirati',
-    area: LocationArea.DOWNTOWN,
-    priceMin: 55,
-    priceMax: 120,
-    phone: null,
-    googleMapsUrl: mapsUrl('Milas Dubai Mall'),
-    tags: ['halal', 'comfort-food', 'dine-in', 'vegetarian-friendly'],
-    ratingScore: 4.3,
-    averageCalories: 740,
-  },
-  {
-    name: 'Al Fanar Restaurant & Cafe',
-    cuisineType: 'Emirati',
-    area: LocationArea.BUSINESS_BAY,
-    priceMin: 50,
-    priceMax: 110,
-    phone: null,
-    googleMapsUrl: null,
-    tags: ['halal', 'comfort-food', 'dine-in'],
-    ratingScore: 4.4,
-    averageCalories: 760,
-  },
-
-  // ---- Chinese (2) ----
-  {
-    name: 'Hutong',
-    cuisineType: 'Chinese',
-    area: LocationArea.DIFC,
-    priceMin: 110,
-    priceMax: 230,
-    phone: null,
-    googleMapsUrl: mapsUrl('Hutong DIFC'),
-    tags: ['date-night', 'dine-in', 'high-protein'],
-    ratingScore: 4.6,
-    averageCalories: 690,
-  },
-  {
-    name: 'Din Tai Fung',
-    cuisineType: 'Chinese',
-    area: LocationArea.DOWNTOWN,
+    name: 'Salt',
+    cuisineType: 'American Burgers',
+    area: LocationArea.MARINA,
     priceMin: 45,
-    priceMax: 95,
-    phone: null,
-    googleMapsUrl: mapsUrl('Din Tai Fung Dubai Mall'),
-    tags: ['quick', 'comfort-food', 'dine-in'],
-    ratingScore: 4.5,
+    priceMax: 70,
+    phone: '+971 50 916 6338',
+    googleMapsUrl: mapsUrl('Salt Dubai Marina'),
+    talabatUrl: `https://www.talabat.com/uae/${slug('Salt Burgers')}`,
+    deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Salt Burgers')}`,
+    isActive: true,
+    isFeatured: true,
+    tags: ['halal', 'comfort', 'high-protein', 'date-night'],
+    ratingScore: 8.9,
+    averageCalories: 900,
+  },
+  {
+    name: 'Comptoir 102',
+    cuisineType: 'Healthy / Organic',
+    area: LocationArea.OTHER,
+    priceMin: 60,
+    priceMax: 90,
+    phone: '+971 4 385 4555',
+    googleMapsUrl: mapsUrl('Comptoir 102 Jumeirah'),
+    talabatUrl: `https://www.talabat.com/uae/${slug('Comptoir 102')}`,
+    deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Comptoir 102')}`,
+    isActive: true,
+    tags: ['healthy', 'vegetarian-friendly', 'date-night'],
+    ratingScore: 8.4,
+    averageCalories: 450,
+  },
+  {
+    name: 'Ravi Restaurant',
+    cuisineType: 'Pakistani',
+    area: LocationArea.OTHER,
+    priceMin: 20,
+    priceMax: 40,
+    phone: '+971 4 331 5353',
+    googleMapsUrl: mapsUrl('Ravi Restaurant Satwa'),
+    talabatUrl: `https://www.talabat.com/uae/${slug('Ravi Restaurant')}`,
+    deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Ravi Restaurant')}`,
+    isActive: true,
+    tags: ['halal', 'cheap', 'comfort', 'late-night', 'high-protein'],
+    ratingScore: 8.8,
+    averageCalories: 800,
+  },
+  {
+    name: 'Arabian Tea House',
+    cuisineType: 'Emirati',
+    area: LocationArea.OTHER,
+    priceMin: 35,
+    priceMax: 60,
+    phone: '+971 4 353 5071',
+    googleMapsUrl: mapsUrl('Arabian Tea House Al Fahidi'),
+    talabatUrl: `https://www.talabat.com/uae/${slug('Arabian Tea House')}`,
+    isActive: true,
+    tags: ['halal', 'comfort', 'date-night', 'vegetarian-friendly'],
+    ratingScore: 8.3,
     averageCalories: 700,
   },
-
-  // ---- Thai (2) ----
   {
-    name: 'Pai Thai',
-    cuisineType: 'Thai',
-    area: LocationArea.MARINA,
-    priceMin: 100,
-    priceMax: 210,
-    phone: null,
-    googleMapsUrl: null,
-    tags: ['date-night', 'dine-in'],
-    ratingScore: 4.6,
-    averageCalories: 620,
+    name: 'Shawarma Station',
+    cuisineType: 'Lebanese Fast Food',
+    area: LocationArea.OTHER,
+    priceMin: 15,
+    priceMax: 30,
+    phone: '+971 4 396 8484',
+    googleMapsUrl: mapsUrl('Shawarma Station Dubai'),
+    talabatUrl: `https://www.talabat.com/uae/${slug('Shawarma Station')}`,
+    deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Shawarma Station')}`,
+    isActive: true,
+    tags: ['halal', 'quick', 'cheap', 'late-night'],
+    ratingScore: 7.9,
+    averageCalories: 600,
   },
   {
-    name: 'Little Bangkok',
-    cuisineType: 'Thai',
-    area: LocationArea.JLT,
-    priceMin: 35,
-    priceMax: 70,
-    phone: null,
-    googleMapsUrl: mapsUrl('Little Bangkok JLT'),
-    tags: ['quick', 'comfort-food', 'halal', 'vegetarian-friendly'],
-    ratingScore: 4.3,
-    averageCalories: 680,
-  },
-
-  // ---- Mediterranean (2) ----
-  {
-    name: 'Gaia',
-    cuisineType: 'Mediterranean',
-    area: LocationArea.DIFC,
-    priceMin: 130,
-    priceMax: 270,
-    phone: null,
-    googleMapsUrl: mapsUrl('Gaia DIFC'),
-    tags: ['date-night', 'dine-in', 'vegetarian-friendly'],
-    ratingScore: 4.7,
-    averageCalories: 640,
-  },
-  {
-    name: 'Nammos Dubai',
-    cuisineType: 'Mediterranean',
-    area: LocationArea.MARINA,
-    priceMin: 150,
-    priceMax: 320,
-    phone: null,
-    googleMapsUrl: null,
-    tags: ['date-night', 'dine-in'],
-    ratingScore: 4.4,
-    averageCalories: 660,
-  },
-
-  // ---- Healthy / bowls (3) ----
-  {
-    name: 'Kcal',
-    cuisineType: 'Healthy',
-    area: LocationArea.JLT,
-    priceMin: 35,
-    priceMax: 65,
-    phone: null,
-    googleMapsUrl: mapsUrl('Kcal JLT'),
-    tags: ['healthy', 'high-protein', 'quick', 'delivery-only'],
-    ratingScore: 4.2,
-    averageCalories: 480,
-  },
-  {
-    name: 'The Sum of Us',
-    cuisineType: 'Healthy',
-    area: LocationArea.BUSINESS_BAY,
-    priceMin: 45,
-    priceMax: 90,
-    phone: null,
-    googleMapsUrl: mapsUrl('The Sum of Us Business Bay'),
-    tags: ['healthy', 'vegetarian-friendly', 'dine-in'],
-    ratingScore: 4.6,
-    averageCalories: 520,
-  },
-  {
-    name: 'Wild & The Moon',
-    cuisineType: 'Healthy',
-    area: LocationArea.DIFC,
-    priceMin: 40,
+    name: 'Tom & Serg',
+    cuisineType: 'Australian Café / Brunch',
+    area: LocationArea.OTHER,
+    priceMin: 55,
     priceMax: 85,
-    phone: null,
-    googleMapsUrl: mapsUrl('Wild and The Moon DIFC'),
-    tags: ['healthy', 'vegetarian-friendly', 'quick'],
-    ratingScore: 4.3,
-    averageCalories: 450,
+    phone: '+971 56 474 6812',
+    googleMapsUrl: mapsUrl('Tom and Serg Al Quoz'),
+    talabatUrl: `https://www.talabat.com/uae/${slug('Tom and Serg')}`,
+    deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Tom and Serg')}`,
+    isActive: true,
+    tags: ['healthy', 'date-night', 'vegetarian-friendly', 'comfort'],
+    ratingScore: 8.5,
+    averageCalories: 750,
+  },
+  {
+    name: 'Pitfire Pizza',
+    cuisineType: 'American',
+    area: LocationArea.JLT,
+    priceMin: 50,
+    priceMax: 75,
+    phone: '+971 4 421 5216',
+    googleMapsUrl: mapsUrl('Pitfire Pizza JLT'),
+    talabatUrl: `https://www.talabat.com/uae/${slug('Pitfire Pizza')}`,
+    deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Pitfire Pizza')}`,
+    isActive: true,
+    tags: ['halal', 'comfort', 'quick', 'vegetarian-friendly'],
+    ratingScore: 8.2,
+    averageCalories: 1000,
+  },
+  {
+    name: 'Sushi Counter',
+    cuisineType: 'Japanese',
+    area: LocationArea.DIFC,
+    priceMin: 80,
+    priceMax: 130,
+    phone: '+971 4 355 1152',
+    googleMapsUrl: mapsUrl('Sushi Counter DIFC'),
+    talabatUrl: `https://www.talabat.com/uae/${slug('Sushi Counter')}`,
+    deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Sushi Counter')}`,
+    isActive: true,
+    tags: ['healthy', 'high-protein', 'date-night', 'quick'],
+    ratingScore: 8.7,
+    averageCalories: 500,
+  },
+  {
+    name: 'Zaroob',
+    cuisineType: 'Levantine Street Food',
+    area: LocationArea.OTHER,
+    priceMin: 25,
+    priceMax: 50,
+    phone: '+971 4 327 6060',
+    googleMapsUrl: mapsUrl('Zaroob Sheikh Zayed Road'),
+    talabatUrl: `https://www.talabat.com/uae/${slug('Zaroob')}`,
+    deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Zaroob')}`,
+    isActive: true,
+    tags: ['halal', 'cheap', 'late-night', 'quick', 'vegetarian-friendly'],
+    ratingScore: 8.6,
+    averageCalories: 650,
   },
 ]
 
 async function main() {
   console.log('🌱 Seeding Jou3an database...')
 
-  // Clean slate (respect FK order)
+  // Clean slate (respect FK order: DailyPick references Restaurant).
   await prisma.dailyPick.deleteMany()
   await prisma.decisionSession.deleteMany()
   await prisma.restaurant.deleteMany()
 
   const created = []
-  for (const r of RESTAURANTS) {
-    const restaurant = await prisma.restaurant.create({ data: r })
-    created.push(restaurant)
+  for (const data of RESTAURANTS) {
+    created.push(await prisma.restaurant.create({ data }))
   }
   console.log(`✅ Seeded ${created.length} restaurants`)
 
-  // Pick 3 high-rated, diverse spots for today's DailyPick
-  const [pick1, pick2, pick3] = [
-    created.find((c) => c.name === 'Reif Japanese Kushiyaki')!,
-    created.find((c) => c.name === 'Allo Beirut')!,
-    created.find((c) => c.name === 'Pickl')!,
-  ]
-
+  // Today's Daily Top 3 — the first three restaurants.
   const today = new Date()
   today.setUTCHours(0, 0, 0, 0)
 
@@ -365,21 +190,23 @@ async function main() {
     where: { date: today },
     update: {
       themeLabel: 'What Dubai Is Eating Right Now',
-      result1Id: pick1.id,
-      result2Id: pick2.id,
-      result3Id: pick3.id,
+      result1Id: created[0].id,
+      result2Id: created[1].id,
+      result3Id: created[2].id,
       isLive: true,
     },
     create: {
       date: today,
       themeLabel: 'What Dubai Is Eating Right Now',
-      result1Id: pick1.id,
-      result2Id: pick2.id,
-      result3Id: pick3.id,
+      result1Id: created[0].id,
+      result2Id: created[1].id,
+      result3Id: created[2].id,
       isLive: true,
     },
   })
-  console.log('✅ Seeded today\'s DailyPick')
+  console.log(
+    `✅ Seeded today's DailyPick: ${created[0].name}, ${created[1].name}, ${created[2].name}`,
+  )
 }
 
 main()

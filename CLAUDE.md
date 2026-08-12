@@ -6,7 +6,7 @@ Jou3an (جوعان) is a food decision engine for Dubai. Not a restaurant listin
 ## Monorepo Structure
 ```
 /jou3an
-├── client/          # React + Vite + TypeScript + Tailwind — web app (PWA)
+├── client/          # React + Vite + TypeScript + Tailwind — marketing landing page (PWA)
 ├── server/          # Node.js + Express + TypeScript + Prisma — backend API
 ├── mobile/          # React Native + Expo — iOS/Android app (primary focus)
 └── CLAUDE.md        # This file
@@ -14,7 +14,7 @@ Jou3an (جوعان) is a food decision engine for Dubai. Not a restaurant listin
 Note: `client/` and `server/` are npm workspaces (see root `package.json`). `mobile/` is a standalone Expo project (NOT a workspace) with its own `node_modules` and `.npmrc` (`legacy-peer-deps=true`) to avoid React Native hoisting issues.
 
 ## Tech Stack
-Frontend (client/): React 19, Vite, TypeScript, Tailwind CSS v3, React Router, React Query, Axios
+Frontend (client/): React 19, Vite, TypeScript, Tailwind CSS v3, React Router (single "/" route). NOTE: now a marketing landing page only — React Query, Axios, AuthContext and all app pages/API calls were removed.
 Backend (server/): Node.js, Express, TypeScript, Prisma ORM (v6), PostgreSQL (Supabase), Passport.js, JWT, bcryptjs, Zod
 Mobile (mobile/): Expo SDK 57, React Native 0.86, Expo Router, NativeWind v4, Reanimated 4 (+ react-native-worklets), React Query, Axios, Expo SecureStore
 Database: Supabase (PostgreSQL) — hosted on EU (Frankfurt) region
@@ -86,12 +86,13 @@ ProcessingState.tsx — animated loading dots with cycling text
 DailyCard.tsx — daily pick card (rank, name, cuisine, area, price)
 ResultCard.tsx — decision result card (rank, name, meta, reasoning, animated score bars, action row)
 
-Mobile shared: `mobile/lib/api.ts` (axios + SecureStore JWT interceptor + typed endpoints + display helpers), `mobile/contexts/AuthContext.tsx` (JWT in SecureStore, `/api/auth/me` validation on mount, login/signup/logout).
+Mobile shared: `mobile/lib/api.ts` (axios + SecureStore JWT request interceptor + a 401 response interceptor that clears the token and redirects to login — skips `/api/auth/*` — + typed endpoints + display helpers). Named Decide-flow wrappers over the existing endpoints: `getDecision(prompt, moodChips)` → `POST /api/decisions/query`; `getDailyPicks()` → `GET /api/daily/today`; `saveDecisionSelection(sessionId, selectedId, actionTaken)` → `PATCH /api/decisions/:sessionId/select`. `mobile/contexts/AuthContext.tsx` (JWT in SecureStore, `/api/auth/me` validation on mount, login/signup/logout).
 
 ## What's Built (Completed Phases)
 ✅ Phase 1: Monorepo scaffold — client + server + root concurrently setup
-✅ Phase 2: Web frontend UI — all pages, components, design system
-✅ Phase 3: Backend + Database — Prisma schema, all API routes, 25 restaurant seed data, Daily picks
+✅ Phase 2: Web frontend UI — original app pages, components, design system (SUPERSEDED — see Landing page below)
+✅ Landing page: client/ converted to a single-page marketing site (`client/src/pages/Landing.tsx`, only route is "/"). 6 sections — Hero (iOS/Android download buttons show "Coming soon" alert), How It Works (3 steps), The 3 Rule, Mood Chips showcase (text-only, non-interactive), Waitlist email capture, Footer. Simplified `Nav.tsx` (logo + "Join Waitlist" CTA that smooth-scrolls to #waitlist). Removed: all other pages, AuthContext, PrivateRoute, BottomNav, InstallPrompt, Layout, MoodChips/DailyCard/ResultCard/ProcessingState/GoogleIcon, lib/{api,hooks,haptics}, and the react-query + axios deps. Design system, fonts, CSS variables, Tailwind config and PWA (manifest + service worker) kept as-is. Waitlist email capture is frontend-only (no backend) — submit just shows a success message.
+✅ Phase 3: Backend + Database — Prisma schema, all API routes, restaurant seed data (currently 10 restaurants + 1 DailyPick), Daily picks
 ✅ Phase 4: SKIPPED (AI engine — placeholder tag/keyword matcher in place; real AI to be activated when Anthropic API key is ready)
 ✅ Phase 5: Auth — Passport.js, email/password, Google OAuth (code ready, creds pending), JWT, AuthContext
 ✅ Phase 6: Daily Top 3 + Admin panel
@@ -99,17 +100,18 @@ Mobile shared: `mobile/lib/api.ts` (axios + SecureStore JWT interceptor + typed 
 ✅ Phase M1: Expo scaffold — navigation, design tokens, base components, AuthContext
 ✅ Phase M2: Core mobile screens — Home, Decide, Results, History, Restaurant Detail, ResultCard, DailyCard
 ✅ Phase M3: Auth screens, Onboarding, Profile, Pro page
-✅ Phase M-Polish: Mobile UI polish — emoji-free chips/labels everywhere; tab bar (26px icons, red active dot, fontSize-9/700/1.8-tracking labels, solid #080808 bg, single 1px #1C1C1C top border, no shadows); Home red LinearGradient glow + shimmer skeleton cards (interpolateColor #141414↔#1A1A1A) shown on load AND error; Decide screen (wrap compact chips, taller full-width input, red-shadow CTA); redesigned Login (logo mark ج, grouped input card w/ divider, Google button via Linking to `${EXPO_PUBLIC_API_URL}/api/auth/google`, bottom sign-up link); unified pressed opacity 0.75 on all cards/buttons; `developmentClient: false` in app.json. New dep in use: `expo-linear-gradient`. Chip now takes a `compact` prop (no emoji prop).
+✅ Phase M-Polish: Mobile UI polish — emoji-free chips/labels everywhere; tab bar (26px icons, red active dot, fontSize-9/700/1.8-tracking labels, solid #080808 bg, single 1px #1C1C1C top border, no shadows); Home red LinearGradient glow + shimmer skeleton cards (interpolateColor #141414↔#1A1A1A) shown on load AND error; Decide screen (wrap compact chips, taller full-width input, red-shadow CTA); redesigned Login + matching Signup (logo mark ج, centered layout, grouped input card w/ 1px dividers — Signup adds a Confirm Password field w/ match validation, Google button via Linking to `${EXPO_PUBLIC_API_URL}/api/auth/google`, bottom cross-link); unified pressed opacity 0.75 on all cards/buttons; `developmentClient: false` in app.json. New dep in use: `expo-linear-gradient`. Chip now takes a `compact` prop (no emoji prop).
+✅ Phase M4: Mobile API wiring COMPLETE — all wiring lives in `mobile/lib/api.ts` (no separate services/ file). Home Daily Top 3 → `getDailyPicks()` (shimmer skeletons on load, static fallback picks on failure — never crashes); Decide → Results → `getDecision()`; `saveDecisionSelection()` is now called from `results.tsx` after an action is taken (Directions/Reserve/Order fire it in the background, fire-and-forget); 401 responses auto-clear the token + redirect to login. Backend endpoints were reused as-is — no new mock endpoints. The existing endpoints are: `POST /api/decisions/query`, `GET /api/daily/today`, `PATCH /api/decisions/:id/select` (the mobile wrappers map onto these). Remaining polish (not blocking): `/api/users/me/history` endpoint (server), error/retry polish, mobile Profile/Pro live data.
+✅ Database seeded: 10 Dubai restaurants + 1 DailyPick for today (theme "What Dubai Is Eating Right Now", first 3 restaurants) via `server/prisma/seed.ts` (`cd server && npm run seed`). All restaurants `isActive: true`, ratings 7.9–8.9.
 
 ## What's Not Built Yet
-❌ Phase M4: API wiring + finishing touches (mobile) — screens fetch live data, but needs: `/api/users/me/history` endpoint (server), decision-select recording from mobile, error/retry polish, mobile Profile/Pro live data
 ❌ Phase 4: AI decision engine (needs ANTHROPIC_API_KEY in server/.env; replace decisionEngine.ts placeholder)
 ❌ Google OAuth credentials (needs Google Cloud Console setup — code path exists, degrades gracefully)
 ❌ Stripe payment integration (Pro subscription)
-❌ Railway deployment (backend)
-❌ Vercel deployment (web frontend)
+👉 NEXT PHASE: Railway deployment (backend) → Vercel deployment (web landing page)
+❌ Railway deployment (backend) — see "Railway Environment Variables" section below
+❌ Vercel deployment (web landing page)
 ❌ App Store / Play Store submission
-❌ Landing page (convert web app to marketing page once mobile is done)
 ❌ Push notifications
 ❌ Google Maps API integration
 
@@ -131,6 +133,18 @@ client/.env required keys:
 - VITE_API_URL (http://localhost:3001 for dev)
 - VITE_ADMIN_PASSWORD (client-side gate for the web /admin panel)
 
+## Railway Environment Variables (backend deployment)
+Set these in the Railway service for the `server/` deployment:
+- DATABASE_URL (Supabase transaction pooler, :6543, pgbouncer=true)
+- DIRECT_URL (Supabase session pooler, :5432, for migrations)
+- JWT_SECRET
+- ANTHROPIC_API_KEY
+- GOOGLE_CLIENT_ID
+- GOOGLE_CLIENT_SECRET
+- SESSION_SECRET
+- PORT=3001
+- CLIENT_URL (production Vercel URL of the landing page — added to the CORS allowlist; falls back to http://localhost:5173 if unset)
+
 ## Dev Commands
 From /jou3an root: `npm run dev` (starts client on :5173 + server on :3001 via concurrently)
 From /jou3an/mobile: `npx expo start` (then press i for iOS simulator)
@@ -150,8 +164,9 @@ View database: Supabase dashboard → Table Editor
 - Max 3 action buttons per result card (Directions, Reserve, Order)
 
 ## Next Session Starting Point
-Continue with Phase M4 — API wiring and finishing touches for the mobile app. First concrete step: add `GET /api/users/me/history` to the server (returns the user's DecisionSessions with the selected restaurant name) so the mobile History screen shows real data.
-Then: Railway deployment → Vercel deployment → Phase 4 AI activation.
+Phase M4 (mobile API wiring) is COMPLETE and the database is seeded (10 restaurants + 1 DailyPick). NEXT PHASE: deployment — Railway (backend) → Vercel (web landing page).
+First concrete step: deploy `server/` to Railway. Set all keys from the "Railway Environment Variables" section (incl. PORT=3001), run `npx prisma migrate deploy` + `npm run seed` against the Supabase DB, then point `mobile/.env` EXPO_PUBLIC_API_URL and `client/.env` VITE_API_URL at the Railway URL. Then deploy the client/ landing page to Vercel.
+Later: Phase 4 AI activation (swap decisionEngine.ts placeholder once ANTHROPIC_API_KEY is set); optional non-blocking polish — `GET /api/users/me/history` for the mobile History screen, mobile Profile/Pro live data.
 
 ---
 After every prompt that adds a feature or completes a phase, update this CLAUDE.md file:
