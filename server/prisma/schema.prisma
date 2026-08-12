@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum LocationArea {
+  JLT
+  DIFC
+  DOWNTOWN
+  BUSINESS_BAY
+  MARINA
+  OTHER
+}
+
+enum BudgetRange {
+  LOW
+  MID
+  HIGH
+}
+
+enum AccountTier {
+  FREE
+  PRO
+}
+
+enum DecisionAction {
+  DIRECTIONS
+  CALL
+  ORDER
+}
+
+model User {
+  id                String       @id @default(cuid())
+  email             String       @unique
+  passwordHash      String?
+  name              String?
+  googleId          String?      @unique
+  locationArea      LocationArea @default(OTHER)
+  cuisinePreferences String[]
+  budgetRange       BudgetRange  @default(MID)
+  dietary           String[]
+  accountTier       AccountTier  @default(FREE)
+  stripeCustomerId  String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  decisionSessions  DecisionSession[]
+}
+
+model Restaurant {
+  id              String       @id @default(cuid())
+  name            String
+  cuisineType     String
+  area            LocationArea
+  priceMin        Int
+  priceMax        Int
+  phone           String?
+  googleMapsUrl   String?
+  talabatUrl      String?
+  noonUrl         String?
+  deliverooUrl    String?
+  isActive        Boolean      @default(true)
+  isFeatured      Boolean      @default(false)
+  tags            String[]
+  ratingScore     Float        @default(0)
+  averageCalories Int?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  dailyPicksAsResult1 DailyPick[] @relation("DailyPickResult1")
+  dailyPicksAsResult2 DailyPick[] @relation("DailyPickResult2")
+  dailyPicksAsResult3 DailyPick[] @relation("DailyPickResult3")
+}
+
+model DecisionSession {
+  id               String          @id @default(cuid())
+  userId           String?
+  user             User?           @relation(fields: [userId], references: [id])
+  promptText       String
+  moodChipsUsed    String[]
+  resultIds        String[]
+  selectedResultId String?
+  actionTaken      DecisionAction?
+  createdAt        DateTime        @default(now())
+}
+
+model DailyPick {
+  id         String   @id @default(cuid())
+  date       DateTime @unique
+  themeLabel String
+  result1Id  String
+  result1    Restaurant @relation("DailyPickResult1", fields: [result1Id], references: [id])
+  result2Id  String
+  result2    Restaurant @relation("DailyPickResult2", fields: [result2Id], references: [id])
+  result3Id  String
+  result3    Restaurant @relation("DailyPickResult3", fields: [result3Id], references: [id])
+  isLive     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}

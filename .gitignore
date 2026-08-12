@@ -1,0 +1,44 @@
+# Environment variables (never commit these)
+.env
+.env.local
+.env.production
+.env.*.local
+server/.env
+client/.env
+mobile/.env
+
+# Dependencies
+node_modules/
+*/node_modules/
+**/node_modules/
+
+# Build outputs
+build/
+dist/
+client/dist/
+server/dist/
+mobile/.expo/
+mobile/dist/
+
+# Prisma
+server/prisma/*.db
+server/prisma/migrations/dev.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Expo
+mobile/.expo-shared/
+mobile/web-build/
+
+# Editor
+.vscode/
+.idea/

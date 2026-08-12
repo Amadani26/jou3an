@@ -1,0 +1,319 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Brand */
+  --red: #E8272A;
+  --gold: #FFB547;
+  --green: #2DCE89;
+
+  /* Backgrounds */
+  --bg: #080808;
+  --bg-1: #0F0F0F;
+  --bg-2: #141414;
+  --bg-3: #1A1A1A;
+  --bg-4: #222222;
+
+  /* Borders */
+  --border: #242424;
+  --border-soft: #1C1C1C;
+
+  /* Text */
+  --text-primary: #F2EDE8;
+  --text-secondary: #8A847E;
+  --text-muted: #504B47;
+
+  /* Radii */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+
+  /* Signature easing */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  position: relative;
+  min-height: 100vh;
+  background-color: #080808;
+  color: #F2EDE8;
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle noise texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.45;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Material Symbols defaults */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Thin custom scrollbar */
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #222222;
+  border-radius: 999px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #222222 transparent;
+}
+
+/* ------------------------------------------------------------------ */
+/* Animations                                                          */
+/* ------------------------------------------------------------------ */
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  opacity: 0;
+  animation: fadeUp 0.7s var(--ease) forwards;
+}
+
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.pulse-dot {
+  animation: pulseDot 2.4s var(--ease) infinite;
+}
+
+@keyframes bounceDot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: translateY(-9px);
+    opacity: 1;
+  }
+}
+
+.bounce-dot {
+  animation: bounceDot 1.2s var(--ease) infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    #141414 0%,
+    #1c1c1c 40%,
+    #222222 50%,
+    #1c1c1c 60%,
+    #141414 100%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* ------------------------------------------------------------------ */
+/* Reusable component primitives                                       */
+/* ------------------------------------------------------------------ */
+
+.card {
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 32px;
+}
+
+.field {
+  width: 100%;
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 16px;
+  padding: 14px 16px;
+  color: #f2ede8;
+  font-family: inherit;
+  /* 16px minimum prevents iOS Safari from auto-zooming on focus */
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
+}
+
+.field::placeholder {
+  color: #504b47;
+}
+
+.field:focus {
+  border-color: rgba(232, 39, 42, 0.55);
+  box-shadow: 0 0 0 3px rgba(232, 39, 42, 0.12);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: #e8272a;
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  border-radius: 16px;
+  padding: 13px 22px;
+  transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px -12px rgba(232, 39, 42, 0.7);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid #242424;
+  color: #8a847e;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-weight: 500;
+  transition: color 0.3s var(--ease), border-color 0.3s var(--ease),
+    transform 0.3s var(--ease);
+}
+
+.btn-ghost:hover {
+  color: #f2ede8;
+  border-color: #3a3a3a;
+  transform: translateY(-1px);
+}
+
+.btn-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  background: #fff;
+  color: #141414;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  border-radius: 16px;
+  padding: 13px 22px;
+  transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
+}
+
+.btn-google:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px -14px rgba(255, 255, 255, 0.4);
+}
+
+/* ------------------------------------------------------------------ */
+/* Touch / mobile                                                      */
+/* ------------------------------------------------------------------ */
+
+/* Kill the 300ms tap delay and the grey tap flash on all interactive elements */
+button,
+a,
+[role='button'],
+input,
+select,
+textarea,
+label {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+/* Press feedback for buttons/links */
+.btn-primary:active,
+.btn-google:active,
+.btn-ghost:active {
+  transform: scale(0.97);
+}
+
+/* Hide scrollbars but keep scrolling (used by the mood-chips row) */
+.hide-scrollbar {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe-area helpers */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Bottom-sheet slide-up animation (mobile modals) */
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.sheet-up {
+  animation: sheetUp 0.35s var(--ease);
+}
+
