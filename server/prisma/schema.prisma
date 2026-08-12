@@ -32,6 +32,7 @@ enum DecisionAction {
   DIRECTIONS
   CALL
   ORDER
+  SELECT
 }
 
 model User {
