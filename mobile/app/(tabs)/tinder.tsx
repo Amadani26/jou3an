@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -18,12 +18,15 @@ import * as Haptics from 'expo-haptics'
 import * as Location from 'expo-location'
 import { GestureDetector, Gesture } from 'react-native-gesture-handler'
 import Animated, {
+  Easing,
   Extrapolation,
   SlideInRight,
+  cancelAnimation,
   interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withSpring,
   withTiming,
 } from 'react-native-reanimated'
@@ -43,6 +46,177 @@ const { width: W, height: H } = Dimensions.get('window')
 const THRESHOLD = W * 0.28
 const SWIPE_OUT = W * 1.5
 const SPRING = { damping: 18, stiffness: 180 }
+
+/* ---------------- Card photo slideshow ---------------- */
+
+const CARD_W = W - 40
+const SLIDE_MS = 2500 // time each photo is held
+const FADE_MS = 400 // cross-fade duration
+const BAR_PAD = 12
+const BAR_GAP = 4
+const BAR_H = 2.5
+
+/**
+ * One cross-fading layer of the slideshow.
+ *
+ * The active slide sits on top and fades IN; the outgoing slide stays fully
+ * opaque underneath until the fade finishes, then snaps off while hidden. A
+ * symmetric fade would dip to the dark card background mid-transition.
+ */
+function Slide({ uri, active }: { uri: string; active: boolean }) {
+  const opacity = useSharedValue(active ? 1 : 0)
+
+  useEffect(() => {
+    opacity.value = active
+      ? withTiming(1, { duration: FADE_MS })
+      : withDelay(FADE_MS, withTiming(0, { duration: 0 }))
+  }, [active, opacity])
+
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }))
+
+  return (
+    <Animated.Image
+      source={{ uri }}
+      resizeMode="cover"
+      style={[StyleSheet.absoluteFill, { zIndex: active ? 2 : 1 }, style]}
+    />
+  )
+}
+
+type SegmentState = 'done' | 'active' | 'todo'
+
+/** One bar of the stories-style progress indicator. */
+function Segment({
+  width,
+  state,
+  paused,
+}: {
+  width: number
+  state: SegmentState
+  paused: boolean
+}) {
+  const p = useSharedValue(state === 'done' ? 1 : 0)
+
+  useEffect(() => {
+    if (state === 'done') {
+      cancelAnimation(p)
+      p.value = 1
+      return
+    }
+    if (state === 'todo') {
+      cancelAnimation(p)
+      p.value = 0
+      return
+    }
+    // Active: pausing freezes the fill where it is; resuming finishes the
+    // remaining time so the bar stays in step with the photo timer.
+    if (paused) {
+      cancelAnimation(p)
+      return
+    }
+    p.value = withTiming(1, {
+      duration: Math.max(0, SLIDE_MS * (1 - p.value)),
+      easing: Easing.linear,
+    })
+  }, [state, paused, p])
+
+  const fill = useAnimatedStyle(() => ({ width: p.value * width }))
+
+  return (
+    <View
+      style={{
+        width,
+        height: BAR_H,
+        borderRadius: BAR_H,
+        backgroundColor: 'rgba(255,255,255,0.22)',
+        overflow: 'hidden',
+      }}
+    >
+      <Animated.View
+        style={[
+          { height: '100%', borderRadius: BAR_H, backgroundColor: 'rgba(255,255,255,0.85)' },
+          fill,
+        ]}
+      />
+    </View>
+  )
+}
+
+/**
+ * Auto-advancing photo slideshow for the swipe card.
+ *
+ * Mount it with `key={restaurant.id}` — a new card remounts this, which resets
+ * to photo 1 and disposes the timer in one step. `paused` holds the timer while
+ * the card is being dragged, preserving the elapsed time so resuming doesn't
+ * restart the current photo.
+ */
+function CardSlideshow({ photos, paused }: { photos: string[]; paused: boolean }) {
+  const [index, setIndex] = useState(0)
+  // Time left on the current photo, carried across pause/resume.
+  const remainingRef = useRef(SLIDE_MS)
+  const startedRef = useRef(0)
+
+  useEffect(() => {
+    if (photos.length < 2) return
+
+    if (paused) {
+      // The previous effect's cleanup already cleared the timer; bank whatever
+      // time was left so the next resume picks up where it stopped.
+      remainingRef.current = Math.max(
+        0,
+        remainingRef.current - (Date.now() - startedRef.current),
+      )
+      return
+    }
+
+    startedRef.current = Date.now()
+    const id = setTimeout(() => {
+      remainingRef.current = SLIDE_MS
+      setIndex((i) => (i + 1) % photos.length)
+    }, remainingRef.current)
+
+    return () => clearTimeout(id)
+  }, [index, paused, photos.length])
+
+  if (photos.length === 0) return null
+
+  const segW =
+    (CARD_W - BAR_PAD * 2 - BAR_GAP * (photos.length - 1)) / photos.length
+
+  return (
+    // Own stacking context: the slides' zIndex must order them against each
+    // other WITHOUT lifting them above the card's scrim and info overlay.
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {photos.map((uri, i) => (
+        <Slide key={uri} uri={uri} active={i === index} />
+      ))}
+
+      {/* Segmented progress — only meaningful with more than one photo */}
+      {photos.length > 1 ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: 12,
+            left: BAR_PAD,
+            right: BAR_PAD,
+            zIndex: 3,
+            flexDirection: 'row',
+            gap: BAR_GAP,
+          }}
+        >
+          {photos.map((uri, i) => (
+            <Segment
+              key={uri}
+              width={segW}
+              state={i < index ? 'done' : i === index ? 'active' : 'todo'}
+              paused={paused}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  )
+}
 
 /** One thumbnail in the "Liked" tray. Its own component so it can hold press state. */
 function LikedThumb({
@@ -100,6 +274,8 @@ export default function TinderScreen() {
   // The restaurant shown in the detail sheet — the current card, or a tapped
   // "Liked" tray thumbnail.
   const [sheetRestaurant, setSheetRestaurant] = useState<Restaurant | null>(null)
+  // Holds the slideshow timer while the card is being dragged.
+  const [dragging, setDragging] = useState(false)
 
   const translateX = useSharedValue(0)
 
@@ -133,7 +309,7 @@ export default function TinderScreen() {
   }, [])
 
   const current = restaurants[index]
-  const currentPhoto = photoUrls(current)[0]
+  const currentPhotos = photoUrls(current)
   const done = !loading && (restaurants.length === 0 || index >= restaurants.length)
 
   // Advance to the next card (runs on the JS thread from the gesture callback).
@@ -163,6 +339,13 @@ export default function TinderScreen() {
 
   const pan = Gesture.Pan()
     .activeOffsetX([-15, 15])
+    .onStart(() => {
+      runOnJS(setDragging)(true)
+    })
+    // onFinalize covers both a completed drag and a cancelled one.
+    .onFinalize(() => {
+      runOnJS(setDragging)(false)
+    })
     .onUpdate((e) => {
       translateX.value = e.translationX
     })
@@ -314,13 +497,15 @@ export default function TinderScreen() {
                 cardStyle,
               ]}
             >
-              {/* Real Google Places photo when synced; branded gradient otherwise. */}
+              {/* Auto-playing slideshow of the real Places photos; branded
+                  gradient when the restaurant has none. Keyed by restaurant id
+                  so each new card restarts at photo 1 with a fresh timer. */}
               <LinearGradient colors={['#2A1114', '#141414']} style={StyleSheet.absoluteFill} />
-              {currentPhoto ? (
-                <Image
-                  source={{ uri: currentPhoto }}
-                  style={StyleSheet.absoluteFill}
-                  resizeMode="cover"
+              {currentPhotos.length > 0 ? (
+                <CardSlideshow
+                  key={current.id}
+                  photos={currentPhotos}
+                  paused={dragging}
                 />
               ) : (
                 <View
