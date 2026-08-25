@@ -233,6 +233,26 @@ export async function getNearbyRestaurants(
   return data
 }
 
+/** One hit from the "Pick an area" search. */
+export interface AreaSuggestion {
+  name: string
+  area: string
+  lat: number
+  lng: number
+}
+
+/**
+ * Dubai-restricted place search for the Decide flow's area picker.
+ * The Places key lives on the server — the app never calls Google directly.
+ */
+export async function searchAreas(q: string): Promise<AreaSuggestion[]> {
+  const { data } = await api.get<{ results: AreaSuggestion[] }>(
+    '/api/places/search-area',
+    { params: { q } },
+  )
+  return data.results ?? []
+}
+
 /** Send the right-swiped restaurant IDs, get back 3 recommendations + a sessionId. */
 export async function tinderSuggest(likedIds: string[]): Promise<DecisionResponse> {
   const { data } = await api.post<DecisionResponse>('/api/decisions/tinder-suggest', {

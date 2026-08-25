@@ -1,15 +1,16 @@
-import { useState } from 'react'
-import { View, Text, Pressable } from 'react-native'
+import { useEffect, useState } from 'react'
+import { View, Text, Pressable, TextInput, ActivityIndicator } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import * as Location from 'expo-location'
-import Animated, { SlideInLeft, SlideInRight } from 'react-native-reanimated'
+import Animated, { FadeIn, SlideInLeft, SlideInRight } from 'react-native-reanimated'
 import RedButton from '../../components/RedButton'
+import { searchAreas, type AreaSuggestion } from '../../lib/api'
 import { usePressed } from '../../lib/usePressed'
 
-type LocationChoice = 'Nearby' | 'Anywhere in Dubai'
+type LocationChoice = 'Nearby' | 'Anywhere in Dubai' | `Near ${string}`
 type Format = 'Delivery' | 'Dine In'
 type Vibe = 'Casual' | 'Fancy'
 
@@ -49,6 +50,15 @@ for (let i = 0; i < CUISINES.length; i += 2) {
 }
 
 const tap = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+
+/** Shared look for the area search's "nothing to show" messages. */
+const emptyStateStyle = {
+  fontFamily: 'DMSans_400Regular',
+  fontSize: 13,
+  color: '#504B47',
+  paddingTop: 18,
+  lineHeight: 19,
+} as const
 
 /* ---------------------------------------------------------------- */
 
@@ -219,6 +229,62 @@ function CuisineCard({
   )
 }
 
+/**
+ * One search hit in the area picker. Its own component so it can hold press
+ * state — hooks can't run inside the results `.map`.
+ */
+function AreaRow({
+  suggestion,
+  onPress,
+}: {
+  suggestion: AreaSuggestion
+  onPress: () => void
+}) {
+  const { pressed, pressHandlers } = usePressed()
+
+  return (
+    <Pressable
+      onPress={() => {
+        tap()
+        onPress()
+      }}
+      {...pressHandlers}
+      // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#1C1C1C',
+        opacity: pressed ? 0.75 : 1,
+      }}
+    >
+      <Ionicons name="location-outline" size={18} color="#504B47" />
+      <View style={{ flex: 1 }}>
+        <Text
+          numberOfLines={1}
+          style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: '#F2EDE8' }}
+        >
+          {suggestion.name}
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={{
+            fontFamily: 'DMSans_400Regular',
+            fontSize: 12,
+            color: '#8A847E',
+            marginTop: 2,
+          }}
+        >
+          {suggestion.area}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color="#3a3a3a" />
+    </Pressable>
+  )
+}
+
 function StepHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <View style={{ marginBottom: 24 }}>
@@ -258,8 +324,71 @@ export default function DecideScreen() {
   const [back, setBack] = useState(false)
 
   const [locationChoice, setLocationChoice] = useState<LocationChoice | null>(null)
-  // Captured when the user picks "Nearby"; forwarded to the decision query.
+  // Captured when the user picks "Nearby" or an area; forwarded to the query.
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
+
+  // "Pick an area" — inline search that replaces the three location cards.
+  const [areaMode, setAreaMode] = useState(false)
+  const [query, setQuery] = useState('')
+  const [suggestions, setSuggestions] = useState<AreaSuggestion[]>([])
+  const [searching, setSearching] = useState(false)
+  const [searchFailed, setSearchFailed] = useState(false)
+
+  // Debounced search. The `cancelled` flag drops responses from superseded
+  // keystrokes so a slow early request can't overwrite a newer result.
+  useEffect(() => {
+    const q = query.trim()
+    if (!areaMode || q.length < 2) {
+      setSuggestions([])
+      setSearching(false)
+      setSearchFailed(false)
+      return
+    }
+
+    let cancelled = false
+    setSearching(true)
+    setSearchFailed(false)
+
+    const id = setTimeout(async () => {
+      try {
+        const results = await searchAreas(q)
+        if (!cancelled) setSuggestions(results)
+      } catch {
+        if (!cancelled) {
+          setSuggestions([])
+          setSearchFailed(true)
+        }
+      } finally {
+        if (!cancelled) setSearching(false)
+      }
+    }, 350)
+
+    return () => {
+      cancelled = true
+      clearTimeout(id)
+    }
+  }, [query, areaMode])
+
+  const openAreaSearch = () => {
+    tap()
+    setAreaMode(true)
+  }
+
+  const closeAreaSearch = () => {
+    setAreaMode(false)
+    setQuery('')
+    setSuggestions([])
+    setSearchFailed(false)
+  }
+
+  // Picking an area behaves exactly like "Nearby" downstream: its coordinates
+  // feed the 5 → 10 → city ladder and the distance display.
+  const chooseArea = (s: AreaSuggestion) => {
+    setCoords({ lat: s.lat, lng: s.lng })
+    setLocationChoice(`Near ${s.name}`)
+    closeAreaSearch()
+    goNext()
+  }
   // Cuisine is MULTI-select: tapping toggles, "Continue →" advances.
   const [cuisines, setCuisines] = useState<string[]>([])
   // "Surprise me" is mutually exclusive with any picked cuisine.
@@ -272,6 +401,11 @@ export default function DecideScreen() {
   }
 
   const goBack = () => {
+    // The area search is a sub-view of step 1 — back closes it first.
+    if (areaMode) {
+      closeAreaSearch()
+      return
+    }
     if (step === 0) {
       // First step — leave the flow back to Home.
       router.navigate('/(tabs)')
@@ -402,23 +536,117 @@ export default function DecideScreen() {
       <Animated.View key={step} entering={entering.duration(260)} style={{ flex: 1 }}>
         {step === 0 && (
           <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 24 }}>
-            <StepHeading eyebrow="STEP 1 · LOCATION" title="Where to?" />
-            <View style={{ gap: 12 }}>
-              <BigCard
-                icon="location-outline"
-                title="Nearby"
-                subtitle="Uses your location · within 5km"
-                selected={locationChoice === 'Nearby'}
-                onPress={() => chooseLocation('Nearby')}
-              />
-              <BigCard
-                icon="map-outline"
-                title="Anywhere in Dubai"
-                subtitle="Search across the whole city"
-                selected={locationChoice === 'Anywhere in Dubai'}
-                onPress={() => chooseLocation('Anywhere in Dubai')}
-              />
-            </View>
+            <StepHeading
+              eyebrow="STEP 1 · LOCATION"
+              title={areaMode ? 'Which area?' : 'Where to?'}
+            />
+
+            {areaMode ? (
+              // Slides in the same direction as a forward step, so the inline
+              // search reads as part of the wizard rather than a modal.
+              <Animated.View entering={SlideInRight.duration(220)} style={{ flex: 1 }}>
+                <Pressable
+                  onPress={() => {
+                    tap()
+                    closeAreaSearch()
+                  }}
+                  hitSlop={10}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginBottom: 14,
+                  }}
+                >
+                  <Ionicons name="chevron-back" size={16} color="#8A847E" />
+                  <Text
+                    style={{
+                      fontFamily: 'DMSans_600SemiBold',
+                      fontSize: 13,
+                      color: '#8A847E',
+                    }}
+                  >
+                    Location options
+                  </Text>
+                </Pressable>
+
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    backgroundColor: '#141414',
+                    borderWidth: 1,
+                    borderColor: '#242424',
+                    borderRadius: 16,
+                    paddingHorizontal: 16,
+                  }}
+                >
+                  <Ionicons name="search-outline" size={18} color="#504B47" />
+                  <TextInput
+                    value={query}
+                    onChangeText={setQuery}
+                    autoFocus
+                    autoCorrect={false}
+                    returnKeyType="search"
+                    placeholder="JBR, Deira, Business Bay…"
+                    placeholderTextColor="#504B47"
+                    style={{
+                      flex: 1,
+                      paddingVertical: 16,
+                      fontFamily: 'DMSans_500Medium',
+                      fontSize: 16,
+                      color: '#F2EDE8',
+                    }}
+                  />
+                  {searching ? <ActivityIndicator size="small" color="#504B47" /> : null}
+                </View>
+
+                <View style={{ flex: 1, marginTop: 8 }}>
+                  {suggestions.length > 0 ? (
+                    <Animated.View entering={FadeIn.duration(180)}>
+                      {suggestions.map((s) => (
+                        <AreaRow
+                          key={`${s.name}-${s.lat}-${s.lng}`}
+                          suggestion={s}
+                          onPress={() => chooseArea(s)}
+                        />
+                      ))}
+                    </Animated.View>
+                  ) : searchFailed ? (
+                    <Text style={emptyStateStyle}>
+                      Couldn&apos;t search just now — check your connection and try again.
+                    </Text>
+                  ) : query.trim().length >= 2 && !searching ? (
+                    <Text style={emptyStateStyle}>No places found in Dubai.</Text>
+                  ) : null}
+                </View>
+              </Animated.View>
+            ) : (
+              <View style={{ gap: 12 }}>
+                <BigCard
+                  icon="location-outline"
+                  title="Nearby"
+                  subtitle="Uses your location · within 5km"
+                  selected={locationChoice === 'Nearby'}
+                  onPress={() => chooseLocation('Nearby')}
+                />
+                <BigCard
+                  icon="map-outline"
+                  title="Anywhere in Dubai"
+                  subtitle="Search across the whole city"
+                  selected={locationChoice === 'Anywhere in Dubai'}
+                  onPress={() => chooseLocation('Anywhere in Dubai')}
+                />
+                <BigCard
+                  icon="search-outline"
+                  title="Pick an area"
+                  subtitle="Search any spot in Dubai"
+                  selected={locationChoice?.startsWith('Near ') ?? false}
+                  onPress={openAreaSearch}
+                />
+              </View>
+            )}
           </View>
         )}
 
