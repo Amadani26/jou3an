@@ -8,6 +8,7 @@ import RedButton from '../../components/RedButton'
 import GhostButton from '../../components/GhostButton'
 import { useAuth } from '../../contexts/AuthContext'
 import { getDecisionHistory, prettyTag, type User, type BudgetRange } from '../../lib/api'
+import { usePressed } from '../../lib/usePressed'
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -141,21 +142,23 @@ function Row({
   last?: boolean
 }) {
   const labelColor = danger ? (muted ? '#7A2A2C' : '#E8272A') : '#F2EDE8'
+  const { pressed, pressHandlers } = usePressed()
+
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      style={({ pressed }) => [
-        {
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 16,
-          paddingVertical: 15,
-          borderBottomWidth: last ? 0 : 1,
-          borderBottomColor: '#1A1A1A',
-        },
-        pressed && onPress ? { opacity: 0.6 } : null,
-      ]}
+      {...pressHandlers}
+      // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 15,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: '#1A1A1A',
+        opacity: pressed && onPress ? 0.6 : 1,
+      }}
     >
       <Text
         style={{

@@ -6,6 +6,7 @@ import { useRouter, Link } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import RedButton from '../../components/RedButton'
 import { useAuth } from '../../contexts/AuthContext'
+import { usePressed } from '../../lib/usePressed'
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'
 
@@ -58,6 +59,7 @@ export default function SignupScreen() {
   const [error, setError] = useState<string | null>(null)
   const [showErrors, setShowErrors] = useState(false)
   const [loading, setLoading] = useState(false)
+  const googlePress = usePressed()
 
   // Per-field "empty on submit" flags — drive the red asterisk + tint.
   const emptyName = showErrors && !name.trim()
@@ -275,20 +277,20 @@ export default function SignupScreen() {
       {/* Google button */}
       <Pressable
         onPress={onGoogle}
-        style={({ pressed }) => [
-          {
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            backgroundColor: '#141414',
-            borderWidth: 1,
-            borderColor: '#242424',
-            borderRadius: 100,
-            paddingVertical: 14,
-          },
-          pressed && { opacity: 0.75 },
-        ]}
+        {...googlePress.pressHandlers}
+        // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          backgroundColor: '#141414',
+          borderWidth: 1,
+          borderColor: '#242424',
+          borderRadius: 100,
+          paddingVertical: 14,
+          opacity: googlePress.pressed ? 0.75 : 1,
+        }}
       >
         <Text
           style={{

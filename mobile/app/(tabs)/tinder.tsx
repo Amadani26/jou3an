@@ -36,11 +36,52 @@ import {
   type Restaurant,
 } from '../../lib/api'
 import { getPlaceholderImage } from '../../lib/placeholderImages'
+import { usePressed } from '../../lib/usePressed'
 
 const { width: W, height: H } = Dimensions.get('window')
 const THRESHOLD = W * 0.28
 const SWIPE_OUT = W * 1.5
 const SPRING = { damping: 18, stiffness: 180 }
+
+/** One thumbnail in the "Liked" tray. Its own component so it can hold press state. */
+function LikedThumb({
+  name,
+  imageIndex,
+  onPress,
+}: {
+  name: string
+  imageIndex: number
+  onPress: () => void
+}) {
+  const { pressed, pressHandlers } = usePressed()
+
+  return (
+    <Pressable
+      onPress={onPress}
+      {...pressHandlers}
+      // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+      style={{ width: 52, alignItems: 'center', opacity: pressed ? 0.7 : 1 }}
+    >
+      <Image
+        source={{ uri: getPlaceholderImage(imageIndex) }}
+        style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#141414' }}
+      />
+      <Text
+        numberOfLines={1}
+        style={{
+          fontFamily: 'DMSans_400Regular',
+          fontSize: 9,
+          color: '#666',
+          marginTop: 4,
+          textAlign: 'center',
+          maxWidth: 52,
+        }}
+      >
+        {name}
+      </Text>
+    </Pressable>
+  )
+}
 
 export default function TinderScreen() {
   const router = useRouter()
@@ -203,8 +244,8 @@ export default function TinderScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#080808', paddingTop: insets.top + 12 }}>
-      {/* Header */}
-      <View style={{ paddingHorizontal: 20, marginBottom: 6 }}>
+      {/* Header — fixed-height block the card can never overlap */}
+      <View style={{ height: 60, paddingHorizontal: 20, justifyContent: 'center' }}>
         <Text
           style={{
             fontFamily: 'DMSans_700Bold',
@@ -229,13 +270,15 @@ export default function TinderScreen() {
         </Text>
       </View>
 
-      {/* Card area */}
+      {/* Card area — flexes to fill the space between the header and the tray.
+          The fixed paddingTop is a barrier the (fixed-height) card can't cross. */}
       <View
         style={{
           flex: 1,
           alignItems: 'center',
           justifyContent: 'center',
           paddingHorizontal: 20,
+          paddingTop: 12,
         }}
       >
         {loading ? (
@@ -256,7 +299,7 @@ export default function TinderScreen() {
               style={[
                 {
                   width: W - 40,
-                  height: H * 0.6,
+                  height: H * 0.52,
                   borderRadius: 28,
                   overflow: 'hidden',
                   backgroundColor: '#141414',
@@ -407,36 +450,11 @@ export default function TinderScreen() {
           >
             {likedRestaurants.map((r) => (
               <Animated.View key={r.id} entering={SlideInRight.springify().damping(14)}>
-                <Pressable
+                <LikedThumb
+                  name={r.name}
+                  imageIndex={restaurants.indexOf(r)}
                   onPress={() => openSheetFor(r)}
-                  style={({ pressed }) => [
-                    { width: 52, alignItems: 'center' },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                >
-                  <Image
-                    source={{ uri: getPlaceholderImage(restaurants.indexOf(r)) }}
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 24,
-                      backgroundColor: '#141414',
-                    }}
-                  />
-                  <Text
-                    numberOfLines={1}
-                    style={{
-                      fontFamily: 'DMSans_400Regular',
-                      fontSize: 9,
-                      color: '#666',
-                      marginTop: 4,
-                      textAlign: 'center',
-                      maxWidth: 52,
-                    }}
-                  >
-                    {r.name}
-                  </Text>
-                </Pressable>
+                />
               </Animated.View>
             ))}
           </ScrollView>

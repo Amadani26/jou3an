@@ -1,5 +1,6 @@
 import { Pressable, Text } from 'react-native'
 import * as Haptics from 'expo-haptics'
+import { usePressed } from '../lib/usePressed'
 
 interface ChipProps {
   label: string
@@ -9,6 +10,8 @@ interface ChipProps {
 }
 
 export default function Chip({ label, active, compact, onPress }: ChipProps) {
+  const { pressed, pressHandlers } = usePressed()
+
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     onPress?.()
@@ -17,19 +20,19 @@ export default function Chip({ label, active, compact, onPress }: ChipProps) {
   return (
     <Pressable
       onPress={handlePress}
-      style={({ pressed }) => [
-        {
-          alignItems: 'center',
-          justifyContent: 'center',
-          paddingHorizontal: compact ? 12 : 14,
-          paddingVertical: compact ? 7 : 8,
-          borderRadius: 100,
-          borderWidth: 1,
-          backgroundColor: active ? 'rgba(232,39,42,0.06)' : '#141414',
-          borderColor: active ? 'rgba(232,39,42,0.45)' : '#242424',
-        },
-        pressed && { opacity: 0.75 },
-      ]}
+      {...pressHandlers}
+      // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+      style={{
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: compact ? 12 : 14,
+        paddingVertical: compact ? 7 : 8,
+        borderRadius: 100,
+        borderWidth: 1,
+        backgroundColor: active ? 'rgba(232,39,42,0.06)' : '#141414',
+        borderColor: active ? 'rgba(232,39,42,0.45)' : '#242424',
+        opacity: pressed ? 0.75 : 1,
+      }}
     >
       <Text
         style={{

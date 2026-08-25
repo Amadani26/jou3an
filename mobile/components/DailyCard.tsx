@@ -1,6 +1,7 @@
 import { Image, Pressable, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { getPlaceholderImage } from '../lib/placeholderImages'
+import { usePressed } from '../lib/usePressed'
 
 interface DailyCardProps {
   rank: number
@@ -21,17 +22,20 @@ export default function DailyCard({
   priceMax,
   onPress,
 }: DailyCardProps) {
+  const { pressed, pressHandlers } = usePressed()
+
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
+      {...pressHandlers}
+      style={[
         {
           backgroundColor: '#141414',
           borderWidth: 1,
           borderColor: '#242424',
           borderRadius: 24,
         },
-        pressed && { opacity: 0.75 },
+        { opacity: pressed ? 0.75 : 1 },
       ]}
     >
       {/* Image header with rank overlay */}

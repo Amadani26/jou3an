@@ -1,5 +1,6 @@
 import { Pressable, Text } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
+import { usePressed } from '../lib/usePressed'
 
 interface GhostButtonProps {
   label: string
@@ -8,10 +9,14 @@ interface GhostButtonProps {
 }
 
 export default function GhostButton({ label, onPress, style }: GhostButtonProps) {
+  const { pressed, pressHandlers } = usePressed()
+
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
+      {...pressHandlers}
+      // Plain array, NOT ({ pressed }) => [...] — see lib/usePressed.
+      style={[
         {
           borderWidth: 1,
           borderColor: '#242424',
@@ -22,7 +27,7 @@ export default function GhostButton({ label, onPress, style }: GhostButtonProps)
           alignItems: 'center',
           justifyContent: 'center',
         },
-        pressed && { opacity: 0.75 },
+        { opacity: pressed ? 0.75 : 1 },
         style,
       ]}
     >

@@ -27,6 +27,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import { prettyTag, visibleTags } from '../lib/api'
+import { usePressed } from '../lib/usePressed'
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window')
 const SPRING = { damping: 20, stiffness: 200, mass: 0.6 }
@@ -60,19 +61,21 @@ function ActionButton({
   label: string
   onPress?: () => void
 }) {
+  const { pressed, pressHandlers } = usePressed()
+
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        {
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 5,
-          minHeight: 44,
-          paddingHorizontal: 4,
-        },
-        pressed && { opacity: 0.6 },
-      ]}
+      {...pressHandlers}
+      // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+      style={{
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 5,
+        minHeight: 44,
+        paddingHorizontal: 4,
+        opacity: pressed ? 0.6 : 1,
+      }}
     >
       <Ionicons name={icon} size={22} color="#999999" />
       <Text

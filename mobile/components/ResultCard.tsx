@@ -1,7 +1,9 @@
 import { Image, Pressable, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
+import * as Haptics from 'expo-haptics'
 import { getPlaceholderImage } from '../lib/placeholderImages'
+import { usePressed } from '../lib/usePressed'
 
 export interface ResultCardProps {
   rank: number
@@ -11,6 +13,8 @@ export interface ResultCardProps {
   area: string
   // Tap the card body to open the inline confirmation.
   onSelect?: () => void
+  // Long-press to open the read-only detail sheet.
+  onLongPress?: () => void
   // Quick actions on the compact card (open external links directly).
   onDirections?: () => void
   onCall?: () => void
@@ -33,19 +37,21 @@ function ActionCol({
   label: string
   onPress?: () => void
 }) {
+  const { pressed, pressHandlers } = usePressed()
+
   return (
     <View style={{ flex: 1 }}>
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [
-          {
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 3,
-            minHeight: 34,
-          },
-          pressed && { opacity: 0.6 },
-        ]}
+        {...pressHandlers}
+        // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+        style={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 3,
+          minHeight: 34,
+          opacity: pressed ? 0.6 : 1,
+        }}
       >
         <Ionicons name={icon} size={18} color="#666" />
         <Text
@@ -71,10 +77,17 @@ export default function ResultCard({
   priceRange,
   area,
   onSelect,
+  onLongPress,
   onDirections,
   onCall,
   onOrder,
 }: ResultCardProps) {
+  const handleLongPress = onLongPress
+    ? () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+        onLongPress()
+      }
+    : undefined
   return (
     <View
       style={{
@@ -89,8 +102,8 @@ export default function ResultCard({
         elevation: 4,
       }}
     >
-      {/* Body — tap to open the inline confirmation */}
-      <Pressable onPress={onSelect}>
+      {/* Body — tap to select (confirmation), long-press for detail sheet */}
+      <Pressable onPress={onSelect} onLongPress={handleLongPress} delayLongPress={400}>
         {/* Image header with rank overlay */}
         <View
           style={{

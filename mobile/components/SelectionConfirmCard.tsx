@@ -11,7 +11,6 @@ import {
   Dimensions,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -20,12 +19,11 @@ import Animated, {
 } from 'react-native-reanimated'
 import { prettyTag, visibleTags, type Restaurant, prettyArea } from '../lib/api'
 import { getPlaceholderImage } from '../lib/placeholderImages'
+import RedButton from './RedButton'
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window')
 const CARD_W = SCREEN_W - 40
 const SPRING = { damping: 18, stiffness: 200, mass: 0.7 }
-
-export type ConfirmAction = 'DIRECTIONS' | 'CALL' | 'ORDER'
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 
@@ -33,9 +31,10 @@ interface Props {
   visible: boolean
   restaurant: Restaurant | null
   rank: number
-  toastVisible: boolean
+  /** When true, a full-screen "Enjoy your meal" flash covers the card. */
+  flashVisible: boolean
   onClose: () => void
-  onAction: (action: ConfirmAction) => void
+  onConfirm: () => void
 }
 
 /** Edge-to-edge paging carousel inside the card (placeholder food photos). */
@@ -86,64 +85,20 @@ function Carousel({ rank }: { rank: number }) {
   )
 }
 
-function ActionButton({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap
-  label: string
-  onPress: () => void
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        {
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 5,
-          paddingVertical: 14,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: '#242424',
-          backgroundColor: '#1a1a1a',
-        },
-        pressed && { opacity: 0.7 },
-      ]}
-    >
-      <Ionicons name={icon} size={20} color="#F2EDE8" />
-      <Text
-        style={{
-          fontFamily: 'DMSans_600SemiBold',
-          fontSize: 11,
-          fontWeight: '600',
-          letterSpacing: 0.4,
-          color: '#F2EDE8',
-        }}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  )
-}
-
 /**
  * Full-screen selection confirmation. The tapped result "expands" into a
  * centered card (spring scale-up + rise) over a dark backdrop, showing the full
- * detail inline plus the three action buttons. Tapping an action shows a toast
- * (owned by the parent) before navigating home.
+ * detail inline plus a single "This is it →" confirm button. Confirming shows a
+ * full-screen "Enjoy your meal" flash (driven by the parent) before navigating.
  */
 export default function SelectionConfirmCard({
   visible,
   restaurant,
   rank,
-  toastVisible,
+  flashVisible,
   onClose,
-  onAction,
+  onConfirm,
 }: Props) {
-  const insets = useSafeAreaInsets()
   const p = useSharedValue(0)
 
   useEffect(() => {
@@ -316,11 +271,9 @@ export default function SelectionConfirmCard({
             </View>
           </ScrollView>
 
-          {/* Action buttons — full-width row pinned at the bottom of the card */}
+          {/* Single confirm CTA pinned at the bottom of the card */}
           <View
             style={{
-              flexDirection: 'row',
-              gap: 10,
               borderTopWidth: 1,
               borderTopColor: '#1e1e1e',
               paddingTop: 14,
@@ -328,29 +281,38 @@ export default function SelectionConfirmCard({
               paddingHorizontal: 20,
             }}
           >
-            <ActionButton icon="navigate-outline" label="DIRECTIONS" onPress={() => onAction('DIRECTIONS')} />
-            <ActionButton icon="call-outline" label="RESERVE" onPress={() => onAction('CALL')} />
-            <ActionButton icon="fast-food-outline" label="ORDER" onPress={() => onAction('ORDER')} />
+            <RedButton
+              label="This is it →"
+              onPress={onConfirm}
+              style={{ paddingVertical: 18 }}
+            />
           </View>
         </Animated.View>
 
-        {/* Toast */}
-        {toastVisible ? (
+        {/* Full-screen "Enjoy your meal" flash on confirm */}
+        {flashVisible ? (
           <View
-            style={{
-              position: 'absolute',
-              bottom: insets.bottom + 40,
-              alignSelf: 'center',
-              backgroundColor: '#1a1a1a',
-              borderWidth: 1,
-              borderColor: '#2a2a2a',
-              borderRadius: 100,
-              paddingHorizontal: 20,
-              paddingVertical: 12,
-            }}
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: '#080808',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 20,
+              },
+            ]}
           >
-            <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 15, color: '#F2EDE8' }}>
-              Enjoy your meal! 🍽
+            <Text
+              style={{
+                // Mobile has no Syne (web-only); DM Sans 800 is the display face.
+                fontFamily: 'DMSans_800ExtraBold',
+                fontSize: 40,
+                color: '#FFFFFF',
+                letterSpacing: -1,
+                textAlign: 'center',
+              }}
+            >
+              Enjoy your meal
             </Text>
           </View>
         ) : null}

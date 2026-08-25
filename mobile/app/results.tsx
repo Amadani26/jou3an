@@ -7,7 +7,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated'
 import ProcessingState from '../components/ProcessingState'
 import ResultCard from '../components/ResultCard'
 import GhostButton from '../components/GhostButton'
-import SelectionConfirmCard, { type ConfirmAction } from '../components/SelectionConfirmCard'
+import SelectionConfirmCard from '../components/SelectionConfirmCard'
+import RestaurantDetailSheet from '../components/RestaurantDetailSheet'
 import {
   getDecision,
   tinderSuggest,
@@ -54,27 +55,29 @@ export default function ResultsScreen() {
   const [results, setResults] = useState<Restaurant[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [toastVisible, setToastVisible] = useState(false)
+  const [flashVisible, setFlashVisible] = useState(false)
+  // Long-press opens the read-only detail sheet (view, not select).
+  const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null)
 
   // Tapping a card expands it into the inline confirmation overlay.
   const selectedRestaurant = results.find((r) => r.id === selectedId) ?? null
   const selectedRank =
     selectedId != null ? results.findIndex((r) => r.id === selectedId) + 1 : 1
 
-  // Confirming an action: record the pick to history (this decision session is
-  // the 'decide' source), show the toast, then head to the home tab.
-  const confirmAction = (action: ConfirmAction) => {
+  // "This is it →": record the final pick (await), flash "Enjoy your meal",
+  // then replace to the home tab — the decision is final, no going back.
+  const confirmSelection = async () => {
     if (selectedRestaurant && sessionId) {
-      saveDecisionSelection(sessionId, selectedRestaurant.id, action).catch(() => {
-        /* silent — selection tracking is best-effort */
-      })
+      try {
+        await saveDecisionSelection(sessionId, selectedRestaurant.id, 'SELECT')
+      } catch {
+        /* best-effort — don't block the confirmation on a network hiccup */
+      }
     }
-    setToastVisible(true)
+    setFlashVisible(true)
     setTimeout(() => {
-      setToastVisible(false)
-      setSelectedId(null)
-      router.navigate('/(tabs)')
-    }, 1500)
+      router.replace('/(tabs)')
+    }, 1200)
   }
 
   const run = useCallback(async () => {
@@ -250,6 +253,7 @@ export default function ResultsScreen() {
                 priceRange={`AED ${r.priceMin}–${r.priceMax}`}
                 area={prettyArea(r.area)}
                 onSelect={() => setSelectedId(r.id)}
+                onLongPress={() => setDetailRestaurant(r)}
                 onDirections={() => openDirections(r)}
                 onCall={() => call(r)}
                 onOrder={() => order(r)}
@@ -257,7 +261,20 @@ export default function ResultsScreen() {
             </Animated.View>
           ))}
 
-          <View style={{ alignItems: 'center', marginTop: 6, gap: 8, paddingHorizontal: 20 }}>
+          {/* Interaction hint (shown before a selection is made) */}
+          <Text
+            style={{
+              fontFamily: 'DMSans_400Regular',
+              fontSize: 12,
+              color: '#444',
+              textAlign: 'center',
+              marginTop: 4,
+            }}
+          >
+            Tap to select · Hold for details
+          </Text>
+
+          <View style={{ alignItems: 'center', marginTop: 10, gap: 8, paddingHorizontal: 20 }}>
             <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: '#504B47' }}>
               Not what you&apos;re looking for?
             </Text>
@@ -271,9 +288,29 @@ export default function ResultsScreen() {
       visible={selectedId != null}
       restaurant={selectedRestaurant}
       rank={selectedRank}
-      toastVisible={toastVisible}
+      flashVisible={flashVisible}
       onClose={() => setSelectedId(null)}
-      onAction={confirmAction}
+      onConfirm={confirmSelection}
+    />
+
+    {/* Read-only detail sheet — long-press on a card */}
+    <RestaurantDetailSheet
+      visible={detailRestaurant != null}
+      onClose={() => setDetailRestaurant(null)}
+      name={detailRestaurant?.name ?? ''}
+      cuisine={detailRestaurant?.cuisineType ?? ''}
+      priceRange={
+        detailRestaurant
+          ? `AED ${detailRestaurant.priceMin}–${detailRestaurant.priceMax}`
+          : ''
+      }
+      area={detailRestaurant ? prettyArea(detailRestaurant.area) : ''}
+      tags={detailRestaurant?.tags}
+      ratingScore={detailRestaurant?.ratingScore}
+      calories={detailRestaurant?.averageCalories}
+      onDirections={() => detailRestaurant && openDirections(detailRestaurant)}
+      onCall={() => detailRestaurant && call(detailRestaurant)}
+      onOrder={() => detailRestaurant && order(detailRestaurant)}
     />
     </>
   )

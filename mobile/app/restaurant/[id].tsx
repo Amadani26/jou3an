@@ -12,6 +12,7 @@ import {
   deliveryUrl,
   type Restaurant,
 } from '../../lib/api'
+import { usePressed } from '../../lib/usePressed'
 
 type IconName = ComponentProps<typeof Ionicons>['name']
 
@@ -24,23 +25,25 @@ function GhostAction({
   label: string
   onPress?: () => void
 }) {
+  const { pressed, pressHandlers } = usePressed()
+
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          borderWidth: 1,
-          borderColor: '#242424',
-          borderRadius: 100,
-          paddingVertical: 14,
-          minHeight: 44,
-        },
-        pressed && { opacity: 0.75 },
-      ]}
+      {...pressHandlers}
+      // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        borderWidth: 1,
+        borderColor: '#242424',
+        borderRadius: 100,
+        paddingVertical: 14,
+        minHeight: 44,
+        opacity: pressed ? 0.75 : 1,
+      }}
     >
       <Ionicons name={icon} size={18} color="#8A847E" />
       <Text

@@ -15,6 +15,7 @@ import GhostButton from '../../components/GhostButton'
 import RestaurantDetailSheet from '../../components/RestaurantDetailSheet'
 import { useAuth } from '../../contexts/AuthContext'
 import { getDecisionHistory, prettyArea, type HistoryItem } from '../../lib/api'
+import { usePressed } from '../../lib/usePressed'
 
 const ACTION_META: Record<string, { label: string; color: string }> = {
   DIRECTIONS: { label: 'Directions', color: '#2DCE89' },
@@ -114,21 +115,23 @@ function HistoryRow({
   onPress: () => void
 }) {
   const action = item.actionTaken ? ACTION_META[item.actionTaken] : null
+  const { pressed, pressHandlers } = usePressed()
+
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 14,
-          paddingHorizontal: 20,
-          paddingVertical: 18,
-          borderBottomWidth: 1,
-          borderBottomColor: '#1C1C1C',
-        },
-        pressed && { opacity: 0.75 },
-      ]}
+      {...pressHandlers}
+      // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        paddingHorizontal: 20,
+        paddingVertical: 18,
+        borderBottomWidth: 1,
+        borderBottomColor: '#1C1C1C',
+        opacity: pressed ? 0.75 : 1,
+      }}
     >
       <View
         style={{
