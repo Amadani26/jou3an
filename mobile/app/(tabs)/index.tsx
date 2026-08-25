@@ -26,56 +26,90 @@ const FALLBACK_PICKS = [
 
 /** The three-second explanation of the whole product. */
 const STEPS = [
-  { n: '01', label: 'Tell us your vibe', sub: 'Four quick taps' },
-  { n: '02', label: 'Get exactly 3', sub: 'Never a long list' },
-  { n: '03', label: 'Eat', sub: 'Directions in a tap' },
+  {
+    n: '01',
+    title: 'Tell us your vibe',
+    sub: 'Four quick taps — where, what, how and the mood',
+  },
+  {
+    n: '02',
+    title: 'Get exactly 3 picks',
+    sub: 'Never a long list, never a scroll hole',
+  },
+  {
+    n: '03',
+    title: 'Eat',
+    sub: 'Directions, a table or delivery in one tap',
+  },
 ]
 
-function StepCard({ n, label, sub }: { n: string; label: string; sub: string }) {
+/**
+ * One row of the how-it-works timeline: a big red number on a rail, the copy
+ * beside it. The rail's 1px line stretches to the next number (the row is
+ * stretch-aligned, so it fills whatever height the copy takes), which is what
+ * makes the three read as a flow rather than a list.
+ */
+function StepRow({
+  n,
+  title,
+  sub,
+  last,
+}: {
+  n: string
+  title: string
+  sub: string
+  last?: boolean
+}) {
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: '#111111',
-        borderWidth: 1,
-        borderColor: '#1C1C1C',
-        borderRadius: 14,
-        paddingVertical: 10,
-        paddingHorizontal: 10,
-      }}
-    >
-      <Text
-        style={{
-          fontFamily: 'DMSans_800ExtraBold',
-          fontSize: 16,
-          color: '#E63946',
-          letterSpacing: -0.5,
-          marginBottom: 4,
-        }}
-      >
-        {n}
-      </Text>
-      <Text
-        style={{
-          fontFamily: 'DMSans_700Bold',
-          fontSize: 12,
-          color: '#F2EDE8',
-          lineHeight: 15,
-        }}
-      >
-        {label}
-      </Text>
-      <Text
-        style={{
-          fontFamily: 'DMSans_400Regular',
-          fontSize: 10,
-          color: '#504B47',
-          marginTop: 2,
-        }}
-        numberOfLines={1}
-      >
-        {sub}
-      </Text>
+    <View style={{ flexDirection: 'row' }}>
+      <View style={{ width: 46, alignItems: 'center' }}>
+        <Text
+          style={{
+            fontFamily: 'DMSans_800ExtraBold',
+            fontSize: 28,
+            color: '#E63946',
+            letterSpacing: -1,
+            lineHeight: 32,
+          }}
+        >
+          {n}
+        </Text>
+        {last ? null : (
+          <View
+            style={{
+              flex: 1,
+              width: 1,
+              backgroundColor: '#242424',
+              marginTop: 8,
+              marginBottom: 2,
+            }}
+          />
+        )}
+      </View>
+
+      <View style={{ flex: 1, paddingLeft: 14, paddingBottom: last ? 0 : 26 }}>
+        <Text
+          style={{
+            fontFamily: 'DMSans_700Bold',
+            fontSize: 16,
+            color: '#FFFFFF',
+            lineHeight: 22,
+          }}
+        >
+          {title}
+        </Text>
+        <Text
+          style={{
+            fontFamily: 'DMSans_400Regular',
+            fontSize: 13,
+            color: '#8A847E',
+            lineHeight: 19,
+            marginTop: 3,
+          }}
+        >
+          {sub}
+        </Text>
+      </View>
     </View>
   )
 }
@@ -113,7 +147,7 @@ function SkeletonCard() {
       style={[
         {
           borderRadius: 20,
-          height: 178,
+          height: 250,
           borderWidth: 1,
           borderColor: '#242424',
         },
@@ -165,48 +199,54 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#080808' }}>
-      {/* Atmospheric red glow behind the hero */}
+      {/* Atmospheric red glow behind the hero — three stops so the falloff
+          reads as a soft bloom rather than a visible band. */}
       <LinearGradient
-        colors={['rgba(232,39,42,0.08)', 'transparent']}
+        colors={[
+          'rgba(232,39,42,0.17)',
+          'rgba(232,39,42,0.06)',
+          'transparent',
+        ]}
+        locations={[0, 0.45, 1]}
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
           right: 0,
-          height: 360,
+          height: 440,
         }}
         pointerEvents="none"
       />
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 28 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Hero — logo mark + a single line. Deliberately tight: the steps
-            below are the actual explanation. */}
+        {/* Hero — logo mark + headline, with room to breathe */}
         <View
           style={{
             paddingHorizontal: 20,
-            paddingTop: insets.top + 8,
+            paddingTop: insets.top + 28,
             alignItems: 'center',
           }}
         >
           <View
             style={{
-              width: 48,
-              height: 48,
-              borderRadius: 14,
+              width: 56,
+              height: 56,
+              borderRadius: 16,
               backgroundColor: '#E8272A',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: 10,
+              marginBottom: 18,
             }}
           >
             <Text
               style={{
                 color: '#FFFFFF',
-                fontSize: 24,
+                fontSize: 28,
                 fontWeight: '800',
                 fontFamily: 'DMSans_800ExtraBold',
               }}
@@ -218,35 +258,33 @@ export default function HomeScreen() {
           <Text
             style={{
               fontFamily: 'DMSans_800ExtraBold',
-              fontSize: 24,
+              fontSize: 30,
+              lineHeight: 38,
               color: '#F2EDE8',
-              letterSpacing: -0.8,
+              letterSpacing: -1.2,
               textAlign: 'center',
             }}
-            numberOfLines={1}
-            adjustsFontSizeToFit
           >
             Hungry? We{' '}
             <Text style={{ color: '#E8272A', fontStyle: 'italic' }}>decide</Text> for you.
           </Text>
         </View>
 
-        {/* How it works — three steps, readable at a glance */}
-        <View
-          style={{
-            flexDirection: 'row',
-            gap: 8,
-            paddingHorizontal: 20,
-            marginTop: 12,
-          }}
-        >
-          {STEPS.map((s) => (
-            <StepCard key={s.n} n={s.n} label={s.label} sub={s.sub} />
+        {/* How it works — a vertical timeline, not a grid of boxes */}
+        <View style={{ paddingHorizontal: 24, marginTop: 36 }}>
+          {STEPS.map((s, i) => (
+            <StepRow
+              key={s.n}
+              n={s.n}
+              title={s.title}
+              sub={s.sub}
+              last={i === STEPS.length - 1}
+            />
           ))}
         </View>
 
         {/* CTA — the payoff of reading the steps */}
-        <View style={{ paddingHorizontal: 20, marginTop: 14, marginBottom: 18 }}>
+        <View style={{ paddingHorizontal: 20, marginTop: 36 }}>
           <Animated.View style={ctaStyle}>
             <RedButton
               label="Decide for me →"
@@ -263,13 +301,13 @@ export default function HomeScreen() {
         </View>
 
         {/* Daily Top 3 */}
-        <View style={{ paddingHorizontal: 20 }}>
+        <View style={{ paddingHorizontal: 20, marginTop: 44 }}>
           <View
             style={{
               flexDirection: 'row',
               alignItems: 'center',
               gap: 8,
-              marginBottom: 8,
+              marginBottom: 10,
             }}
           >
             <PulsingDot />
@@ -294,16 +332,17 @@ export default function HomeScreen() {
 
           <Text
             style={{
-              fontFamily: 'DMSans_400Regular',
-              fontSize: 13,
-              color: '#8A847E',
-              marginBottom: 10,
+              fontFamily: 'DMSans_800ExtraBold',
+              fontSize: 22,
+              color: '#F2EDE8',
+              letterSpacing: -0.8,
+              marginBottom: 16,
             }}
           >
             {daily?.themeLabel ?? 'What Dubai is eating right now'}
           </Text>
 
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: 12 }}>
             {isLoading ? (
               <>
                 <SkeletonCard />
@@ -321,7 +360,6 @@ export default function HomeScreen() {
                   priceMin={r.priceMin}
                   priceMax={r.priceMax}
                   imageUrl={photoUrls(r)[0]}
-                  compact
                   onPress={() => router.push(`/restaurant/${r.id}`)}
                 />
               ))
@@ -336,7 +374,6 @@ export default function HomeScreen() {
                   area={r.area}
                   priceMin={r.priceMin}
                   priceMax={r.priceMax}
-                  compact
                   onPress={() =>
                     router.push({
                       pathname: '/results',
