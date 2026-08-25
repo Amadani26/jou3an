@@ -161,20 +161,30 @@ export default function RestaurantScreen() {
             AED {r.priceMin}–{r.priceMax}
           </Text>
 
-          {/* Rating stars */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Ionicons
-                key={i}
-                name={i <= Math.round(r.ratingScore) ? 'star' : 'star-outline'}
-                size={14}
-                color="#FFB547"
-              />
-            ))}
-            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 13, color: '#8A847E', marginLeft: 4 }}>
-              {r.ratingScore.toFixed(1)}
-            </Text>
-          </View>
+          {/* Google rating (0–5) — hidden entirely when not synced. The stars
+              are meaningful now that the value is on a 5-point scale. */}
+          {typeof r.googleRating === 'number' ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Ionicons
+                  key={i}
+                  name={i <= Math.round(r.googleRating as number) ? 'star' : 'star-outline'}
+                  size={14}
+                  color="#FFB547"
+                />
+              ))}
+              <Text
+                style={{
+                  fontFamily: 'DMSans_500Medium',
+                  fontSize: 13,
+                  color: '#8A847E',
+                  marginLeft: 4,
+                }}
+              >
+                {r.googleRating.toFixed(1)} on Google
+              </Text>
+            </View>
+          ) : null}
 
           {/* Tags */}
           {r.tags.length > 0 ? (

@@ -305,7 +305,7 @@ export default function HistoryScreen() {
           priceRange={selected.priceRange}
           area={prettyArea(selected.area)}
           tags={selected.tags}
-          ratingScore={selected.ratingScore}
+          googleRating={selected.googleRating}
           calories={selected.calories}
           images={photoUrls(selected)}
           onDirections={() => openMaps(selected)}

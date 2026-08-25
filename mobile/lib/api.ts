@@ -85,6 +85,7 @@ export interface Restaurant {
   noonUrl: string | null
   deliverooUrl: string | null
   tags: string[]
+  /** Seeded 0–10 score — ranking only, never displayed. Use googleRating. */
   ratingScore: number
   averageCalories: number | null
   /** Relative /api/photos/... proxy paths from Google Places. Use photoUrls(). */
@@ -241,7 +242,10 @@ export interface HistoryItem {
   actionTaken: 'DIRECTIONS' | 'CALL' | 'ORDER' | 'SELECT' | null
   createdAt: string
   tags: string[]
+  /** Seeded 0–10 score — ranking only, never displayed. Use googleRating. */
   ratingScore: number
+  /** Google's 0–5 rating; null until the restaurant has been Places-synced. */
+  googleRating?: number | null
   calories: number | null
   /** Relative /api/photos/... proxy paths — pass through photoUrls(). */
   photoUrls?: string[]

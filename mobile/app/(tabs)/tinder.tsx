@@ -491,7 +491,7 @@ export default function TinderScreen() {
           priceRange={`AED ${sheetRestaurant.priceMin}–${sheetRestaurant.priceMax}`}
           area={prettyArea(sheetRestaurant.area)}
           tags={sheetRestaurant.tags}
-          ratingScore={sheetRestaurant.ratingScore}
+          googleRating={sheetRestaurant.googleRating}
           calories={sheetRestaurant.averageCalories}
           images={photoUrls(sheetRestaurant)}
           onDirections={openDirections}

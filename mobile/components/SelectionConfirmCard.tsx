@@ -226,17 +226,17 @@ export default function SelectionConfirmCard({
                 </Text>
               </View>
 
-              {/* Rating */}
-              {typeof restaurant.ratingScore === 'number' ? (
+              {/* Google rating (0–5). Hidden entirely when not synced. */}
+              {typeof restaurant.googleRating === 'number' ? (
                 <View
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 }}
                 >
-                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#2DCE89' }} />
+                  <Ionicons name="star" size={16} color="#FFB547" />
                   <Text style={{ fontFamily: 'DMSans_800ExtraBold', fontSize: 18, color: '#F2EDE8' }}>
-                    {restaurant.ratingScore.toFixed(1)}
+                    {restaurant.googleRating.toFixed(1)}
                   </Text>
                   <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: '#504B47' }}>
-                    rating
+                    on Google
                   </Text>
                 </View>
               ) : null}

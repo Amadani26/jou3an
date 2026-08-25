@@ -127,7 +127,10 @@ router.get('/history', requireAuth, async (req, res) => {
         createdAt: s.createdAt,
         // Extras so the mobile RestaurantDetailSheet can render on tap:
         tags: r.tags,
+        // ratingScore stays for ranking/back-compat; googleRating (0–5) is
+        // what the app actually displays.
         ratingScore: r.ratingScore,
+        googleRating: r.googleRating,
         calories: r.averageCalories,
         photoUrls: r.photoRefs.map(photoProxyPath),
       },

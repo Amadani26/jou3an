@@ -42,7 +42,8 @@ export interface RestaurantDetailSheetProps {
   priceRange: string
   area: string
   tags?: string[]
-  ratingScore?: number
+  /** Google's 0–5 rating. Omit/null hides the rating row entirely. */
+  googleRating?: number | null
   calories?: number | null
   description?: string | null
   /** Photo URLs — when provided, real Images render instead of placeholder slots. */
@@ -180,7 +181,7 @@ export default function RestaurantDetailSheet({
   priceRange,
   area,
   tags = [],
-  ratingScore,
+  googleRating,
   calories,
   description,
   images,
@@ -326,8 +327,8 @@ export default function RestaurantDetailSheet({
                 </Text>
               </View>
 
-              {/* Rating */}
-              {typeof ratingScore === 'number' ? (
+              {/* Google rating (0–5). Hidden entirely when not synced. */}
+              {typeof googleRating === 'number' ? (
                 <View
                   style={{
                     flexDirection: 'row',
@@ -336,14 +337,7 @@ export default function RestaurantDetailSheet({
                     marginBottom: 16,
                   }}
                 >
-                  <View
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: 5,
-                      backgroundColor: '#2DCE89',
-                    }}
-                  />
+                  <Ionicons name="star" size={16} color="#FFB547" />
                   <Text
                     style={{
                       fontFamily: 'DMSans_800ExtraBold',
@@ -351,12 +345,12 @@ export default function RestaurantDetailSheet({
                       color: '#F2EDE8',
                     }}
                   >
-                    {ratingScore.toFixed(1)}
+                    {googleRating.toFixed(1)}
                   </Text>
                   <Text
                     style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: '#504B47' }}
                   >
-                    rating
+                    on Google
                   </Text>
                 </View>
               ) : null}

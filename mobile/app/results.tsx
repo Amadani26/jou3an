@@ -308,7 +308,7 @@ export default function ResultsScreen() {
       }
       area={detailRestaurant ? prettyArea(detailRestaurant.area) : ''}
       tags={detailRestaurant?.tags}
-      ratingScore={detailRestaurant?.ratingScore}
+      googleRating={detailRestaurant?.googleRating}
       calories={detailRestaurant?.averageCalories}
       images={photoUrls(detailRestaurant)}
       onDirections={() => detailRestaurant && openDirections(detailRestaurant)}
