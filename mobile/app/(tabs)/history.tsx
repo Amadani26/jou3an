@@ -14,7 +14,12 @@ import RedButton from '../../components/RedButton'
 import GhostButton from '../../components/GhostButton'
 import RestaurantDetailSheet from '../../components/RestaurantDetailSheet'
 import { useAuth } from '../../contexts/AuthContext'
-import { getDecisionHistory, prettyArea, type HistoryItem } from '../../lib/api'
+import {
+  getDecisionHistory,
+  prettyArea,
+  photoUrls,
+  type HistoryItem,
+} from '../../lib/api'
 import { usePressed } from '../../lib/usePressed'
 
 const ACTION_META: Record<string, { label: string; color: string }> = {
@@ -302,6 +307,7 @@ export default function HistoryScreen() {
           tags={selected.tags}
           ratingScore={selected.ratingScore}
           calories={selected.calories}
+          images={photoUrls(selected)}
           onDirections={() => openMaps(selected)}
           onCall={() => openMaps(selected)}
           onOrder={() => openMaps(selected)}

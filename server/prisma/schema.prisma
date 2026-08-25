@@ -71,6 +71,17 @@ model Restaurant {
   tags            String[]
   ratingScore     Float        @default(0)
   averageCalories Int?
+
+  // --- Google Places (populated by `npm run sync:places`) ---
+  googlePlaceId   String?      @unique
+  /// Places photo resource names ("places/{placeId}/photos/{photoId}"), max 6.
+  /// Served to clients via the /api/photos proxy so the API key never ships.
+  photoRefs       String[]
+  lat             Float?
+  lng             Float?
+  googleRating    Float?
+  googleSyncedAt  DateTime?
+
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 

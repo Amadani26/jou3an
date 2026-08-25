@@ -36,6 +36,12 @@ const SURPRISE: Cuisine = {
   icon: 'shuffle-outline',
 }
 
+const NO_PREFERENCE: Cuisine = {
+  name: 'No preference',
+  descriptor: 'Show me anything',
+  icon: 'help-circle-outline',
+}
+
 // Chunk the cuisines into rows of two for the 2-column grid.
 const CUISINE_ROWS: Cuisine[][] = []
 for (let i = 0; i < CUISINES.length; i += 2) {
@@ -123,6 +129,7 @@ function CuisineCard({
   icon,
   selected,
   onPress,
+  wide,
   surprise,
 }: {
   name: string
@@ -130,6 +137,9 @@ function CuisineCard({
   icon: keyof typeof Ionicons.glyphMap
   selected: boolean
   onPress: () => void
+  /** Full-width 64pt row instead of a half-row grid tile. */
+  wide?: boolean
+  /** Red accent treatment ("Surprise me"). Layout-independent. */
   surprise?: boolean
 }) {
   // Icon + name go red on selection; "Surprise me" is red at rest.
@@ -148,7 +158,7 @@ function CuisineCard({
         // form — the function form is dropped on Pressable in this setup, which
         // is why cards used to collapse to their text width. Press feedback is
         // handled by the inner View via onPressIn/onPressOut instead.
-        surprise
+        wide
           ? { alignSelf: 'stretch', height: 64 }
           : { flexGrow: 1, flexShrink: 1, flexBasis: 0, alignSelf: 'stretch' }
       }
@@ -167,26 +177,26 @@ function CuisineCard({
           justifyContent: 'center',
           alignItems: 'center',
           paddingHorizontal: 14,
-          gap: surprise ? 0 : 8,
-          flexDirection: surprise ? 'row' : 'column',
+          gap: wide ? 0 : 8,
+          flexDirection: wide ? 'row' : 'column',
           opacity: pressed ? 0.75 : 1,
         }}
       >
         <Ionicons
           name={icon}
-          size={surprise ? 18 : 26}
+          size={wide ? 18 : 26}
           color={accent ?? '#8A847E'}
-          style={surprise ? { marginRight: 10 } : undefined}
+          style={wide ? { marginRight: 10 } : undefined}
         />
 
-        <View style={surprise ? undefined : { width: '100%' }}>
+        <View style={wide ? undefined : { width: '100%' }}>
           <Text
             numberOfLines={1}
             style={{
               fontFamily: 'DMSans_700Bold',
               fontSize: 16,
               color: accent ?? '#F2EDE8',
-              textAlign: surprise ? 'left' : 'center',
+              textAlign: wide ? 'left' : 'center',
             }}
           >
             {name}
@@ -197,7 +207,7 @@ function CuisineCard({
               fontFamily: 'DMSans_400Regular',
               fontSize: 11,
               color: '#8A847E',
-              textAlign: surprise ? 'left' : 'center',
+              textAlign: wide ? 'left' : 'center',
               marginTop: 2,
             }}
           >
@@ -292,15 +302,15 @@ export default function DecideScreen() {
     )
   }
 
-  // "Surprise me" and "Skip" both advance immediately and clear any picks —
-  // neither contributes a cuisine to the prompt.
+  // "Surprise me" and "No preference" both advance immediately and clear any
+  // picks — neither contributes a cuisine to the prompt.
   const chooseSurprise = () => {
     setCuisines([])
     setSurprise(true)
     goNext()
   }
 
-  const skipCuisine = () => {
+  const chooseNoPreference = () => {
     setCuisines([])
     setSurprise(false)
     goNext()
@@ -384,10 +394,20 @@ export default function DecideScreen() {
           <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 24 }}>
             <StepHeading eyebrow="STEP 2 · CUISINE" title="Any cuisine?" />
 
-            {/* 2-col grid — 4 rows + "Surprise me" fill the space, no scrolling.
-                Rows grow to share the height, clamped so cards stay ~100-110.
-                Multi-select: tapping toggles, "Continue →" advances. */}
+            {/* "No preference" + 2-col grid + "Surprise me" + Continue all fit
+                without scrolling. Rows grow to share the leftover height.
+                Multi-select: tapping a grid card toggles, "Continue →" advances. */}
             <View style={{ flex: 1, gap: 12, paddingBottom: 14 }}>
+              {/* Escape hatch for "I don't know" — advances with no cuisine */}
+              <CuisineCard
+                wide
+                name={NO_PREFERENCE.name}
+                descriptor={NO_PREFERENCE.descriptor}
+                icon={NO_PREFERENCE.icon}
+                selected={false}
+                onPress={chooseNoPreference}
+              />
+
               {CUISINE_ROWS.map((row, ri) => (
                 <View
                   key={ri}
@@ -398,8 +418,8 @@ export default function DecideScreen() {
                     flexGrow: 1,
                     flexShrink: 1,
                     flexBasis: 0,
-                    minHeight: 80,
-                    maxHeight: 106,
+                    minHeight: 64,
+                    maxHeight: 94,
                   }}
                 >
                   {row.map((c) => (
@@ -418,6 +438,7 @@ export default function DecideScreen() {
               {/* "Surprise me" — full-width, sits at the bottom of the grid.
                   Advances immediately and clears any selection. */}
               <CuisineCard
+                wide
                 surprise
                 name={SURPRISE.name}
                 descriptor={SURPRISE.descriptor}
@@ -432,25 +453,6 @@ export default function DecideScreen() {
                 disabled={cuisines.length === 0}
                 onPress={goNext}
               />
-
-              <Pressable
-                onPress={() => {
-                  tap()
-                  skipCuisine()
-                }}
-                hitSlop={10}
-              >
-                <Text
-                  style={{
-                    fontFamily: 'DMSans_600SemiBold',
-                    fontSize: 13,
-                    color: '#444',
-                    textAlign: 'center',
-                  }}
-                >
-                  Skip cuisine →
-                </Text>
-              </Pressable>
             </View>
           </View>
         )}

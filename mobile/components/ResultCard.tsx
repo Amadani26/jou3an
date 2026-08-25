@@ -11,6 +11,8 @@ export interface ResultCardProps {
   cuisine: string
   priceRange: string
   area: string
+  /** Google Places photo URL; falls back to the placeholder when absent. */
+  imageUrl?: string
   // Tap the card body to open the inline confirmation.
   onSelect?: () => void
   // Long-press to open the read-only detail sheet.
@@ -76,6 +78,7 @@ export default function ResultCard({
   cuisine,
   priceRange,
   area,
+  imageUrl,
   onSelect,
   onLongPress,
   onDirections,
@@ -114,7 +117,7 @@ export default function ResultCard({
           }}
         >
           <Image
-            source={{ uri: getPlaceholderImage(rank - 1) }}
+            source={{ uri: imageUrl ?? getPlaceholderImage(rank - 1) }}
             style={{ width: '100%', height: 120 }}
             resizeMode="cover"
           />

@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts",
+    "sync:places": "ts-node src/scripts/syncGooglePlaces.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

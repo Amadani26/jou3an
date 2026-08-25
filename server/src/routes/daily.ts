@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma'
+import { withPhotoUrlsAll } from '../lib/photos'
 
 const router = Router()
 
@@ -34,7 +35,7 @@ router.get('/today', async (_req, res) => {
     date: pick.date,
     themeLabel: pick.themeLabel,
     isLive: pick.isLive,
-    results: [pick.result1, pick.result2, pick.result3],
+    results: withPhotoUrlsAll([pick.result1, pick.result2, pick.result3]),
   })
 })
 

@@ -18,11 +18,13 @@ const RESTAURANTS: Prisma.RestaurantCreateInput[] = [
   {
     name: 'Operation Falafel',
     cuisineType: 'Lebanese',
-    area: LocationArea.JLT,
+    // Places resolves this to the JBR branch (25.077, 55.132) — MARINA is the
+    // closest enum member, so the area now matches the coordinates we store.
+    area: LocationArea.MARINA,
     priceMin: 30,
     priceMax: 55,
     phone: '+971 4 431 7778',
-    googleMapsUrl: mapsUrl('Operation Falafel JLT'),
+    googleMapsUrl: mapsUrl('Operation Falafel JBR'),
     talabatUrl: `https://www.talabat.com/uae/${slug('Operation Falafel')}`,
     deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Operation Falafel')}`,
     isActive: true,
@@ -65,10 +67,14 @@ const RESTAURANTS: Prisma.RestaurantCreateInput[] = [
   {
     name: 'Ravi Restaurant',
     cuisineType: 'Pakistani',
+    // Al Satwa has no enum member — OTHER is correct here.
     area: LocationArea.OTHER,
     priceMin: 20,
     priceMax: 40,
     phone: '+971 4 331 5353',
+    // Pinned: a plain text search lands on the Al Nahda branch, but the
+    // famous original is Satwa (4.0★, 7k+ reviews).
+    googlePlaceId: 'ChIJN81uvipDXz4RH_4cyTocRMI',
     googleMapsUrl: mapsUrl('Ravi Restaurant Satwa'),
     talabatUrl: `https://www.talabat.com/uae/${slug('Ravi Restaurant')}`,
     deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Ravi Restaurant')}`,
@@ -137,15 +143,19 @@ const RESTAURANTS: Prisma.RestaurantCreateInput[] = [
     averageCalories: 1000,
   },
   {
-    name: 'Sushi Counter',
+    // Was "Sushi Counter", which has no DIFC location on Google Places — the
+    // real DIFC sushi spot is Sushi Art (Marble Walk, Gate 5). Details below
+    // are from Places: +971 50 350 2883, PRICE_LEVEL_MODERATE, 4.7★ (1310).
+    name: 'Sushi Art',
     cuisineType: 'Japanese',
     area: LocationArea.DIFC,
-    priceMin: 80,
-    priceMax: 130,
-    phone: '+971 4 355 1152',
-    googleMapsUrl: mapsUrl('Sushi Counter DIFC'),
-    talabatUrl: `https://www.talabat.com/uae/${slug('Sushi Counter')}`,
-    deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Sushi Counter')}`,
+    priceMin: 60,
+    priceMax: 110,
+    phone: '+971 50 350 2883',
+    googlePlaceId: 'ChIJj5caDJJCXz4RuHx7vNMaj_c',
+    googleMapsUrl: mapsUrl('Sushi Art DIFC'),
+    talabatUrl: `https://www.talabat.com/uae/${slug('Sushi Art')}`,
+    deliverooUrl: `https://deliveroo.ae/menu/dubai/${slug('Sushi Art')}`,
     isActive: true,
     tags: ['healthy', 'high-protein', 'date-night', 'quick'],
     ratingScore: 8.7,

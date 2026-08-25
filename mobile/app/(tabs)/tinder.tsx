@@ -33,6 +33,7 @@ import {
   getNearbyRestaurants,
   prettyArea,
   deliveryUrl,
+  photoUrls,
   type Restaurant,
 } from '../../lib/api'
 import { getPlaceholderImage } from '../../lib/placeholderImages'
@@ -47,10 +48,13 @@ const SPRING = { damping: 18, stiffness: 180 }
 function LikedThumb({
   name,
   imageIndex,
+  imageUrl,
   onPress,
 }: {
   name: string
   imageIndex: number
+  /** Google Places photo; falls back to the placeholder when absent. */
+  imageUrl?: string
   onPress: () => void
 }) {
   const { pressed, pressHandlers } = usePressed()
@@ -63,7 +67,7 @@ function LikedThumb({
       style={{ width: 52, alignItems: 'center', opacity: pressed ? 0.7 : 1 }}
     >
       <Image
-        source={{ uri: getPlaceholderImage(imageIndex) }}
+        source={{ uri: imageUrl ?? getPlaceholderImage(imageIndex) }}
         style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#141414' }}
       />
       <Text
@@ -129,6 +133,7 @@ export default function TinderScreen() {
   }, [])
 
   const current = restaurants[index]
+  const currentPhoto = photoUrls(current)[0]
   const done = !loading && (restaurants.length === 0 || index >= restaurants.length)
 
   // Advance to the next card (runs on the JS thread from the gesture callback).
@@ -309,21 +314,31 @@ export default function TinderScreen() {
                 cardStyle,
               ]}
             >
-              {/* Placeholder "photo" (real Google Places photos not available yet) */}
+              {/* Real Google Places photo when synced; branded gradient otherwise. */}
               <LinearGradient colors={['#2A1114', '#141414']} style={StyleSheet.absoluteFill} />
-              <View
-                style={[
-                  StyleSheet.absoluteFill,
-                  { alignItems: 'center', justifyContent: 'center' },
-                ]}
-              >
-                <Ionicons name="restaurant" size={110} color="rgba(232,39,42,0.12)" />
-              </View>
+              {currentPhoto ? (
+                <Image
+                  source={{ uri: currentPhoto }}
+                  style={StyleSheet.absoluteFill}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View
+                  style={[
+                    StyleSheet.absoluteFill,
+                    { alignItems: 'center', justifyContent: 'center' },
+                  ]}
+                >
+                  <Ionicons name="restaurant" size={110} color="rgba(232,39,42,0.12)" />
+                </View>
+              )}
 
-              {/* Bottom scrim for text legibility */}
+              {/* Bottom scrim for text legibility. Needs to be deeper/darker than
+                  the old placeholder gradient — real Places photos are often bright. */}
               <LinearGradient
-                colors={['transparent', 'rgba(8,8,8,0.96)']}
-                style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 240 }}
+                colors={['transparent', 'rgba(8,8,8,0.62)', 'rgba(8,8,8,0.97)']}
+                locations={[0, 0.45, 1]}
+                style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 320 }}
               />
 
               {/* Info overlay */}
@@ -453,6 +468,7 @@ export default function TinderScreen() {
                 <LikedThumb
                   name={r.name}
                   imageIndex={restaurants.indexOf(r)}
+                  imageUrl={photoUrls(r)[0]}
                   onPress={() => openSheetFor(r)}
                 />
               </Animated.View>
@@ -477,6 +493,7 @@ export default function TinderScreen() {
           tags={sheetRestaurant.tags}
           ratingScore={sheetRestaurant.ratingScore}
           calories={sheetRestaurant.averageCalories}
+          images={photoUrls(sheetRestaurant)}
           onDirections={openDirections}
           onCall={call}
           onOrder={order}

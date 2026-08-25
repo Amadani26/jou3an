@@ -3,6 +3,7 @@ import { z } from 'zod'
 import prisma from '../lib/prisma'
 import { decideRestaurants } from '../services/decisionEngine'
 import { optionalAuth, requireAuth } from '../middleware/auth'
+import { photoProxyPath, withPhotoUrlsAll } from '../lib/photos'
 
 const router = Router()
 
@@ -49,7 +50,7 @@ router.post('/query', optionalAuth, async (req, res) => {
     },
   })
 
-  res.json({ results, sessionId: session.id })
+  res.json({ results: withPhotoUrlsAll(results), sessionId: session.id })
 })
 
 const tinderSchema = z.object({
@@ -92,7 +93,7 @@ router.post('/tinder-suggest', optionalAuth, async (req, res) => {
     },
   })
 
-  res.json({ results, sessionId: session.id })
+  res.json({ results: withPhotoUrlsAll(results), sessionId: session.id })
 })
 
 // GET /api/decisions/history — the signed-in user's picks (selection made),
@@ -128,6 +129,7 @@ router.get('/history', requireAuth, async (req, res) => {
         tags: r.tags,
         ratingScore: r.ratingScore,
         calories: r.averageCalories,
+        photoUrls: r.photoRefs.map(photoProxyPath),
       },
     ]
   })

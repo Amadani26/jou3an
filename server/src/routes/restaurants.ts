@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma'
+import { withPhotoUrls, withPhotoUrlsAll } from '../lib/photos'
 
 const router = Router()
 
@@ -10,7 +11,7 @@ const router = Router()
 // Must be declared BEFORE '/:id' so "nearby" isn't matched as an id.
 router.get('/nearby', async (_req, res) => {
   const restaurants = await prisma.restaurant.findMany({ where: { isActive: true } })
-  res.json(restaurants)
+  res.json(withPhotoUrlsAll(restaurants))
 })
 
 // GET /api/restaurants/:id
@@ -22,7 +23,7 @@ router.get('/:id', async (req, res) => {
     res.status(404).json({ error: 'Restaurant not found' })
     return
   }
-  res.json(restaurant)
+  res.json(withPhotoUrls(restaurant))
 })
 
 export default router

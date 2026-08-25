@@ -10,6 +10,8 @@ interface DailyCardProps {
   area: string
   priceMin: number
   priceMax: number
+  /** Google Places photo URL; falls back to the placeholder when absent. */
+  imageUrl?: string
   onPress?: () => void
 }
 
@@ -20,6 +22,7 @@ export default function DailyCard({
   area,
   priceMin,
   priceMax,
+  imageUrl,
   onPress,
 }: DailyCardProps) {
   const { pressed, pressHandlers } = usePressed()
@@ -48,7 +51,7 @@ export default function DailyCard({
         }}
       >
         <Image
-          source={{ uri: getPlaceholderImage(rank - 1) }}
+          source={{ uri: imageUrl ?? getPlaceholderImage(rank - 1) }}
           style={{ width: '100%', height: 160 }}
           resizeMode="cover"
         />

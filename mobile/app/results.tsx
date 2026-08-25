@@ -15,6 +15,7 @@ import {
   saveDecisionSelection,
   prettyArea,
   deliveryUrl,
+  photoUrls,
   type Restaurant,
 } from '../lib/api'
 
@@ -252,6 +253,7 @@ export default function ResultsScreen() {
                 cuisine={r.cuisineType}
                 priceRange={`AED ${r.priceMin}–${r.priceMax}`}
                 area={prettyArea(r.area)}
+                imageUrl={photoUrls(r)[0]}
                 onSelect={() => setSelectedId(r.id)}
                 onLongPress={() => setDetailRestaurant(r)}
                 onDirections={() => openDirections(r)}
@@ -308,6 +310,7 @@ export default function ResultsScreen() {
       tags={detailRestaurant?.tags}
       ratingScore={detailRestaurant?.ratingScore}
       calories={detailRestaurant?.averageCalories}
+      images={photoUrls(detailRestaurant)}
       onDirections={() => detailRestaurant && openDirections(detailRestaurant)}
       onCall={() => detailRestaurant && call(detailRestaurant)}
       onOrder={() => detailRestaurant && order(detailRestaurant)}

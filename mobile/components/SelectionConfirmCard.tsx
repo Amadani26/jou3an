@@ -17,7 +17,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated'
-import { prettyTag, visibleTags, type Restaurant, prettyArea } from '../lib/api'
+import { prettyTag, visibleTags, photoUrls, type Restaurant, prettyArea } from '../lib/api'
 import { getPlaceholderImage } from '../lib/placeholderImages'
 import RedButton from './RedButton'
 
@@ -37,14 +37,19 @@ interface Props {
   onConfirm: () => void
 }
 
-/** Edge-to-edge paging carousel inside the card (placeholder food photos). */
-function Carousel({ rank }: { rank: number }) {
+/**
+ * Edge-to-edge paging carousel inside the card. Uses the restaurant's real
+ * Google Places photos when it has been synced, else placeholder food photos.
+ */
+function Carousel({ rank, photos }: { rank: number; photos: string[] }) {
   const [active, setActive] = useState(0)
-  const images = [
-    getPlaceholderImage(rank - 1),
-    getPlaceholderImage(rank),
-    getPlaceholderImage(rank + 1),
-  ]
+  const images = photos.length
+    ? photos
+    : [
+        getPlaceholderImage(rank - 1),
+        getPlaceholderImage(rank),
+        getPlaceholderImage(rank + 1),
+      ]
   return (
     <View style={{ marginTop: 16 }}>
       <FlatList
@@ -195,7 +200,7 @@ export default function SelectionConfirmCard({
             </View>
 
             {/* Image carousel */}
-            <Carousel rank={rank} />
+            <Carousel rank={rank} photos={photoUrls(restaurant)} />
 
             <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
               {/* Cuisine · price · area */}

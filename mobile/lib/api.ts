@@ -87,6 +87,11 @@ export interface Restaurant {
   tags: string[]
   ratingScore: number
   averageCalories: number | null
+  /** Relative /api/photos/... proxy paths from Google Places. Use photoUrls(). */
+  photoUrls?: string[]
+  lat?: number | null
+  lng?: number | null
+  googleRating?: number | null
 }
 
 export interface DailyToday {
@@ -238,6 +243,8 @@ export interface HistoryItem {
   tags: string[]
   ratingScore: number
   calories: number | null
+  /** Relative /api/photos/... proxy paths — pass through photoUrls(). */
+  photoUrls?: string[]
 }
 
 /** The signed-in user's decision history (picks with a selection), newest first. */
@@ -273,6 +280,34 @@ export const HIDDEN_TAGS = ['halal']
 /** Strip hidden tags before displaying a restaurant's tag list. */
 export const visibleTags = (tags: string[] = []) =>
   tags.filter((t) => !HIDDEN_TAGS.includes(t.toLowerCase()))
+
+/**
+ * Absolute URLs for a restaurant's Google Places photos.
+ *
+ * The server returns relative proxy paths ("/api/photos/places/…") so the
+ * Places API key never reaches the app; this prefixes them with the API base.
+ * Returns [] when the restaurant hasn't been synced yet — callers fall back to
+ * `getPlaceholderImage`.
+ */
+export function photoUrls(
+  restaurant?: { photoUrls?: string[] | null } | null,
+): string[] {
+  return (restaurant?.photoUrls ?? []).map((path) =>
+    path.startsWith('http') ? path : `${baseURL}${path}`,
+  )
+}
+
+/**
+ * The single image to show for a restaurant, with a deterministic placeholder
+ * fallback. `index` picks the placeholder when there are no real photos.
+ */
+export function primaryPhotoUrl(
+  restaurant: { photoUrls?: string[] | null } | null | undefined,
+  index: number,
+  placeholder: (i: number) => string,
+): string {
+  return photoUrls(restaurant)[0] ?? placeholder(index)
+}
 
 /** Derive display scores from a restaurant's rating + rank (server has no scores). */
 export function deriveScores(rank: number, rating: number) {

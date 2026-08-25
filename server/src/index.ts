@@ -11,6 +11,7 @@ import decisionsRouter from './routes/decisions'
 import restaurantsRouter from './routes/restaurants'
 import dailyRouter from './routes/daily'
 import usersRouter from './routes/users'
+import photosRouter from './routes/photos'
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3001
@@ -63,6 +64,7 @@ app.use('/api/auth', authRouter)
 app.use('/api/decisions', decisionsRouter)
 app.use('/api/restaurants', restaurantsRouter)
 app.use('/api/daily', dailyRouter)
+app.use('/api/photos', photosRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/admin', adminRouter)
 
