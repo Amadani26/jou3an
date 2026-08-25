@@ -26,7 +26,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated'
-import { prettyTag, visibleTags } from '../lib/api'
+import { prettyTag, visibleTags, prettyDistance } from '../lib/api'
 import { usePressed } from '../lib/usePressed'
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window')
@@ -44,6 +44,8 @@ export interface RestaurantDetailSheetProps {
   tags?: string[]
   /** Google's 0–5 rating. Omit/null hides the rating row entirely. */
   googleRating?: number | null
+  /** Km from the user, shown next to the area when known. */
+  distanceKm?: number
   calories?: number | null
   description?: string | null
   /** Photo URLs — when provided, real Images render instead of placeholder slots. */
@@ -182,6 +184,7 @@ export default function RestaurantDetailSheet({
   area,
   tags = [],
   googleRating,
+  distanceKm,
   calories,
   description,
   images,
@@ -325,6 +328,27 @@ export default function RestaurantDetailSheet({
                 <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: '#8A847E' }}>
                   {area}
                 </Text>
+                {prettyDistance(distanceKm) ? (
+                  <>
+                    <View
+                      style={{
+                        width: 3,
+                        height: 3,
+                        borderRadius: 1.5,
+                        backgroundColor: '#3a3a3a',
+                      }}
+                    />
+                    <Text
+                      style={{
+                        fontFamily: 'DMSans_600SemiBold',
+                        fontSize: 14,
+                        color: '#8A847E',
+                      }}
+                    >
+                      {prettyDistance(distanceKm)}
+                    </Text>
+                  </>
+                ) : null}
               </View>
 
               {/* Google rating (0–5). Hidden entirely when not synced. */}

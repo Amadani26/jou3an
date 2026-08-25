@@ -258,6 +258,8 @@ export default function DecideScreen() {
   const [back, setBack] = useState(false)
 
   const [locationChoice, setLocationChoice] = useState<LocationChoice | null>(null)
+  // Captured when the user picks "Nearby"; forwarded to the decision query.
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   // Cuisine is MULTI-select: tapping toggles, "Continue →" advances.
   const [cuisines, setCuisines] = useState<string[]>([])
   // "Surprise me" is mutually exclusive with any picked cuisine.
@@ -279,16 +281,41 @@ export default function DecideScreen() {
     setStep((s) => Math.max(0, s - 1))
   }
 
-  // Step 1 — Location (Nearby requests GPS permission; denial falls back silently).
+  // Step 1 — Location. "Nearby" asks for GPS and captures the coordinates that
+  // get sent with the decision query; any failure degrades silently to a
+  // city-wide search rather than blocking the flow.
   const chooseLocation = async (choice: LocationChoice) => {
     if (choice === 'Nearby') {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync()
-        setLocationChoice(status === 'granted' ? 'Nearby' : 'Anywhere in Dubai')
+        if (status !== 'granted') {
+          setCoords(null)
+          setLocationChoice('Anywhere in Dubai')
+          goNext()
+          return
+        }
+
+        // Last known is instant; only pay for a fresh fix if there isn't one.
+        let pos = await Location.getLastKnownPositionAsync()
+        if (!pos) {
+          pos = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          })
+        }
+
+        if (pos) {
+          setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+          setLocationChoice('Nearby')
+        } else {
+          setCoords(null)
+          setLocationChoice('Anywhere in Dubai')
+        }
       } catch {
+        setCoords(null)
         setLocationChoice('Anywhere in Dubai')
       }
     } else {
+      setCoords(null)
       setLocationChoice('Anywhere in Dubai')
     }
     goNext()
@@ -334,7 +361,12 @@ export default function DecideScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     router.push({
       pathname: '/results',
-      params: { prompt, chips: '[]' },
+      params: {
+        prompt,
+        chips: '[]',
+        // Only sent for "Nearby" — "Anywhere in Dubai" stays city-wide.
+        ...(coords ? { lat: String(coords.lat), lng: String(coords.lng) } : {}),
+      },
     })
   }
 

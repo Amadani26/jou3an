@@ -4,6 +4,13 @@ import prisma from '../lib/prisma'
 import { decideRestaurants } from '../services/decisionEngine'
 import { optionalAuth, requireAuth } from '../middleware/auth'
 import { photoProxyPath, withPhotoUrlsAll } from '../lib/photos'
+import {
+  distanceKm as kmBetween,
+  hasCoords,
+  roundKm,
+  withinRadius,
+  type Coords,
+} from '../lib/geo'
 
 const router = Router()
 
@@ -20,7 +27,22 @@ const querySchema = z.object({
   prompt: z.string().min(1, 'prompt is required'),
   moodChips: z.array(z.string()).default([]),
   userId: z.string().optional(),
+  // Present only when the user picked "Nearby" in the Decide flow.
+  lat: z.number().optional(),
+  lng: z.number().optional(),
 })
+
+/**
+ * Radius tiers for a located query, widest-last. The product rule is ALWAYS
+ * exactly 3 results, so a tier is only used when it can supply at least 3
+ * candidates; otherwise we widen, and ultimately fall back to all of Dubai.
+ */
+const RADIUS_TIERS = [
+  { km: 5, tier: 'NEARBY' as const },
+  { km: 10, tier: 'WIDER' as const },
+]
+
+type RadiusTier = 'NEARBY' | 'WIDER' | 'CITY'
 
 // POST /api/decisions/query — works anonymously; associates the logged-in user when a token is present
 router.post('/query', optionalAuth, async (req, res) => {
@@ -29,10 +51,45 @@ router.post('/query', optionalAuth, async (req, res) => {
     res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() })
     return
   }
-  const { prompt, moodChips, userId } = parsed.data
+  const { prompt, moodChips, userId, lat, lng } = parsed.data
 
   const restaurants = await prisma.restaurant.findMany({ where: { isActive: true } })
-  const results = decideRestaurants(prompt, moodChips, restaurants)
+
+  const origin: Coords | null =
+    typeof lat === 'number' && typeof lng === 'number' ? { lat, lng } : null
+
+  // Prefer nearby, but widen rather than ever return fewer than 3.
+  let pool = restaurants
+  let radiusKm: number | null = null
+  let radiusTier: RadiusTier = 'CITY'
+
+  if (origin) {
+    for (const { km, tier } of RADIUS_TIERS) {
+      const within = withinRadius(restaurants, origin, km)
+      if (within.length >= 3) {
+        pool = within
+        radiusKm = km
+        radiusTier = tier
+        break
+      }
+    }
+  }
+
+  const picked = decideRestaurants(prompt, moodChips, pool)
+
+  // Distance is attached whenever we know where the user is, even on the
+  // city-wide fallback — it's useful context either way.
+  const distances = origin
+    ? new Map(
+        restaurants
+          .filter(hasCoords)
+          .map((r) => [r.id, roundKm(kmBetween(origin, { lat: r.lat, lng: r.lng }))]),
+      )
+    : null
+
+  const results = picked.map((r) =>
+    distances?.has(r.id) ? { ...r, distanceKm: distances.get(r.id) } : r,
+  )
 
   // Prefer the authenticated user; fall back to a body userId that exists (FK safety)
   let validUserId: string | null = req.userId ?? null
@@ -50,7 +107,13 @@ router.post('/query', optionalAuth, async (req, res) => {
     },
   })
 
-  res.json({ results: withPhotoUrlsAll(results), sessionId: session.id })
+  res.json({
+    results: withPhotoUrlsAll(results),
+    sessionId: session.id,
+    // Which radius tier actually produced these picks.
+    radiusKm,
+    radiusTier,
+  })
 })
 
 const tinderSchema = z.object({

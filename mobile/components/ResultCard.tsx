@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { getPlaceholderImage } from '../lib/placeholderImages'
+import { prettyDistance } from '../lib/api'
 import { usePressed } from '../lib/usePressed'
 
 export interface ResultCardProps {
@@ -11,6 +12,8 @@ export interface ResultCardProps {
   cuisine: string
   priceRange: string
   area: string
+  /** Km from the user, shown next to the area when known. */
+  distanceKm?: number
   /** Google Places photo URL; falls back to the placeholder when absent. */
   imageUrl?: string
   // Tap the card body to open the inline confirmation.
@@ -78,6 +81,7 @@ export default function ResultCard({
   cuisine,
   priceRange,
   area,
+  distanceKm,
   imageUrl,
   onSelect,
   onLongPress,
@@ -181,6 +185,20 @@ export default function ResultCard({
             <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: '#888888' }}>
               {area}
             </Text>
+            {prettyDistance(distanceKm) ? (
+              <>
+                <Dot />
+                <Text
+                  style={{
+                    fontFamily: 'DMSans_600SemiBold',
+                    fontSize: 12,
+                    color: '#8A847E',
+                  }}
+                >
+                  {prettyDistance(distanceKm)}
+                </Text>
+              </>
+            ) : null}
           </View>
         </View>
       </Pressable>

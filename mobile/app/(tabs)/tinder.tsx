@@ -35,6 +35,7 @@ import RestaurantDetailSheet from '../../components/RestaurantDetailSheet'
 import {
   getNearbyRestaurants,
   prettyArea,
+  prettyDistance,
   deliveryUrl,
   photoUrls,
   type Restaurant,
@@ -561,6 +562,27 @@ export default function TinderScreen() {
                   <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: '#8A847E' }}>
                     {prettyArea(current.area)}
                   </Text>
+                  {prettyDistance(current.distanceKm) ? (
+                    <>
+                      <View
+                        style={{
+                          width: 3,
+                          height: 3,
+                          borderRadius: 1.5,
+                          backgroundColor: '#5a5a5a',
+                        }}
+                      />
+                      <Text
+                        style={{
+                          fontFamily: 'DMSans_600SemiBold',
+                          fontSize: 14,
+                          color: '#8A847E',
+                        }}
+                      >
+                        {prettyDistance(current.distanceKm)}
+                      </Text>
+                    </>
+                  ) : null}
                 </View>
               </View>
 
@@ -677,6 +699,7 @@ export default function TinderScreen() {
           area={prettyArea(sheetRestaurant.area)}
           tags={sheetRestaurant.tags}
           googleRating={sheetRestaurant.googleRating}
+          distanceKm={sheetRestaurant.distanceKm}
           calories={sheetRestaurant.averageCalories}
           images={photoUrls(sheetRestaurant)}
           onDirections={openDirections}

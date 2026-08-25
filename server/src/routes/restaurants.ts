@@ -1,17 +1,39 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma'
 import { withPhotoUrls, withPhotoUrlsAll } from '../lib/photos'
+import { withinRadius } from '../lib/geo'
 
 const router = Router()
 
-// GET /api/restaurants/nearby?lat=&lng=&radius=5000
-// NOTE: real geo filtering isn't wired yet (no lat/lng columns in the DB), so this
-// returns all active restaurants regardless of the params. lat/lng/radius are accepted
-// now for forward-compatibility; wire distance filtering once coordinates exist.
-// Must be declared BEFORE '/:id' so "nearby" isn't matched as an id.
-router.get('/nearby', async (_req, res) => {
+const DEFAULT_RADIUS_KM = 5
+
+/**
+ * GET /api/restaurants/nearby?lat=&lng=&radius=
+ *
+ * With coordinates: active restaurants within `radius` km (default 5), each
+ * carrying `distanceKm`, nearest first. Without coordinates: all active, as
+ * before. `radius` is in KILOMETRES.
+ *
+ * Must be declared BEFORE '/:id' so "nearby" isn't matched as an id.
+ */
+router.get('/nearby', async (req, res) => {
   const restaurants = await prisma.restaurant.findMany({ where: { isActive: true } })
-  res.json(withPhotoUrlsAll(restaurants))
+
+  const lat = Number(req.query.lat)
+  const lng = Number(req.query.lng)
+  const hasOrigin = Number.isFinite(lat) && Number.isFinite(lng)
+
+  if (!hasOrigin) {
+    res.json(withPhotoUrlsAll(restaurants))
+    return
+  }
+
+  const parsedRadius = Number(req.query.radius)
+  const radiusKm =
+    Number.isFinite(parsedRadius) && parsedRadius > 0 ? parsedRadius : DEFAULT_RADIUS_KM
+
+  const nearby = withinRadius(restaurants, { lat, lng }, radiusKm)
+  res.json(withPhotoUrlsAll(nearby))
 })
 
 // GET /api/restaurants/:id

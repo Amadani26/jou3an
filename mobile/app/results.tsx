@@ -28,7 +28,15 @@ export default function ResultsScreen() {
     mode?: string
     likedIds?: string
     title?: string
+    lat?: string
+    lng?: string
   }>()
+
+  // Present only when the Decide flow captured a "Nearby" position.
+  const lat = Number(params.lat)
+  const lng = Number(params.lng)
+  const coords =
+    Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null
 
   const prompt = params.prompt ?? ''
   let chips: string[] = []
@@ -89,7 +97,7 @@ export default function ResultsScreen() {
     try {
       const res = isTinder
         ? await tinderSuggest(likedIds)
-        : await getDecision(effectivePrompt, chips)
+        : await getDecision(effectivePrompt, chips, coords)
       const elapsed = Date.now() - started
       if (elapsed < 1200) {
         await new Promise((r) => setTimeout(r, 1200 - elapsed))
@@ -253,6 +261,7 @@ export default function ResultsScreen() {
                 cuisine={r.cuisineType}
                 priceRange={`AED ${r.priceMin}–${r.priceMax}`}
                 area={prettyArea(r.area)}
+                distanceKm={r.distanceKm}
                 imageUrl={photoUrls(r)[0]}
                 onSelect={() => setSelectedId(r.id)}
                 onLongPress={() => setDetailRestaurant(r)}
@@ -309,6 +318,7 @@ export default function ResultsScreen() {
       area={detailRestaurant ? prettyArea(detailRestaurant.area) : ''}
       tags={detailRestaurant?.tags}
       googleRating={detailRestaurant?.googleRating}
+      distanceKm={detailRestaurant?.distanceKm}
       calories={detailRestaurant?.averageCalories}
       images={photoUrls(detailRestaurant)}
       onDirections={() => detailRestaurant && openDirections(detailRestaurant)}

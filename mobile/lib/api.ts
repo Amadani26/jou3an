@@ -90,6 +90,8 @@ export interface Restaurant {
   averageCalories: number | null
   /** Relative /api/photos/... proxy paths from Google Places. Use photoUrls(). */
   photoUrls?: string[]
+  /** Km from the user, to 1dp. Present only on located queries. */
+  distanceKm?: number
   lat?: number | null
   lng?: number | null
   googleRating?: number | null
@@ -106,6 +108,10 @@ export interface DailyToday {
 export interface DecisionResponse {
   results: Restaurant[]
   sessionId: string
+  /** Radius that produced these picks; null when the city-wide fallback ran. */
+  radiusKm?: number | null
+  /** NEARBY = 5km, WIDER = 10km, CITY = no radius (all of Dubai). */
+  radiusTier?: 'NEARBY' | 'WIDER' | 'CITY'
 }
 
 export interface DecisionSession {
@@ -172,6 +178,8 @@ export async function postDecisionQuery(body: {
   prompt: string
   moodChips: string[]
   userId?: string
+  lat?: number
+  lng?: number
 }): Promise<DecisionResponse> {
   const { data } = await api.post<DecisionResponse>('/api/decisions/query', body)
   return data
@@ -185,8 +193,13 @@ export async function postDecisionQuery(body: {
 export async function getDecision(
   prompt: string,
   moodChips: string[],
+  coords?: { lat: number; lng: number } | null,
 ): Promise<DecisionResponse> {
-  return postDecisionQuery({ prompt, moodChips })
+  return postDecisionQuery({
+    prompt,
+    moodChips,
+    ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+  })
 }
 
 /**
@@ -212,9 +225,10 @@ export async function getRestaurant(id: string): Promise<Restaurant> {
 /** Nearby (Food Tinder) — passes lat/lng when a location is available. */
 export async function getNearbyRestaurants(
   coords?: { lat: number; lng: number },
-  radius = 5000,
+  /** KILOMETRES (the server reads km, not metres). */
+  radiusKm = 5,
 ): Promise<Restaurant[]> {
-  const params = coords ? { lat: coords.lat, lng: coords.lng, radius } : undefined
+  const params = coords ? { lat: coords.lat, lng: coords.lng, radius: radiusKm } : undefined
   const { data } = await api.get<Restaurant[]>('/api/restaurants/nearby', { params })
   return data
 }
@@ -280,6 +294,11 @@ export const prettyTag = (tag: string) =>
 
 /** Tags that must never render anywhere in the app (e.g. lingering in old data). */
 export const HIDDEN_TAGS = ['halal']
+
+/** "1.2 km" — or null when we don't know how far away it is. */
+export function prettyDistance(km?: number | null): string | null {
+  return typeof km === 'number' ? `${km.toFixed(1)} km` : null
+}
 
 /** Strip hidden tags before displaying a restaurant's tag list. */
 export const visibleTags = (tags: string[] = []) =>
