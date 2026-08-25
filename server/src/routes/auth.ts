@@ -24,6 +24,7 @@ function sanitize(user: User) {
 const signupSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Valid email required'),
+  phoneNumber: z.string().trim().min(1).optional(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 })
 
@@ -33,7 +34,7 @@ router.post('/signup', async (req, res) => {
     res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() })
     return
   }
-  const { name, email, password } = parsed.data
+  const { name, email, phoneNumber, password } = parsed.data
   const normalizedEmail = email.toLowerCase()
 
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
@@ -47,6 +48,7 @@ router.post('/signup', async (req, res) => {
     data: {
       name,
       email: normalizedEmail,
+      phoneNumber: phoneNumber ?? null,
       passwordHash,
       cuisinePreferences: [],
       dietary: [],

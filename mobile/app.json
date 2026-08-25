@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Jou3an",
+    "slug": "jou3an",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "jou3an",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#080808",
+    "developmentClient": false,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.jou3an.app"
+    },
+    "android": {
+      "package": "com.jou3an.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E8272A",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Jou3an to use your location to find restaurants near you."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#080808",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160
+        }
+      ]
+    ]
+  }
+}
