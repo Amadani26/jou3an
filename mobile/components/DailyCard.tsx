@@ -12,6 +12,8 @@ interface DailyCardProps {
   priceMax: number
   /** Google Places photo URL; falls back to the placeholder when absent. */
   imageUrl?: string
+  /** Shorter card so three fit under the Home hero without a long scroll. */
+  compact?: boolean
   onPress?: () => void
 }
 
@@ -23,9 +25,11 @@ export default function DailyCard({
   priceMin,
   priceMax,
   imageUrl,
+  compact,
   onPress,
 }: DailyCardProps) {
   const { pressed, pressHandlers } = usePressed()
+  const imgH = compact ? 100 : 160
 
   return (
     <Pressable
@@ -44,7 +48,7 @@ export default function DailyCard({
       {/* Image header with rank overlay */}
       <View
         style={{
-          height: 160,
+          height: imgH,
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
           overflow: 'hidden',
@@ -52,7 +56,7 @@ export default function DailyCard({
       >
         <Image
           source={{ uri: imageUrl ?? getPlaceholderImage(rank - 1) }}
-          style={{ width: '100%', height: 160 }}
+          style={{ width: '100%', height: imgH }}
           resizeMode="cover"
         />
         {/* Dark gradient so the rank stays readable */}
@@ -67,7 +71,7 @@ export default function DailyCard({
             left: 16,
             bottom: 6,
             fontFamily: 'DMSans_800ExtraBold',
-            fontSize: 38,
+            fontSize: compact ? 30 : 38,
             color: '#E8272A',
             textShadowColor: 'rgba(0,0,0,0.6)',
             textShadowRadius: 8,
@@ -79,13 +83,19 @@ export default function DailyCard({
       </View>
 
       {/* Content */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16 }}>
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingTop: compact ? 9 : 12,
+          paddingBottom: compact ? 12 : 16,
+        }}
+      >
         <Text
           style={{
             fontFamily: 'DMSans_700Bold',
             fontSize: 15,
             color: '#F2EDE8',
-            marginBottom: 4,
+            marginBottom: compact ? 2 : 4,
           }}
         >
           {name}
@@ -95,7 +105,7 @@ export default function DailyCard({
             fontFamily: 'DMSans_400Regular',
             fontSize: 12,
             color: '#504B47',
-            marginBottom: 8,
+            marginBottom: compact ? 5 : 8,
           }}
         >
           {cuisine} · {area}

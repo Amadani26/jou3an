@@ -24,6 +24,62 @@ const FALLBACK_PICKS = [
   { name: 'Pickl', cuisine: 'Smash Burgers', area: 'City Walk', priceMin: 40, priceMax: 65 },
 ]
 
+/** The three-second explanation of the whole product. */
+const STEPS = [
+  { n: '01', label: 'Tell us your vibe', sub: 'Four quick taps' },
+  { n: '02', label: 'Get exactly 3', sub: 'Never a long list' },
+  { n: '03', label: 'Eat', sub: 'Directions in a tap' },
+]
+
+function StepCard({ n, label, sub }: { n: string; label: string; sub: string }) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: '#111111',
+        borderWidth: 1,
+        borderColor: '#1C1C1C',
+        borderRadius: 14,
+        paddingVertical: 10,
+        paddingHorizontal: 10,
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: 'DMSans_800ExtraBold',
+          fontSize: 16,
+          color: '#E63946',
+          letterSpacing: -0.5,
+          marginBottom: 4,
+        }}
+      >
+        {n}
+      </Text>
+      <Text
+        style={{
+          fontFamily: 'DMSans_700Bold',
+          fontSize: 12,
+          color: '#F2EDE8',
+          lineHeight: 15,
+        }}
+      >
+        {label}
+      </Text>
+      <Text
+        style={{
+          fontFamily: 'DMSans_400Regular',
+          fontSize: 10,
+          color: '#504B47',
+          marginTop: 2,
+        }}
+        numberOfLines={1}
+      >
+        {sub}
+      </Text>
+    </View>
+  )
+}
+
 function PulsingDot({ size = 6 }: { size?: number }) {
   const opacity = useSharedValue(1)
   useEffect(() => {
@@ -57,7 +113,7 @@ function SkeletonCard() {
       style={[
         {
           borderRadius: 20,
-          height: 110,
+          height: 178,
           borderWidth: 1,
           borderColor: '#242424',
         },
@@ -124,74 +180,73 @@ export default function HomeScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 28 }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
-        <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 20 }}>
-          <Text
+        {/* Hero — logo mark + a single line. Deliberately tight: the steps
+            below are the actual explanation. */}
+        <View
+          style={{
+            paddingHorizontal: 20,
+            paddingTop: insets.top + 8,
+            alignItems: 'center',
+          }}
+        >
+          <View
             style={{
-              fontFamily: 'DMSans_500Medium',
-              fontSize: 13,
-              color: '#E8272A',
-              opacity: 0.7,
-              marginBottom: 16,
-              textAlign: 'center',
+              width: 48,
+              height: 48,
+              borderRadius: 14,
+              backgroundColor: '#E8272A',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 10,
             }}
           >
-            جوعان على إيش؟
-          </Text>
-
-          <Text
-            style={{
-              fontFamily: 'DMSans_800ExtraBold',
-              fontSize: 52,
-              color: '#F2EDE8',
-              letterSpacing: -2,
-              textAlign: 'center',
-            }}
-          >
-            HUNGRY?
-          </Text>
-          <Text
-            style={{
-              fontFamily: 'DMSans_800ExtraBold',
-              fontSize: 52,
-              color: '#F2EDE8',
-              letterSpacing: -2,
-              textAlign: 'center',
-              marginTop: 8,
-            }}
-          >
-            WE{' '}
             <Text
               style={{
-                color: '#E8272A',
-                fontStyle: 'italic',
-                fontSize: 48,
+                color: '#FFFFFF',
+                fontSize: 24,
+                fontWeight: '800',
+                fontFamily: 'DMSans_800ExtraBold',
               }}
             >
-              decide
+              ج
             </Text>
-          </Text>
+          </View>
 
           <Text
             style={{
-              fontFamily: 'DMSans_400Regular',
-              fontSize: 15,
-              color: '#8A847E',
+              fontFamily: 'DMSans_800ExtraBold',
+              fontSize: 24,
+              color: '#F2EDE8',
+              letterSpacing: -0.8,
               textAlign: 'center',
-              marginTop: 12,
-              marginBottom: 28,
-              paddingHorizontal: 20,
             }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
           >
-            Tell us what you&apos;re craving. We&apos;ll handle the rest.
+            Hungry? We{' '}
+            <Text style={{ color: '#E8272A', fontStyle: 'italic' }}>decide</Text> for you.
           </Text>
         </View>
 
-        {/* CTA into the guided Decide flow */}
-        <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+        {/* How it works — three steps, readable at a glance */}
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 8,
+            paddingHorizontal: 20,
+            marginTop: 12,
+          }}
+        >
+          {STEPS.map((s) => (
+            <StepCard key={s.n} n={s.n} label={s.label} sub={s.sub} />
+          ))}
+        </View>
+
+        {/* CTA — the payoff of reading the steps */}
+        <View style={{ paddingHorizontal: 20, marginTop: 14, marginBottom: 18 }}>
           <Animated.View style={ctaStyle}>
             <RedButton
               label="Decide for me →"
@@ -214,7 +269,7 @@ export default function HomeScreen() {
               flexDirection: 'row',
               alignItems: 'center',
               gap: 8,
-              marginBottom: 14,
+              marginBottom: 8,
             }}
           >
             <PulsingDot />
@@ -242,13 +297,13 @@ export default function HomeScreen() {
               fontFamily: 'DMSans_400Regular',
               fontSize: 13,
               color: '#8A847E',
-              marginBottom: 16,
+              marginBottom: 10,
             }}
           >
             {daily?.themeLabel ?? 'What Dubai is eating right now'}
           </Text>
 
-          <View style={{ gap: 10 }}>
+          <View style={{ gap: 8 }}>
             {isLoading ? (
               <>
                 <SkeletonCard />
@@ -266,6 +321,7 @@ export default function HomeScreen() {
                   priceMin={r.priceMin}
                   priceMax={r.priceMax}
                   imageUrl={photoUrls(r)[0]}
+                  compact
                   onPress={() => router.push(`/restaurant/${r.id}`)}
                 />
               ))
@@ -280,6 +336,7 @@ export default function HomeScreen() {
                   area={r.area}
                   priceMin={r.priceMin}
                   priceMax={r.priceMax}
+                  compact
                   onPress={() =>
                     router.push({
                       pathname: '/results',
