@@ -26,7 +26,7 @@ const ACTION_META: Record<string, { label: string; color: string }> = {
   DIRECTIONS: { label: 'Directions', color: '#2DCE89' },
   ORDER: { label: 'Ordered', color: '#E8272A' },
   CALL: { label: 'Reserved', color: '#FFB547' },
-  SELECT: { label: 'Selected', color: '#8A847E' },
+  SELECT: { label: 'Selected', color: '#E63946' },
 }
 
 /** "Today" / "Yesterday" / "Mon 4 Aug". */
