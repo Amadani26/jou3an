@@ -230,7 +230,13 @@ Checks `/health`, `/api/daily/today`, that the daily payload has **exactly 3** r
 **`mobile/app.json` store readiness** — `name` Jou3an, `slug` jou3an, `version` 1.0.0, `ios.bundleIdentifier` `com.jou3an.app` (kept — already unique and matches the Android package; changing it after App Store Connect registration is painful), plus newly added `ios.buildNumber` "1", `android.versionCode` 1, and `ios.config.usesNonExemptEncryption: false` (skips the export-compliance question on every TestFlight upload).
 🚨 **BLOCKER — placeholder art.** `assets/icon.png` and `assets/splash-icon.png` are still the stock Expo template images (blue "A" chevron / grey target grid), both 1024×1024. TestFlight will accept them, but the app ships unbranded. Replace with real Jou3an artwork (red #E8272A ج mark on #080808) before submitting. `assets/android-icon-*.png` are placeholders too.
 
-**EAS build profiles** (`mobile/eas.json`): `cli.appVersionSource: "local"` (versions come from app.json) and `production` uses `autoIncrement: "buildNumber"` — each production build bumps `ios.buildNumber` in `app.json`, which avoids the duplicate-build-number rejection but means **builds modify app.json**; commit the bump.
+**EAS build profiles** (`mobile/eas.json`): `cli.appVersionSource: "local"` (versions come from app.json) and `production` uses `"autoIncrement": true` — each production build bumps `ios.buildNumber` in `app.json`, which avoids the duplicate-build-number rejection but means **builds modify app.json**; commit the bump.
+⚠️ At the BUILD-PROFILE level `autoIncrement` must be a **boolean** — `"autoIncrement": "buildNumber"` fails validation with `eas.json is not valid. - "build.production.autoIncrement" must be a boolean`. The `"version"` / `"buildNumber"` string form is only valid nested under a platform key (`production.ios.autoIncrement`). On iOS `true` already means "bump buildNumber".
+Validate eas.json offline, without a linked EAS project, using the CLI's own schema:
+```bash
+cd mobile && node -e 'const{EasJsonAccessor,EasJsonUtils}=require(require("child_process").execSync("npm root -g").toString().trim()+"/eas-cli/node_modules/@expo/eas-json");(async()=>{const a=EasJsonAccessor.fromProjectPath(process.cwd());const n=await EasJsonUtils.getBuildProfileNamesAsync(a);for(const p of n)await EasJsonUtils.getBuildProfileAsync(a,"ios",p);console.log("eas.json OK:",n.join(", "))})().catch(e=>{console.error(e.message);process.exit(1)})'
+```
+(`eas config --non-interactive` cannot do this before `eas init` — it errors on the missing project id first.)
 
 **Interactive steps — run these yourself, in order** (`eas-cli` 22.4.0 is already installed globally):
 ```bash

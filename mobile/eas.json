@@ -19,7 +19,7 @@
     },
     "production": {
       "distribution": "store",
-      "autoIncrement": "buildNumber",
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://YOUR-RAILWAY-DOMAIN"
       }
