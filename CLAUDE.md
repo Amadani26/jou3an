@@ -186,6 +186,30 @@ Set these in the Railway service for the `server/` deployment:
 - PORT=3001
 - CLIENT_URL (production Vercel URL of the landing page — added to the CORS allowlist; falls back to http://localhost:5173 if unset)
 
+## Railway Deployment Setup (backend)
+⚠️ The Railway service's **Root Directory is `server/`**, so every command runs INSIDE `server/` — it is NOT the monorepo root. Therefore **no `--workspace=server` / `-w server` flags anywhere** in the Railway build or start commands: from that root there are no npm workspaces at all and npm fails with `No workspaces found: --workspace=server`. Run the plain scripts instead.
+
+`server/railway.json` (the source of truth — it overrides anything typed into the Railway dashboard):
+```json
+{
+  "build":  { "builder": "NIXPACKS", "buildCommand": "npm run build" },
+  "deploy": {
+    "preDeployCommand": "npx prisma migrate deploy",
+    "startCommand": "npm start",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 30,
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
+```
+- **Build**: `npm run build` → `prisma generate && tsc` (server/package.json). Prisma Client MUST be generated before `tsc`, and again on every deploy because Nixpacks builds in a fresh container where `node_modules/.prisma` doesn't exist yet.
+- **Migrations**: run via Railway's **`deploy.preDeployCommand`** (`npx prisma migrate deploy`) — chosen over prepending to `start` so that a failed migration fails the deploy and keeps the previous version live, and so it runs exactly once per deploy instead of on every container restart/replica.
+- **Start**: `npm start` → `node dist/index.js` — the compiled JS. Never `ts-node` in production (ts-node/ts-node-dev are devDependencies and add startup cost).
+- Nixpacks runs `npm install` (there is no `package-lock.json` inside `server/`, so `npm ci` would fail — don't set one as the install command).
+- `server/package.json` declares `"engines": { "node": ">=20" }`.
+- Seeding is **not** automatic — run it once by hand after the first deploy: `railway run npm run seed` (or `npm run seed` locally against the same Supabase DB).
+- The server binds `Number(process.env.PORT) || 3001`; Railway injects `PORT`, so the explicit `PORT=3001` variable is optional.
+
 ## Dev Commands
 From /jou3an root: `npm run dev` (starts client on :5173 + server on :3001 via concurrently)
 From /jou3an/mobile: `npx expo start` (then press i for iOS simulator)
