@@ -11,7 +11,11 @@
     "developmentClient": false,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.jou3an.app"
+      "bundleIdentifier": "com.jou3an.app",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.jou3an.app",
@@ -19,7 +23,8 @@
         "backgroundColor": "#E8272A",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"

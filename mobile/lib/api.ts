@@ -2,7 +2,12 @@ import axios from 'axios'
 import * as SecureStore from 'expo-secure-store'
 import { router } from 'expo-router'
 
-const baseURL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'
+// Trailing slashes are stripped so the relative /api/photos/... proxy paths
+// returned by the server concatenate cleanly in photoUrls().
+const baseURL = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001').replace(
+  /\/+$/,
+  '',
+)
 
 export const TOKEN_KEY = 'jou3an_token'
 

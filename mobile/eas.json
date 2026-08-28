@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 22.4.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://localhost:3001"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://YOUR-RAILWAY-DOMAIN"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "autoIncrement": "buildNumber",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://YOUR-RAILWAY-DOMAIN"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {}
+    }
+  }
+}

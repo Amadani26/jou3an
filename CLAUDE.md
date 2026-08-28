@@ -146,8 +146,9 @@ Mobile shared: `mobile/lib/api.ts` (axios + SecureStore JWT request interceptor 
 ❌ Google OAuth credentials (needs Google Cloud Console setup — code path exists, degrades gracefully)
 ❌ Stripe payment integration (Pro subscription)
 🅿️ Explore tab — PARKED: placeholder only, to be built after core features are complete. (NOTE: no `explore.tsx` file exists in `app/(tabs)/` yet — the current tabs are Home, Decide, Swipe/Tinder, History, Profile. Create the placeholder tab when work resumes.)
-👉 NEXT PHASE (in order): Railway deployment (backend) → Vercel deployment (web landing page) → Phase 4 AI activation (geo-filtering is DONE)
-❌ Railway deployment (backend) — see "Railway Environment Variables" section below
+👉 NEXT PHASE (in order): TestFlight build (mobile) → Vercel deployment (web landing page) → Phase 4 AI activation (Railway backend + geo-filtering are DONE)
+✅ Railway deployment (backend) — LIVE. Config in `server/railway.json`; see "Railway Deployment Setup" below
+❌ TestFlight / App Store submission — config is READY (`mobile/eas.json`), blocked on a real app icon + the interactive EAS steps
 ❌ Vercel deployment (web landing page)
 ❌ App Store / Play Store submission
 ❌ Push notifications
@@ -166,7 +167,7 @@ server/.env required keys:
 - ADMIN_EMAIL (email of the admin user for /api/admin/* routes)
 
 mobile/.env required keys:
-- EXPO_PUBLIC_API_URL (http://localhost:3001 for dev, Railway URL for prod; use LAN IP on a physical device)
+- EXPO_PUBLIC_API_URL (http://localhost:3001 for dev, Railway URL for prod; use LAN IP on a physical device). For BUILDS this comes from `mobile/eas.json` `build.<profile>.env`, not from a .env file — see "TestFlight Build Prep".
 Mobile native deps of note: `expo-linear-gradient`, `expo-location` (Decide "Nearby" GPS permission — configured via the `expo-location` plugin in app.json with an iOS `locationWhenInUsePermission` string).
 
 client/.env required keys:
@@ -210,6 +211,37 @@ Set these in the Railway service for the `server/` deployment:
 - Seeding is **not** automatic — run it once by hand after the first deploy: `railway run npm run seed` (or `npm run seed` locally against the same Supabase DB).
 - The server binds `Number(process.env.PORT) || 3001`; Railway injects `PORT`, so the explicit `PORT=3001` variable is optional.
 
+## TestFlight Build Prep (mobile)
+**Production API URL.** ⚠️ `https://YOUR-RAILWAY-DOMAIN` is still a PLACEHOLDER in `mobile/eas.json` and `mobile/.env.production` — substitute the real Railway domain before building:
+```bash
+cd mobile && sed -i '' 's|https://YOUR-RAILWAY-DOMAIN|https://<real>.up.railway.app|g' eas.json .env.production
+```
+- **`mobile/eas.json` `build.<profile>.env.EXPO_PUBLIC_API_URL` is the source of truth for builds.** `development` → `http://localhost:3001`; `preview` and `production` → the Railway URL.
+- `mobile/.env.production` exists only for LOCAL production-mode parity (`npx expo export`). It is **gitignored** (root `.gitignore` line 4 matches `.env.production` at any depth), so it is never uploaded to the EAS build workers — never rely on it for a real build.
+- Photo proxy: the server returns relative `/api/photos/...` paths and `photoUrls()` in `mobile/lib/api.ts` concatenates them onto the same `baseURL`, so they follow `EXPO_PUBLIC_API_URL` automatically. `baseURL` now strips trailing slashes so a URL entered as `https://host/` can't produce `https://host//api/photos/...`.
+
+**Smoke test the production backend** (`scripts/smoke-prod.sh`, URL read from `mobile/eas.json` or passed as `$1`):
+```bash
+./scripts/smoke-prod.sh                    # uses eas.json production env
+./scripts/smoke-prod.sh http://localhost:3001
+```
+Checks `/health`, `/api/daily/today`, that the daily payload has **exactly 3** results, and that the first `photoUrls` path returns a real `image/*` through the proxy. Exits 2 while the placeholder domain is still in place.
+
+**`mobile/app.json` store readiness** — `name` Jou3an, `slug` jou3an, `version` 1.0.0, `ios.bundleIdentifier` `com.jou3an.app` (kept — already unique and matches the Android package; changing it after App Store Connect registration is painful), plus newly added `ios.buildNumber` "1", `android.versionCode` 1, and `ios.config.usesNonExemptEncryption: false` (skips the export-compliance question on every TestFlight upload).
+🚨 **BLOCKER — placeholder art.** `assets/icon.png` and `assets/splash-icon.png` are still the stock Expo template images (blue "A" chevron / grey target grid), both 1024×1024. TestFlight will accept them, but the app ships unbranded. Replace with real Jou3an artwork (red #E8272A ج mark on #080808) before submitting. `assets/android-icon-*.png` are placeholders too.
+
+**EAS build profiles** (`mobile/eas.json`): `cli.appVersionSource: "local"` (versions come from app.json) and `production` uses `autoIncrement: "buildNumber"` — each production build bumps `ios.buildNumber` in `app.json`, which avoids the duplicate-build-number rejection but means **builds modify app.json**; commit the bump.
+
+**Interactive steps — run these yourself, in order** (`eas-cli` 22.4.0 is already installed globally):
+```bash
+cd mobile
+eas login                                          # Expo account
+eas init                                           # writes extra.eas.projectId + owner into app.json — commit it
+eas build --platform ios --profile production      # prompts for Apple ID; lets EAS manage certs/provisioning
+eas submit --platform ios --profile production     # pick the build; prompts Apple ID + app-specific password
+```
+Requires a **paid** Apple Developer account. On first `eas submit` the app record must exist in App Store Connect (EAS offers to create it); after upload it appears in TestFlight in ~10–15 min, and Apple emails when processing finishes. Fill `submit.production.ios` in eas.json with `appleId` / `ascAppId` / `appleTeamId` only if you want to skip the prompts on later runs.
+
 ## Dev Commands
 From /jou3an root: `npm run dev` (starts client on :5173 + server on :3001 via concurrently)
 From /jou3an/mobile: `npx expo start` (then press i for iOS simulator)
@@ -232,9 +264,13 @@ View database: Supabase dashboard → Table Editor
 - Max 3 action buttons per result card (Directions, Reserve, Order)
 
 ## Next Session Starting Point
-Phase M5 (core discovery features) and the Google Places photo integration are COMPLETE. The database is seeded (10 restaurants + 1 DailyPick) and all 10 are synced with Google Places (place id, 6 photoRefs, lat/lng, googleRating). NEXT PHASE (in order): Railway (backend, remember to add GOOGLE_PLACES_API_KEY) → Vercel (web landing page) → Phase 4 AI activation (geo-filtering is DONE).
-First concrete step: deploy `server/` to Railway. Set all keys from the "Railway Environment Variables" section (incl. PORT=3001), run `npx prisma migrate deploy` + `npm run seed` against the Supabase DB, then point `mobile/.env` EXPO_PUBLIC_API_URL and `client/.env` VITE_API_URL at the Railway URL. Then deploy the client/ landing page to Vercel.
-Then: Phase 4 AI activation (swap decisionEngine.ts placeholder once ANTHROPIC_API_KEY is set) (geo-filtering is DONE). The Places data is verified: `Sushi Counter` was replaced by the real **Sushi Art** (DIFC, pinned), `Ravi Restaurant` is pinned to the **Satwa** original, and `Operation Falafel` is now seeded as MARINA to match the JBR coordinates Places returns.
+The Railway backend deploy config is DONE (`server/railway.json`: plain `npm run build` / `npm start`, migrations via `preDeployCommand`) and the mobile TestFlight config is DONE (`mobile/eas.json` + app.json build metadata + `scripts/smoke-prod.sh`).
+Two things block the actual TestFlight build, both needing the user:
+1. Substitute the real Railway domain for `https://YOUR-RAILWAY-DOMAIN` in `mobile/eas.json` + `mobile/.env.production`, then run `./scripts/smoke-prod.sh` to confirm prod data.
+2. Replace the stock Expo placeholder `mobile/assets/icon.png` and `splash-icon.png` with real Jou3an artwork.
+Then the interactive chain: `eas login` → `eas init` → `eas build --platform ios --profile production` → `eas submit --platform ios --profile production` (see "TestFlight Build Prep").
+After that: Vercel (client/ landing page) → Phase 4 AI activation (swap the `decisionEngine.ts` placeholder once ANTHROPIC_API_KEY is set).
+Note: the seeded DailyPick is dated 2026-08-25; `/api/daily/today` falls back to the most recent live pick, so the app always has data, but re-seed for a fresh date.
 Parked: the Explore tab (placeholder not yet created). Optional non-blocking polish: mobile Profile/Pro live data.
 
 ---
