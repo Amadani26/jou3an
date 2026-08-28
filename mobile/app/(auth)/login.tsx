@@ -6,8 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import RedButton from '../../components/RedButton'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePressed } from '../../lib/usePressed'
+import { API_BASE_URL } from '../../lib/api'
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets()
@@ -33,7 +33,7 @@ export default function LoginScreen() {
   }
 
   const onGoogle = () => {
-    Linking.openURL(`${API_URL}/api/auth/google`).catch(() => {
+    Linking.openURL(`${API_BASE_URL}/api/auth/google`).catch(() => {
       setError('Google sign-in is unavailable right now.')
     })
   }

@@ -148,7 +148,7 @@ Mobile shared: `mobile/lib/api.ts` (axios + SecureStore JWT request interceptor 
 🅿️ Explore tab — PARKED: placeholder only, to be built after core features are complete. (NOTE: no `explore.tsx` file exists in `app/(tabs)/` yet — the current tabs are Home, Decide, Swipe/Tinder, History, Profile. Create the placeholder tab when work resumes.)
 👉 NEXT PHASE (in order): TestFlight build (mobile) → Vercel deployment (web landing page) → Phase 4 AI activation (Railway backend + geo-filtering are DONE)
 ✅ Railway deployment (backend) — LIVE. Config in `server/railway.json`; see "Railway Deployment Setup" below
-❌ TestFlight / App Store submission — config is READY (`mobile/eas.json`), blocked on a real app icon + the interactive EAS steps
+❌ TestFlight / App Store submission — config READY and the prod API URL is baked in (`mobile/eas.json`); blocked only on a real app icon + the interactive EAS steps
 ❌ Vercel deployment (web landing page)
 ❌ App Store / Play Store submission
 ❌ Push notifications
@@ -212,20 +212,29 @@ Set these in the Railway service for the `server/` deployment:
 - The server binds `Number(process.env.PORT) || 3001`; Railway injects `PORT`, so the explicit `PORT=3001` variable is optional.
 
 ## TestFlight Build Prep (mobile)
-**Production API URL.** ⚠️ `https://YOUR-RAILWAY-DOMAIN` is still a PLACEHOLDER in `mobile/eas.json` and `mobile/.env.production` — substitute the real Railway domain before building:
-```bash
-cd mobile && sed -i '' 's|https://YOUR-RAILWAY-DOMAIN|https://<real>.up.railway.app|g' eas.json .env.production
-```
+**Production API URL: `https://server-production-0599.up.railway.app`** (Railway, live).
 - **`mobile/eas.json` `build.<profile>.env.EXPO_PUBLIC_API_URL` is the source of truth for builds.** `development` → `http://localhost:3001`; `preview` and `production` → the Railway URL.
-- `mobile/.env.production` exists only for LOCAL production-mode parity (`npx expo export`). It is **gitignored** (root `.gitignore` line 4 matches `.env.production` at any depth), so it is never uploaded to the EAS build workers — never rely on it for a real build.
-- Photo proxy: the server returns relative `/api/photos/...` paths and `photoUrls()` in `mobile/lib/api.ts` concatenates them onto the same `baseURL`, so they follow `EXPO_PUBLIC_API_URL` automatically. `baseURL` now strips trailing slashes so a URL entered as `https://host/` can't produce `https://host//api/photos/...`.
+- `mobile/.env.production` exists only for LOCAL production-mode parity (`npx expo export`). It is **gitignored** (root `.gitignore` line 4 matches `.env.production` at any depth), so it is never uploaded to the EAS build workers — never rely on it for a real build. Keep its value in sync with eas.json by hand.
+- **ONE origin, one fallback.** `mobile/lib/api.ts` exports `API_BASE_URL` — the only place the origin is resolved. `login.tsx` / `signup.tsx` import it for the Google-OAuth `Linking.openURL` instead of re-deriving `process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'` with their own fallback (they used to; three copies meant three ways to ship localhost). The single remaining `localhost:3001` fallback is the `expo start` default.
+- `EXPO_PUBLIC_*` is inlined at BUILD time, so it must stay a static `process.env.EXPO_PUBLIC_API_URL` member expression — never destructure or index into `process.env`, or the substitution silently doesn't happen.
+- Photo proxy: the server returns relative `/api/photos/...` paths and `photoUrls()` concatenates them onto `API_BASE_URL`, so they follow the same value automatically. Trailing slashes are stripped so `https://host/` can't produce `https://host//api/photos/...`.
+
+**Verify the URL is actually baked into a bundle** — this is what catches an API-unreachable TestFlight build BEFORE uploading:
+```bash
+cd mobile && rm -rf dist
+EXPO_PUBLIC_API_URL=https://server-production-0599.up.railway.app npx expo export --platform ios --clear
+B=$(ls dist/_expo/static/js/ios/*.hbc)
+strings "$B" | grep -c "server-production-0599.up.railway.app"   # expect 1
+strings "$B" | grep -c "localhost:3001"                          # expect 0
+```
+⚠️ **`--clear` is mandatory here.** Metro's transform cache does NOT invalidate when only the env value changes, so without it `expo export` happily re-emits the previous bundle and the grep reports whatever the last run baked in — a false pass. Confirm the `.hbc` filename hash changes between runs. (Verified: with a cleared cache and no env source the bundle contains `localhost:3001` and zero occurrences of the domain — exactly the failing build; with the env var set it is 1 / 0.) EAS Build itself always runs in a fresh container, so this caveat is local-only.
 
 **Smoke test the production backend** (`scripts/smoke-prod.sh`, URL read from `mobile/eas.json` or passed as `$1`):
 ```bash
 ./scripts/smoke-prod.sh                    # uses eas.json production env
 ./scripts/smoke-prod.sh http://localhost:3001
 ```
-Checks `/health`, `/api/daily/today`, that the daily payload has **exactly 3** results, and that the first `photoUrls` path returns a real `image/*` through the proxy. Exits 2 while the placeholder domain is still in place.
+Checks `/health`, `/api/daily/today`, that the daily payload has **exactly 3** results, and that the first `photoUrls` path returns a real `image/*` through the proxy. Exits 2 if the URL is still the `YOUR-RAILWAY-DOMAIN` placeholder. ✅ All four checks pass against the live Railway backend.
 
 **`mobile/app.json` store readiness** — `name` Jou3an, `slug` jou3an, `version` 1.0.0, `ios.bundleIdentifier` `com.jou3an.app` (kept — already unique and matches the Android package; changing it after App Store Connect registration is painful), plus newly added `ios.buildNumber` "1", `android.versionCode` 1, and `ios.config.usesNonExemptEncryption: false` (skips the export-compliance question on every TestFlight upload).
 🚨 **BLOCKER — placeholder art.** `assets/icon.png` and `assets/splash-icon.png` are still the stock Expo template images (blue "A" chevron / grey target grid), both 1024×1024. TestFlight will accept them, but the app ships unbranded. Replace with real Jou3an artwork (red #E8272A ج mark on #080808) before submitting. `assets/android-icon-*.png` are placeholders too.
@@ -270,11 +279,9 @@ View database: Supabase dashboard → Table Editor
 - Max 3 action buttons per result card (Directions, Reserve, Order)
 
 ## Next Session Starting Point
-The Railway backend deploy config is DONE (`server/railway.json`: plain `npm run build` / `npm start`, migrations via `preDeployCommand`) and the mobile TestFlight config is DONE (`mobile/eas.json` + app.json build metadata + `scripts/smoke-prod.sh`).
-Two things block the actual TestFlight build, both needing the user:
-1. Substitute the real Railway domain for `https://YOUR-RAILWAY-DOMAIN` in `mobile/eas.json` + `mobile/.env.production`, then run `./scripts/smoke-prod.sh` to confirm prod data.
-2. Replace the stock Expo placeholder `mobile/assets/icon.png` and `splash-icon.png` with real Jou3an artwork.
-Then the interactive chain: `eas login` → `eas init` → `eas build --platform ios --profile production` → `eas submit --platform ios --profile production` (see "TestFlight Build Prep").
+Railway backend is LIVE at `https://server-production-0599.up.railway.app` (all 4 smoke checks pass) and the mobile TestFlight config is DONE — the prod API URL is baked into `mobile/eas.json` and verified inlined into an actual iOS bundle.
+ONE blocker remains for a shippable TestFlight build: **replace the stock Expo placeholder `mobile/assets/icon.png` and `splash-icon.png`** (and `android-icon-*.png`) with real Jou3an artwork.
+Rebuild + resubmit: `cd mobile && eas build --platform ios --profile production --clear-cache` then `eas submit --platform ios --profile production`. `eas login` is already done (accounts: amadani26, amadani26s-team); `eas init` still needs running once to write `extra.eas.projectId` into app.json.
 After that: Vercel (client/ landing page) → Phase 4 AI activation (swap the `decisionEngine.ts` placeholder once ANTHROPIC_API_KEY is set).
 Note: the seeded DailyPick is dated 2026-08-25; `/api/daily/today` falls back to the most recent live pick, so the app always has data, but re-seed for a fresh date.
 Parked: the Explore tab (placeholder not yet created). Optional non-blocking polish: mobile Profile/Pro live data.

@@ -14,14 +14,14 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://YOUR-RAILWAY-DOMAIN"
+        "EXPO_PUBLIC_API_URL": "https://server-production-0599.up.railway.app"
       }
     },
     "production": {
       "distribution": "store",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://YOUR-RAILWAY-DOMAIN"
+        "EXPO_PUBLIC_API_URL": "https://server-production-0599.up.railway.app"
       }
     }
   },

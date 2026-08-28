@@ -2,12 +2,18 @@ import axios from 'axios'
 import * as SecureStore from 'expo-secure-store'
 import { router } from 'expo-router'
 
+// The ONE place the API origin is resolved. EXPO_PUBLIC_* vars are inlined at
+// BUILD time, so this must stay a static `process.env.X` member expression for
+// the bundler to substitute it — don't destructure or index into process.env.
+// The localhost fallback is for `expo start` only; production builds get the
+// real value from eas.json -> build.<profile>.env.
 // Trailing slashes are stripped so the relative /api/photos/... proxy paths
 // returned by the server concatenate cleanly in photoUrls().
-const baseURL = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001').replace(
-  /\/+$/,
-  '',
-)
+export const API_BASE_URL = (
+  process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'
+).replace(/\/+$/, '')
+
+const baseURL = API_BASE_URL
 
 export const TOKEN_KEY = 'jou3an_token'
 
