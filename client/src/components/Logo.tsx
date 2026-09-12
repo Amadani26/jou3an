@@ -4,6 +4,10 @@
  * ⚠️ The letters are WHITE — this must only ever sit on a dark surface.
  * Rendered at a fraction of its intrinsic size so it stays crisp on retina:
  * even the largest use here (34px tall) is ~18% of the source width.
+ *
+ * Render ONE of these per location — two nodes means the alt text is announced
+ * twice, and any responsive show/hide between them is a duplication waiting to
+ * happen.
  */
 const INTRINSIC_W = 973
 const INTRINSIC_H = 186
@@ -25,7 +29,9 @@ export default function Logo({
       height={height}
       draggable={false}
       // Explicit box so the fixed nav doesn't reflow while the PNG loads.
-      style={{ width, height, display: 'block' }}
+      // NOTE: no `display` here — an inline style beats any utility class, so
+      // setting it would silently defeat `hidden` / `md:block` on the caller.
+      style={{ width, height }}
       className={`select-none ${className}`}
     />
   )

@@ -219,6 +219,55 @@ function CardSlideshow({ photos, paused }: { photos: string[]; paused: boolean }
   )
 }
 
+/**
+ * Shown when nothing was within the search radius and the deck was widened to
+ * the whole city. Dismissible — it explains the widening once, then gets out
+ * of the way.
+ */
+function RadiusBanner({ onDismiss }: { onDismiss: () => void }) {
+  const { pressed, pressHandlers } = usePressed()
+
+  return (
+    <View
+      style={{
+        marginHorizontal: 20,
+        marginBottom: 4,
+        paddingVertical: 10,
+        paddingLeft: 12,
+        paddingRight: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: '#141414',
+        borderWidth: 1,
+        borderColor: '#242424',
+        borderRadius: 12,
+      }}
+    >
+      <Ionicons name="location-outline" size={16} color="#FFB547" />
+      <Text
+        style={{
+          flex: 1,
+          fontFamily: 'DMSans_400Regular',
+          fontSize: 12,
+          lineHeight: 16,
+          color: '#8A847E',
+        }}
+      >
+        Nothing within 5 km — showing all of Dubai
+      </Text>
+      <Pressable
+        {...pressHandlers}
+        onPress={onDismiss}
+        hitSlop={8}
+        style={{ padding: 6, opacity: pressed ? 0.6 : 1 }}
+      >
+        <Ionicons name="close" size={16} color="#504B47" />
+      </Pressable>
+    </View>
+  )
+}
+
 /** One thumbnail in the "Liked" tray. Its own component so it can hold press state. */
 function LikedThumb({
   name,
@@ -277,6 +326,10 @@ export default function TinderScreen() {
   const [sheetRestaurant, setSheetRestaurant] = useState<Restaurant | null>(null)
   // Holds the slideshow timer while the card is being dragged.
   const [dragging, setDragging] = useState(false)
+  // True when the nearby fetch found nothing in radius and we fell back to the
+  // whole city — surfaced as a dismissible banner so "all of Dubai" isn't silent.
+  const [widened, setWidened] = useState(false)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   const translateX = useSharedValue(0)
 
@@ -296,7 +349,14 @@ export default function TinderScreen() {
         /* no location — fetch all */
       }
       try {
-        const data = await getNearbyRestaurants(coords)
+        let data = await getNearbyRestaurants(coords)
+        // Nothing within the radius (user is outside Dubai, or the simulator's
+        // default location is): never show an empty deck — widen to every
+        // active restaurant rather than leaving the user with nothing to swipe.
+        if (coords && data.length === 0) {
+          data = await getNearbyRestaurants()
+          if (active && data.length > 0) setWidened(true)
+        }
         if (active) setRestaurants(data)
       } catch {
         if (active) setRestaurants([]) // graceful — empty deck, Suggest still works
@@ -458,6 +518,10 @@ export default function TinderScreen() {
           Food Tinder
         </Text>
       </View>
+
+      {widened && !bannerDismissed ? (
+        <RadiusBanner onDismiss={() => setBannerDismissed(true)} />
+      ) : null}
 
       {/* Card area — flexes to fill the space between the header and the tray.
           The fixed paddingTop is a barrier the (fixed-height) card can't cross. */}
