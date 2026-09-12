@@ -3,8 +3,10 @@
 @tailwind utilities;
 
 :root {
-  /* Brand */
-  --red: #E8272A;
+  /* Brand — --red matches the official logo assets in public/brand/ exactly.
+     (Was #E8272A before the real artwork landed; the wordmark's "3" and the
+     standalone icon are both #FF3133, so the token follows the artwork.) */
+  --red: #FF3133;
   --gold: #FFB547;
   --green: #2DCE89;
 
@@ -192,8 +194,8 @@ body::before {
 }
 
 .field:focus {
-  border-color: rgba(232, 39, 42, 0.55);
-  box-shadow: 0 0 0 3px rgba(232, 39, 42, 0.12);
+  border-color: rgba(255, 49, 51, 0.55);
+  box-shadow: 0 0 0 3px rgba(255, 49, 51, 0.12);
 }
 
 .btn-primary {
@@ -201,7 +203,7 @@ body::before {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: #e8272a;
+  background: #FF3133;
   color: #fff;
   font-weight: 600;
   border: none;
@@ -213,7 +215,7 @@ body::before {
 
 .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 30px -12px rgba(232, 39, 42, 0.7);
+  box-shadow: 0 14px 30px -12px rgba(255, 49, 51, 0.7);
 }
 
 .btn-ghost {
@@ -286,7 +288,7 @@ a,
   transform: scale(0.97);
 }
 
-/* Hide scrollbars but keep scrolling (used by the mood-chips row) */
+/* Hide scrollbars but keep scrolling */
 .hide-scrollbar {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -317,3 +319,31 @@ a,
   animation: sheetUp 0.35s var(--ease);
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Interactive app preview (landing demo)                              */
+/* ------------------------------------------------------------------ */
+
+/* Stories-style segmented progress bar on the swipe card's photo slideshow */
+@keyframes progressFill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.progress-fill {
+  animation: progressFill 2500ms linear forwards;
+}
+
+/* Dragging the card pauses the slideshow, exactly like the mobile app */
+.progress-paused .progress-fill {
+  animation-play-state: paused;
+}
+
+/* Photo cross-fade between slideshow frames */
+.demo-photo {
+  transition: opacity 0.45s var(--ease);
+}

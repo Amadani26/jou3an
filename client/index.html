@@ -2,7 +2,6 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
     <!-- Mobile / PWA viewport -->
     <meta
@@ -10,13 +9,56 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
     />
 
+    <!-- Favicons — the standalone red "3" mark (transparent, reads on both
+         light and dark browser chrome) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/jou3an-icon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/brand/jou3an-icon-180.png" />
+
     <!-- PWA -->
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#080808" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Jou3an" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+
+    <!-- SEO -->
+    <meta
+      name="description"
+      content="Dubai's food decision engine. Tell us what you're craving and get exactly 3 places to eat — no menus, no scrolling, just a decision. Join the waitlist."
+    />
+    <link rel="canonical" href="https://www.jou3an.me/" />
+
+    <!-- Open Graph (WhatsApp, Instagram, Facebook, LinkedIn) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Jou3an" />
+    <meta property="og:url" content="https://www.jou3an.me" />
+    <meta property="og:title" content="Jou3an — Hungry? We decide for you." />
+    <meta
+      property="og:description"
+      content="Dubai's food decision engine. Tell us what you're craving and get exactly 3 places to eat — no menus, no scrolling, just a decision."
+    />
+    <meta
+      property="og:image"
+      content="https://www.jou3an.me/brand/jou3an-logo-black.jpeg"
+    />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1080" />
+    <meta property="og:image:height" content="1350" />
+    <meta property="og:image:alt" content="Jou3an" />
+    <meta property="og:locale" content="en_AE" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Jou3an — Hungry? We decide for you." />
+    <meta
+      name="twitter:description"
+      content="Dubai's food decision engine. Tell us what you're craving and get exactly 3 places to eat — no menus, no scrolling, just a decision."
+    />
+    <meta
+      name="twitter:image"
+      content="https://www.jou3an.me/brand/jou3an-logo-black.jpeg"
+    />
+    <meta name="twitter:image:alt" content="Jou3an" />
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -30,7 +72,10 @@
       rel="stylesheet"
     />
 
-    <title>Jou3an</title>
+    <!-- The splash paints the wordmark immediately; preload beats the bundle -->
+    <link rel="preload" as="image" href="/brand/jou3an-logo.png" />
+
+    <title>Jou3an — Hungry? We decide for you.</title>
 
     <style>
       #splash {
@@ -50,25 +95,26 @@
         pointer-events: none;
       }
       #splash .wordmark {
-        font-family: 'Syne', sans-serif;
-        font-weight: 800;
-        font-size: 3rem;
-        letter-spacing: -0.02em;
-        color: #f2ede8;
-      }
-      #splash .wordmark span {
-        color: #e8272a;
+        width: 210px;
+        height: 40px;
+        display: block;
       }
       #splash .ar {
         font-size: 1rem;
-        color: #e8272a;
+        color: #FF3133;
       }
     </style>
   </head>
   <body>
     <!-- App splash (fades out once React mounts) -->
     <div id="splash">
-      <div class="wordmark">Jou<span>3</span>an</div>
+      <img
+        class="wordmark"
+        src="/brand/jou3an-logo.png"
+        alt="Jou3an"
+        width="210"
+        height="40"
+      />
       <div class="ar" dir="rtl">جوعان</div>
     </div>
 

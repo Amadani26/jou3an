@@ -21,7 +21,8 @@ Database: Supabase (PostgreSQL) — hosted on EU (Frankfurt) region
 AI: Anthropic Claude API — @anthropic-ai/sdk (Phase 4, not yet activated; decision engine is currently a tag/keyword matcher in `server/src/services/decisionEngine.ts`)
 
 ## Design System (Non-Negotiable)
-Colors: red #E8272A, gold #FFB547, green #2DCE89
+Colors: red **#FF3133** (web), gold #FFB547, green #2DCE89
+⚠️ RED SPLIT — read this before touching a red hex. The official logo artwork (`client/public/brand/`) is **#FF3133**, sampled straight out of the PNGs. `client/src/index.css` `--red` was moved from the old #E8272A to #FF3133 so the CSS red and the logo's "3" match where they meet in the nav and footer; every hardcoded `#E8272A` / `#E63946` / `rgba(232,39,42,…)` / `rgba(232,57,70,…)` in `client/` was swept with it. **`mobile/` was deliberately NOT swept** — it still hardcodes #E8272A / #E63946 inline across many files. Unify it when the app icon artwork is done.
 Background: #080808 (base), #0F0F0F, #141414, #1A1A1A, #222222
 Border: #242424 (default), #1C1C1C (soft)
 Text: #F2EDE8 (primary), #8A847E (secondary), #504B47 (muted)
@@ -29,6 +30,13 @@ Fonts: Syne 800 (display/headlines, web), DM Sans (body), Instrument Serif itali
   - Mobile note: only DM Sans is loaded (weights 400/500/600/700/800). Syne/Instrument Serif are web-only; mobile uses DM Sans 800 for display and `fontStyle: 'italic'` for accents.
 Border radius: 10px (sm), 16px (md), 24px (lg), 32px (xl)
 Animation: cubic-bezier(0.16,1,0.3,1) ease-out throughout
+
+### Brand Assets (`client/public/brand/`)
+The official artwork. Served from `/brand/...` — they are static `public/` files, so the paths are absolute and never hashed by Vite.
+- `jou3an-logo.png` — transparent wordmark, **973×186**, WHITE letters + a #FF3133 "3". ⚠️ **White text: it must never sit on a light background.** Rendered via `client/src/components/Logo.tsx`, which takes a `height` and derives the width from the 973/186 ratio, sets explicit `width`/`height` attributes (no CLS in the fixed nav), and carries `alt="Jou3an"`. Every use is far under half the intrinsic size, so it stays crisp on retina: nav 24px (mobile) / 28px (md+), footer 34px, boot splash 210×40.
+- `jou3an-icon-512.png` / `-180` / `-32` — the standalone red "3", transparent. 32 = favicon, 180 = apple-touch-icon, 512 + 180 = `site.webmanifest` icons. All `purpose: "any"` — **not maskable**: the glyph fills ~80% of the canvas width, so Android's maskable safe zone would clip it.
+- `jou3an-logo-black.jpeg` — wordmark on solid black, **1080×1350** (note the extension is `.jpeg`, not `.jpg`). Used as `og:image` / `twitter:image`. The wordmark is vertically centred (content box 892×107 at y≈632), so X's 1.91:1 centre crop keeps it intact.
+Deleted with this change: the old placeholder `public/favicon.svg`, `public/icons.svg`, `public/icon-192.png`, `public/icon-512.png`, `public/manifest.json`, and `client/scripts/generate-icons.mjs` (the script existed only to render those placeholder "white ج on a red square" icons). `sharp` is still a devDependency but no longer has a consumer.
 
 ## Database Schema (Prisma)
 Models: User, Restaurant, DecisionSession, DailyPick
@@ -110,7 +118,24 @@ Mobile shared: `mobile/lib/api.ts` (axios + SecureStore JWT request interceptor 
 ## What's Built (Completed Phases)
 ✅ Phase 1: Monorepo scaffold — client + server + root concurrently setup
 ✅ Phase 2: Web frontend UI — original app pages, components, design system (SUPERSEDED — see Landing page below)
-✅ Landing page: client/ converted to a single-page marketing site (`client/src/pages/Landing.tsx`, only route is "/"). 6 sections — Hero (iOS/Android download buttons show "Coming soon" alert), How It Works (3 steps), The 3 Rule, Mood Chips showcase (text-only, non-interactive), Waitlist email capture, Footer. Simplified `Nav.tsx` (logo + "Join Waitlist" CTA that smooth-scrolls to #waitlist). Removed: all other pages, AuthContext, PrivateRoute, BottomNav, InstallPrompt, Layout, MoodChips/DailyCard/ResultCard/ProcessingState/GoogleIcon, lib/{api,hooks,haptics}, and the react-query + axios deps. Design system, fonts, CSS variables, Tailwind config and PWA (manifest + service worker) kept as-is. Waitlist email capture is frontend-only (no backend) — submit just shows a success message.
+✅ Landing page → **WAITLIST LAUNCH PAGE** (`client/src/pages/Landing.tsx`, only route is "/"). All App Store / Google Play download buttons are GONE — there is exactly ONE call to action on the page, the `WaitlistCTA` "Join the Waitlist" button, rendered in the hero and again at the end of the app-preview section; both smooth-scroll to `#waitlist` (via `client/src/lib/scroll.ts`, which also focuses the email input after the scroll settles). Nav's CTA uses the same helper. **7 sections, in order**: (1) Hero — unchanged headline/orbs, WaitlistCTA in place of the two download buttons; (2) How It Works — a VERTICAL TIMELINE (`StepRow`, numbered rail + connecting 1px line, no boxes) matching the mobile Home screen, with the app's real flow: 01 "Tell it your vibe", 02 "Swipe or let Jou3an decide", 03 "Get your 3"; (3) The 3 Rule (unchanged); (4) **Interactive app preview** (`AppPreview.tsx` — see below); (5) Waitlist section (`WaitlistForm.tsx`); (6) **FAQ** (`FAQ.tsx` — 6-question accordion); (7) Footer. The old "What are you in the mood for" mood-chip showcase was REMOVED entirely (the local `Chip` helper and `MOODS` array with it). Removed earlier and still gone: all other pages, AuthContext, PrivateRoute, BottomNav, InstallPrompt, Layout, MoodChips/DailyCard/ResultCard/ProcessingState/GoogleIcon, lib/{api,hooks,haptics}, and the react-query + axios deps. Design system, fonts, CSS variables, Tailwind config and PWA (manifest + service worker) kept as-is.
+  - **Branding**: the nav and footer wordmarks are now the real `jou3an-logo.png` via `<Logo />` (the old `Jou3an` / `Jou<span>3</span>an` text treatments and the little red dot over the 3 are gone), as is the boot splash in `index.html`. The HERO was left as styled text on purpose — its headline is the tagline "Hungry? We decide", not the brand name, and the fixed nav already shows the wordmark ~56px above it, so an image there would double up. All three logo surfaces are dark (nav `rgba(8,8,8,0.72)` + blur, footer/splash `#080808`); even a white photo from the app-preview scrolling under the translucent nav composites to ≈#4D4D4D, keeping white-on-nav at ~8:1.
+  - **`index.html` head**: favicon 32 / apple-touch-icon 180 / `rel="manifest"` → `/site.webmanifest`, a `<meta name="description">`, `rel="canonical"`, a real `<title>`, a `preload` for the wordmark (so the splash paints it without a blank beat), and the full Open Graph + Twitter card set — `og:url` `https://www.jou3an.me`, `og:image` / `twitter:image` → `/brand/jou3an-logo-black.jpeg` (absolute URL, with `og:image:width/height`), `twitter:card` `summary_large_image`.
+  - `public/site.webmanifest` REPLACES `public/manifest.json`. `public/sw.js` was bumped to `CACHE_NAME = 'jou3an-v2'` with a new `APP_SHELL` — **mandatory**, because `cache.addAll()` rejects wholesale if any pre-cached URL 404s and the old shell listed files that no longer exist.
+✅ Waitlist capture (client → Supabase DIRECT, **not** through the Express server — the landing page must deploy standalone to Vercel and keep working with the API offline):
+  - `client/supabase/waitlist.sql` — **run this once by hand in the Supabase dashboard** (SQL Editor). Creates `public.waitlist_signups` (`id` uuid pk, `email` text unique, `created_at` timestamptz, `source` text default `'landing'`) + a `lower(email)` unique index, enables RLS, `revoke all` then `grant insert` to anon, and one INSERT-only policy. No SELECT/UPDATE/DELETE policy exists, so anon can never read rows.
+  - Counter: `public.waitlist_count()` — a `security definer` / `stable` SQL function returning `count(*) + 731`, execute granted to anon. This is the ONLY way the count reaches the client; the rows themselves stay unreadable.
+  - `client/src/lib/supabase.ts` — the single Supabase client (`persistSession: false`), `WAITLIST_BASE_COUNT = 731`, `isValidEmail()`, `joinWaitlist(email, source)` and `fetchWaitlistCount()`. ⚠️ The insert deliberately has **no `.select()`** — anon holds INSERT only, so asking for the row back would fail. A `23505` unique violation is mapped to the friendly `'duplicate'` result. Missing env vars leave `supabase` as `null` and every caller degrades instead of throwing.
+  - `client/src/lib/waitlistCount.ts` — module-level store + `useWaitlistCount()` hook, so N mounted counters cause ONE request and a successful signup (`refreshWaitlistCount()`, optimistic +1 then re-fetch) updates every counter at once.
+  - `client/src/components/WaitlistCount.tsx` — small muted "{n} people already on the list" line. Rendered DIRECTLY under every Join-the-Waitlist button. Falls back to the static 731 whenever the RPC fails.
+  - `client/src/components/WaitlistCTA.tsx` — the big red pill CTA + counter. `client/src/components/WaitlistForm.tsx` — email input + submit with inline validation and five states: idle / submitting / joined (green success card, replaces the form) / duplicate (gold "you're already on the list", form stays) / error.
+  - New dep (the only one added): `@supabase/supabase-js`.
+✅ Interactive app preview (`client/src/components/AppPreview.tsx`, section id `#preview`) — a working slice of the real decision flow inside a phone-shaped frame, with **zero backend calls**; all data is hardcoded in `client/src/lib/demoData.ts` (`DEMO_CUISINES` mirroring the mobile Decide list, 8 `DEMO_RESTAURANTS` with 3 Unsplash photos each, `buildDeck()` / `pickThree()`). Three stages driven by one `Stage` state (`'pick' | 'swipe' | 'results'`) with a shared step-dot header:
+  - **pick** — 2-column icon cards (lucide-react icons, bg #141414 / 1px #242424 / radius 16; selected → red border, #1a0d0d fill, red icon+name) that TOGGLE (multi-select), a full-width red-accent "Surprise me" row that advances immediately, and a "Continue" button disabled until something is picked. Same interaction model as the mobile Decide step.
+  - **swipe** — a tinder card stack: pointer-events drag (works for touch AND mouse), ±15° rotation, 95px threshold, fly-off + "Interested"/"Pass" badges, plus X / heart buttons for desktop and a "Skip to my 3 →" link. The card photo is a cross-faded slideshow under an Instagram-stories segmented progress bar. ⚠️ The photo advance is driven by the progress bar's `onAnimationEnd`, not a `setInterval` — that keeps bar and photo in sync and makes a drag (which sets `animation-play-state: paused` via the `.progress-paused` class) pause and RESUME the slideshow rather than restart it. The card uses `touchAction: 'pan-y'` so vertical page scrolling still works while the horizontal axis belongs to the swipe.
+  - **results** — exactly 3 cards matching the mobile `ResultCard`: photo header with the rank (34px red) overlaid over a dark gradient, name, `cuisine · AED min–max (amber #F4A261) · pin + area`, and a red reasoning pill. Plus a "Try again" reset.
+  - Section closes with a second `WaitlistCTA`. New CSS in `client/src/index.css`: `@keyframes progressFill`, `.progress-fill`, `.progress-paused`, `.demo-photo`.
+✅ FAQ (`client/src/components/FAQ.tsx`, section id `#faq`) — 6-question accordion at the very end of the page (before the footer): What is Jou3an? / When does it launch? / Which cities? / Is it free? / Is this another delivery app? / What do waitlist members get?. One open at a time (first open by default), rotating +/× toggle, height animated with the `grid-template-rows: 0fr → 1fr` trick so nothing needs measuring. No emojis.
 ✅ Phase 3: Backend + Database — Prisma schema, all API routes, restaurant seed data (currently 10 restaurants + 1 DailyPick), Daily picks
 ✅ Phase 4: SKIPPED (AI engine — placeholder tag/keyword matcher in place; real AI to be activated when Anthropic API key is ready)
 ✅ Phase 5: Auth — Passport.js, email/password, Google OAuth (code ready, creds pending), JWT, AuthContext
@@ -149,7 +174,7 @@ Mobile shared: `mobile/lib/api.ts` (axios + SecureStore JWT request interceptor 
 👉 NEXT PHASE (in order): TestFlight build (mobile) → Vercel deployment (web landing page) → Phase 4 AI activation (Railway backend + geo-filtering are DONE)
 ✅ Railway deployment (backend) — LIVE. Config in `server/railway.json`; see "Railway Deployment Setup" below
 ❌ TestFlight / App Store submission — config READY and the prod API URL is baked in (`mobile/eas.json`); blocked only on a real app icon + the interactive EAS steps
-❌ Vercel deployment (web landing page)
+❌ Vercel deployment (web landing page) — code is READY; needs `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` set in Vercel and `client/supabase/waitlist.sql` run once in the Supabase dashboard
 ❌ App Store / Play Store submission
 ❌ Push notifications
 ❌ Google Maps API integration
@@ -170,9 +195,11 @@ mobile/.env required keys:
 - EXPO_PUBLIC_API_URL (http://localhost:3001 for dev, Railway URL for prod; use LAN IP on a physical device). For BUILDS this comes from `mobile/eas.json` `build.<profile>.env`, not from a .env file — see "TestFlight Build Prep".
 Mobile native deps of note: `expo-linear-gradient`, `expo-location` (Decide "Nearby" GPS permission — configured via the `expo-location` plugin in app.json with an iOS `locationWhenInUsePermission` string).
 
-client/.env required keys:
-- VITE_API_URL (http://localhost:3001 for dev)
+client/.env required keys (see `client/.env.example`):
+- VITE_API_URL (http://localhost:3001 for dev) — no longer used by the landing page itself
 - VITE_ADMIN_PASSWORD (client-side gate for the web /admin panel)
+- VITE_SUPABASE_URL (Supabase project URL — waitlist capture + counter)
+- VITE_SUPABASE_ANON_KEY (Supabase anon key. Public BY DESIGN: RLS grants anon INSERT on `waitlist_signups` and EXECUTE on `waitlist_count()`, nothing else. Both must also be set in the Vercel project's env vars — `client/.env` is gitignored.)
 
 ## Railway Environment Variables (backend deployment)
 Set these in the Railway service for the `server/` deployment:
@@ -282,7 +309,12 @@ View database: Supabase dashboard → Table Editor
 Railway backend is LIVE at `https://server-production-0599.up.railway.app` (all 4 smoke checks pass) and the mobile TestFlight config is DONE — the prod API URL is baked into `mobile/eas.json` and verified inlined into an actual iOS bundle.
 ONE blocker remains for a shippable TestFlight build: **replace the stock Expo placeholder `mobile/assets/icon.png` and `splash-icon.png`** (and `android-icon-*.png`) with real Jou3an artwork.
 Rebuild + resubmit: `cd mobile && eas build --platform ios --profile production --clear-cache` then `eas submit --platform ios --profile production`. `eas login` is already done (accounts: amadani26, amadani26s-team); `eas init` still needs running once to write `extra.eas.projectId` into app.json.
-After that: Vercel (client/ landing page) → Phase 4 AI activation (swap the `decisionEngine.ts` placeholder once ANTHROPIC_API_KEY is set).
+The client/ **waitlist launch page is BUILT and BRANDED** (official logo in the nav / footer / splash, full favicon + webmanifest set, Open Graph + Twitter cards pointing at `https://www.jou3an.me`, and `--red` moved to the official **#FF3133**). It has: download buttons removed, one Join-the-Waitlist CTA + live counter, interactive app-preview demo, rewritten 3-step timeline, FAQ accordion. `npx tsc -b`, `npx oxlint` and `npm run build` are all clean, and every `/brand/*` asset was verified serving with the right MIME type from `vite preview`. Manual steps remaining before it is live:
+  1. Run `client/supabase/waitlist.sql` once in the Supabase dashboard (SQL Editor) — creates `waitlist_signups`, the insert-only RLS policy, and the `waitlist_count()` RPC.
+  2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `client/.env` (locally) AND in the Vercel project, then deploy `client/`. Until they are set the form reports an error and the counter shows the static 731 — nothing crashes.
+  3. Point **`www.jou3an.me`** at the Vercel deployment. The Open Graph tags hardcode that origin, so WhatsApp/X previews only resolve `og:image` once the domain is live. Re-scrape with X's Card Validator / Facebook's Sharing Debugger after the first deploy — both cache aggressively.
+⚠️ Bundle weight: the landing JS is **478 kB raw / 139 kB gzip**, and ~215 kB of that is `@supabase/supabase-js` (it drags in auth-js + realtime-js + storage-js for what is one INSERT and one RPC). Not addressed — the cheap fix is a dynamic `import()` in `client/src/lib/supabase.ts` so it lands in a lazy chunk instead of the initial bundle.
+After that: Phase 4 AI activation (swap the `decisionEngine.ts` placeholder once ANTHROPIC_API_KEY is set).
 Note: the seeded DailyPick is dated 2026-08-25; `/api/daily/today` falls back to the most recent live pick, so the app always has data, but re-seed for a fresh date.
 Parked: the Explore tab (placeholder not yet created). Optional non-blocking polish: mobile Profile/Pro live data.
 

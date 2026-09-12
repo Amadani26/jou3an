@@ -1,14 +1,15 @@
 /* Jou3an service worker */
-const CACHE_NAME = 'jou3an-v1'
+const CACHE_NAME = 'jou3an-v2'
 
 // Core app shell to pre-cache. Hashed JS/CSS bundles are cached at runtime
 // (their names are not known ahead of time in a Vite build).
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
+  '/site.webmanifest',
+  '/brand/jou3an-logo.png',
+  '/brand/jou3an-icon-180.png',
+  '/brand/jou3an-icon-512.png',
 ]
 
 self.addEventListener('install', (event) => {

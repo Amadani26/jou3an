@@ -1,63 +1,75 @@
-import { useState } from 'react'
-import type { FormEvent } from 'react'
-import { Apple } from 'lucide-react'
+import AppPreview from '../components/AppPreview'
+import FAQ from '../components/FAQ'
+import Logo from '../components/Logo'
+import WaitlistCTA from '../components/WaitlistCTA'
+import WaitlistForm from '../components/WaitlistForm'
 
-const MOODS = [
-  'Cheap',
-  'Healthy',
-  'Late Night',
-  'High Protein',
-  'Comfort Food',
-  'Quick',
-  'Date Night',
-  'Halal',
-]
-
+/** The app's real flow, in three beats. */
 const STEPS = [
   {
-    n: '1',
-    title: 'Tell us what you want',
-    body: 'Type anything — "cheap healthy lunch", "date night", "late-night shawarma" — or just tap a mood.',
+    n: '01',
+    title: 'Tell it your vibe',
+    body: 'Pick your area and the cuisines you want — or just say what you’re craving.',
   },
   {
-    n: '2',
-    title: 'We decide for you',
-    body: 'Our AI reads your craving, budget and area, then picks exactly 3 options. No lists to scroll.',
+    n: '02',
+    title: 'Swipe or let Jou3an decide',
+    body: 'Swipe through tinder-style picks, or skip straight to an instant decision.',
   },
   {
-    n: '3',
-    title: 'Go eat',
-    body: 'Tap Directions, Reserve, or Order and you’re out the door. Decision made in seconds.',
+    n: '03',
+    title: 'Get your 3',
+    body: 'Exactly three options with directions, call or reserve, or order. Decided in under 10 seconds.',
   },
 ]
 
-/** Smoothly scroll to the waitlist section. */
-export function scrollToWaitlist() {
-  document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' })
-}
-
-function Chip({ label }: { label: string }) {
+/**
+ * Vertical timeline step — a numbered rail with a connecting line, matching
+ * the mobile Home screen's StepRow. No boxes: the three read as one flow.
+ */
+function StepRow({
+  n,
+  title,
+  body,
+  last,
+}: {
+  n: string
+  title: string
+  body: string
+  last?: boolean
+}) {
   return (
-    <span className="shrink-0 px-4 py-2 rounded-full text-sm border bg-bg-2 border-border text-text-secondary select-none">
-      {label}
-    </span>
+    <div className="flex gap-5">
+      {/* Rail */}
+      <div className="flex flex-col items-center" style={{ width: 46 }}>
+        <span
+          className="font-display font-extrabold leading-none"
+          style={{ fontSize: 28, color: 'var(--red)' }}
+        >
+          {n}
+        </span>
+        {!last && (
+          <span
+            className="flex-1 w-px mt-3"
+            style={{ background: 'var(--border)', minHeight: 34 }}
+          />
+        )}
+      </div>
+
+      {/* Copy */}
+      <div className={last ? 'pb-0' : 'pb-9'}>
+        <h3 className="font-display font-bold text-text-primary text-lg md:text-xl">
+          {title}
+        </h3>
+        <p className="mt-1.5 text-text-secondary text-[15px] leading-relaxed max-w-[460px]">
+          {body}
+        </p>
+      </div>
+    </div>
   )
 }
 
 export default function Landing() {
-  const [email, setEmail] = useState('')
-  const [joined, setJoined] = useState(false)
-
-  const comingSoon = () => window.alert('Coming soon')
-
-  const joinWaitlist = (e: FormEvent) => {
-    e.preventDefault()
-    if (!email.trim()) return
-    // Frontend-only for now — no backend capture yet.
-    setJoined(true)
-    setEmail('')
-  }
-
   return (
     <div className="relative overflow-hidden">
       {/* ============================================================ */}
@@ -69,7 +81,7 @@ export default function Landing() {
           className="pointer-events-none absolute top-0 -left-16 w-80 h-80 rounded-full"
           style={{
             background:
-              'radial-gradient(circle, rgba(232,39,42,0.28), transparent 70%)',
+              'radial-gradient(circle, rgba(255, 49, 51,0.28), transparent 70%)',
             filter: 'blur(70px)',
           }}
         />
@@ -82,7 +94,7 @@ export default function Landing() {
           }}
         />
 
-        <div className="relative flex flex-col items-center">
+        <div className="relative flex flex-col items-center w-full">
           <p
             className="text-red uppercase fade-up"
             style={{
@@ -118,25 +130,16 @@ export default function Landing() {
             options. No menus. No scrolling. Just a decision.
           </p>
 
-          <div
-            className="mt-9 flex flex-col sm:flex-row items-center gap-3 fade-up"
-            style={{ animationDelay: '0.22s' }}
-          >
-            <button onClick={comingSoon} className="btn-primary rounded-full px-6 py-3.5">
-              <Apple size={18} />
-              Download on iOS
-            </button>
-            <button onClick={comingSoon} className="btn-ghost px-6 py-3.5">
-              <span className="material-symbols-outlined text-[18px]">android</span>
-              Get Android App
-            </button>
-          </div>
+          <WaitlistCTA
+            className="mt-9 w-full max-w-[340px] fade-up"
+            label="Join the Waitlist"
+          />
 
           <p
             className="mt-5 text-text-muted text-sm fade-up"
             style={{ animationDelay: '0.28s' }}
           >
-            Available soon · Dubai, UAE
+            Launching in Dubai · Invites in batches
           </p>
         </div>
 
@@ -149,9 +152,9 @@ export default function Landing() {
       </section>
 
       {/* ============================================================ */}
-      {/* SECTION 2 — HOW IT WORKS                                     */}
+      {/* SECTION 2 — HOW IT WORKS (vertical timeline)                 */}
       {/* ============================================================ */}
-      <section className="relative max-w-[1000px] mx-auto px-5 md:px-8 py-24 md:py-32">
+      <section className="relative max-w-[860px] mx-auto px-5 md:px-8 py-24 md:py-32">
         <p className="text-xs uppercase tracking-[0.2em] text-red mb-4">
           How It Works
         </p>
@@ -163,26 +166,15 @@ export default function Landing() {
           <em className="font-serif italic font-normal text-red">10 seconds</em>
         </h2>
 
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
-          {STEPS.map((s) => (
-            <div
+        <div className="mt-12">
+          {STEPS.map((s, i) => (
+            <StepRow
               key={s.n}
-              className="bg-bg-2 border border-border"
-              style={{ borderRadius: 24, padding: 28 }}
-            >
-              <div
-                className="font-display font-extrabold text-red leading-none"
-                style={{ fontSize: '4rem', opacity: 0.4 }}
-              >
-                {s.n}
-              </div>
-              <h3 className="mt-4 font-display font-bold text-xl text-text-primary">
-                {s.title}
-              </h3>
-              <p className="mt-2 text-text-secondary text-[15px] leading-relaxed">
-                {s.body}
-              </p>
-            </div>
+              n={s.n}
+              title={s.title}
+              body={s.body}
+              last={i === STEPS.length - 1}
+            />
           ))}
         </div>
       </section>
@@ -215,26 +207,12 @@ export default function Landing() {
       </section>
 
       {/* ============================================================ */}
-      {/* SECTION 4 — MOOD CHIPS SHOWCASE                              */}
+      {/* SECTION 4 — INTERACTIVE APP PREVIEW (+ its own waitlist CTA) */}
       {/* ============================================================ */}
-      <section className="relative px-5 md:px-8 py-24 md:py-32 text-center">
-        <p className="text-xs uppercase tracking-[0.2em] text-red mb-8">
-          What Are You In The Mood For?
-        </p>
-
-        <div className="max-w-[640px] mx-auto flex flex-wrap justify-center gap-2.5">
-          {MOODS.map((m) => (
-            <Chip key={m} label={m} />
-          ))}
-        </div>
-
-        <p className="mt-8 text-text-secondary">
-          Tap a mood. Get 3 perfect picks. Done.
-        </p>
-      </section>
+      <AppPreview />
 
       {/* ============================================================ */}
-      {/* SECTION 5 — EARLY ACCESS / WAITLIST                          */}
+      {/* SECTION 5 — WAITLIST                                         */}
       {/* ============================================================ */}
       <section
         id="waitlist"
@@ -252,29 +230,7 @@ export default function Landing() {
             know the moment Jou3an is live.
           </p>
 
-          {joined ? (
-            <p className="mt-9 text-green font-medium">
-              You&apos;re on the list. We&apos;ll be in touch.
-            </p>
-          ) : (
-            <form
-              onSubmit={joinWaitlist}
-              className="mt-9 w-full flex flex-col sm:flex-row items-stretch gap-3 max-w-[520px]"
-            >
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@email.com"
-                className="flex-1 min-w-0 bg-bg-2 border border-border text-text-primary placeholder:text-text-muted outline-none transition-colors duration-300 focus:border-[rgba(232,39,42,0.55)]"
-                style={{ borderRadius: 32, padding: '12px 20px', fontSize: 16 }}
-              />
-              <button type="submit" className="btn-primary rounded-full px-6 py-3">
-                Join Waitlist
-              </button>
-            </form>
-          )}
+          <WaitlistForm />
 
           <p className="mt-4 text-text-muted text-sm">
             No spam. Just one email when we launch.
@@ -283,13 +239,17 @@ export default function Landing() {
       </section>
 
       {/* ============================================================ */}
-      {/* SECTION 6 — FOOTER                                           */}
+      {/* SECTION 6 — FAQ                                              */}
+      {/* ============================================================ */}
+      <FAQ />
+
+      {/* ============================================================ */}
+      {/* SECTION 7 — FOOTER                                           */}
       {/* ============================================================ */}
       <footer className="relative px-5 md:px-8 pt-16 pb-14 border-t border-border-soft text-center">
         <div className="max-w-[720px] mx-auto flex flex-col items-center gap-3">
-          <div className="font-display font-extrabold text-2xl tracking-tight text-text-primary">
-            Jou<span className="text-red">3</span>an
-          </div>
+          {/* Footer sits on #080808 — safe for the white wordmark */}
+          <Logo height={34} />
           <div className="text-red text-sm" dir="rtl">
             جوعان
           </div>
