@@ -80,6 +80,11 @@ model Restaurant {
   photoRefs      String[]
   lat            Float?
   lng            Float?
+  /// Real Dubai neighbourhood from Google's address components ("Al Satwa",
+  /// "Mirdif", "Motor City"). DISPLAY + search only — all filtering is driven
+  /// by lat/lng. Null until the row has been Places-synced.
+  /// Supersedes the coarse `area` enum, which cannot represent most of Dubai.
+  areaName       String?
   googleRating   Float?
   /// Google `regularOpeningHours.periods` verbatim:
   /// [{ open: { day, hour, minute }, close?: { day, hour, minute } }].

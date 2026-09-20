@@ -39,6 +39,7 @@ import {
   cuisineFromTypes,
   priceRangeFor,
 } from '../lib/importMapping'
+import { areaNameFromFormattedAddress } from '../lib/areaName'
 
 /** Gap between Places calls during enrichment. */
 const SYNC_DELAY_MS = 400
@@ -49,6 +50,7 @@ interface ResultRow {
   name: string
   status: RowStatus
   cuisine: string
+  /** Real neighbourhood once known, else the coarse enum. */
   area: string
   price: string
   photos: number
@@ -129,6 +131,9 @@ async function main() {
   for (const c of approved) {
     const cuisine = cuisineFromTypes(c.primaryType)
     const area = areaFromPlace(c.address, null)
+    // Best guess from the candidates file; the Places sync below replaces it
+    // with the structured address components, which are more reliable.
+    const areaNameGuess = areaNameFromFormattedAddress(c.address)
     const price = priceRangeFor(c.priceLevel)
     const priceLabel = `${price.min}–${price.max}`
 
@@ -173,6 +178,7 @@ async function main() {
           googlePlaceId: c.placeId,
           isActive: true,
           tags: [],
+          ...(areaNameGuess ? { areaName: areaNameGuess } : {}),
           // Neutral — our editorial score is not Google's, and the engine
           // already reads quality from googleRating.
           ratingScore: NEUTRAL_RATING_SCORE,
@@ -184,11 +190,14 @@ async function main() {
       let hours: number | null = null
       let note: string | undefined
 
+      let resolvedArea: string = areaNameGuess ?? area
+
       if (!noSync) {
         const outcome = await syncRestaurantPlaces(created)
         apiCalls += outcome.apiCalls
         photos = outcome.photos
         hours = outcome.hours
+        if (outcome.areaName) resolvedArea = outcome.areaName
         // The area guess came from the address; now that the sync has real
         // coordinates, let them refine an OTHER into a real district.
         if (area === 'OTHER') {
@@ -214,7 +223,7 @@ async function main() {
         name: c.name,
         status: 'created',
         cuisine,
-        area,
+        area: resolvedArea,
         price: priceLabel,
         photos,
         hours,

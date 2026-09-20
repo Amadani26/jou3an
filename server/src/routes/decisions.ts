@@ -339,7 +339,10 @@ router.get('/history', requireAuth, async (req, res) => {
         restaurantId: r.id,
         restaurantName: r.name,
         cuisine: r.cuisineType,
+        // Deprecated coarse enum, kept for older app builds; `areaName` is the
+        // real neighbourhood and what the app should render.
         area: r.area,
+        areaName: r.areaName,
         priceRange: `AED ${r.priceMin}–${r.priceMax}`,
         actionTaken: s.actionTaken,
         createdAt: s.createdAt,

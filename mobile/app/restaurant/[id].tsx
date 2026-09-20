@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import RedButton from '../../components/RedButton'
 import {
   getRestaurant,
-  prettyArea,
+  displayArea,
   prettyTag,
   deliveryUrl,
   type Restaurant,
@@ -95,7 +95,7 @@ export default function RestaurantScreen() {
   const openDirections = (rest: Restaurant) =>
     Linking.openURL(
       `https://maps.google.com/?q=${encodeURIComponent(
-        `${rest.name} ${prettyArea(rest.area)} Dubai`,
+        `${rest.name} ${displayArea(rest)} Dubai`,
       )}`,
     )
 
@@ -153,7 +153,7 @@ export default function RestaurantScreen() {
             </Text>
             <Ionicons name="location-outline" size={13} color="#8A847E" />
             <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: '#8A847E' }}>
-              {prettyArea(r.area)}
+              {displayArea(r)}
             </Text>
           </View>
 

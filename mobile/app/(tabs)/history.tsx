@@ -16,7 +16,7 @@ import RestaurantDetailSheet from '../../components/RestaurantDetailSheet'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   getDecisionHistory,
-  prettyArea,
+  displayArea,
   photoUrls,
   type HistoryItem,
 } from '../../lib/api'
@@ -164,7 +164,7 @@ function HistoryRow({
           style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: '#8A847E' }}
           numberOfLines={1}
         >
-          {item.cuisine} · {prettyArea(item.area)} · {item.priceRange}
+          {item.cuisine} · {displayArea(item)} · {item.priceRange}
         </Text>
       </View>
 
@@ -223,7 +223,7 @@ export default function HistoryScreen() {
   const openMaps = (item: HistoryItem) =>
     Linking.openURL(
       `https://maps.google.com/?q=${encodeURIComponent(
-        `${item.restaurantName} ${prettyArea(item.area)} Dubai`,
+        `${item.restaurantName} ${displayArea(item)} Dubai`,
       )}`,
     )
 
@@ -303,7 +303,7 @@ export default function HistoryScreen() {
           name={selected.restaurantName}
           cuisine={selected.cuisine}
           priceRange={selected.priceRange}
-          area={prettyArea(selected.area)}
+          area={displayArea(selected)}
           tags={selected.tags}
           googleRating={selected.googleRating}
           calories={selected.calories}

@@ -17,7 +17,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated'
-import { prettyTag, visibleTags, photoUrls, type Restaurant, prettyArea } from '../lib/api'
+import { prettyTag, visibleTags, photoUrls, type Restaurant, displayArea } from '../lib/api'
 import { getPlaceholderImage } from '../lib/placeholderImages'
 import RedButton from './RedButton'
 
@@ -222,7 +222,7 @@ export default function SelectionConfirmCard({
                 <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#242424' }} />
                 <Ionicons name="location-outline" size={13} color="#8A847E" />
                 <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: '#8A847E' }}>
-                  {prettyArea(restaurant.area)}
+                  {displayArea(restaurant)}
                 </Text>
               </View>
 

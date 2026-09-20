@@ -8,6 +8,7 @@
 import { Prisma, type Restaurant } from '@prisma/client'
 import prisma from '../lib/prisma'
 import { extractPeriods, getPlaceDetails, rankPhotos, searchPlace } from './googlePlaces'
+import { resolveAreaName } from '../lib/areaName'
 
 export const MAX_PHOTOS = 6
 
@@ -27,6 +28,8 @@ export interface SyncOutcome {
   rating: number | null
   hours: number | null
   coords: string
+  /** Real neighbourhood from Google's address, or null when unresolvable. */
+  areaName: string | null
   /** How many Places calls this row cost. */
   apiCalls: number
 }
@@ -50,7 +53,15 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
     const match = await searchPlace(query)
     apiCalls++
     if (!match?.id) {
-      return { status: 'no match', photos: 0, rating: null, hours: null, coords: '—', apiCalls }
+      return {
+      status: 'no match',
+      photos: 0,
+      rating: null,
+      hours: null,
+      coords: '—',
+      areaName: null,
+      apiCalls,
+    }
     }
     placeId = match.id
     searchName = match.displayName?.text
@@ -67,6 +78,10 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
   const location = details.location
   const rating = details.rating ?? null
   const periods = extractPeriods(details)
+  // Components first, formatted address as the fallback. Never overwrite a
+  // resolved name with null: a transient gap in Google's data should not wipe
+  // a neighbourhood we already had.
+  const areaName = resolveAreaName(details.addressComponents, details.formattedAddress)
 
   await prisma.restaurant.update({
     where: { id: r.id },
@@ -76,6 +91,7 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
       lat: location?.latitude ?? null,
       lng: location?.longitude ?? null,
       googleRating: rating,
+      ...(areaName ? { areaName } : {}),
       // Prisma.DbNull (not JS null) is how a Json column is set back to SQL
       // NULL; plain null would be rejected by the generated type.
       openingHours: (periods ?? Prisma.DbNull) as unknown as Prisma.InputJsonValue,
@@ -89,6 +105,7 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
     photos: photoRefs.length,
     rating,
     hours: periods?.length ?? null,
+    areaName,
     coords: location
       ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
       : '—',

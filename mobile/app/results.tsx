@@ -13,7 +13,7 @@ import {
   getDecision,
   tinderSuggest,
   saveDecisionSelection,
-  prettyArea,
+  displayArea,
   deliveryUrl,
   photoUrls,
   type Restaurant,
@@ -176,7 +176,7 @@ export default function ResultsScreen() {
     recordSelection(r, 'DIRECTIONS')
     Linking.openURL(
       `https://maps.google.com/?q=${encodeURIComponent(
-        `${r.name} ${prettyArea(r.area)} Dubai`,
+        `${r.name} ${displayArea(r)} Dubai`,
       )}`,
     )
   }
@@ -186,7 +186,7 @@ export default function ResultsScreen() {
     else
       Linking.openURL(
         `https://maps.google.com/?q=${encodeURIComponent(
-          `${r.name} ${prettyArea(r.area)} Dubai`,
+          `${r.name} ${displayArea(r)} Dubai`,
         )}`,
       )
   }
@@ -197,7 +197,7 @@ export default function ResultsScreen() {
     else
       Linking.openURL(
         `https://maps.google.com/?q=${encodeURIComponent(
-          `${r.name} ${prettyArea(r.area)} Dubai`,
+          `${r.name} ${displayArea(r)} Dubai`,
         )}`,
       )
   }
@@ -303,7 +303,7 @@ export default function ResultsScreen() {
                 name={r.name}
                 cuisine={r.cuisineType}
                 priceRange={`AED ${r.priceMin}–${r.priceMax}`}
-                area={prettyArea(r.area)}
+                area={displayArea(r)}
                 distanceKm={r.distanceKm}
                 reason={r.reason}
                 imageUrl={photoUrls(r)[0]}
@@ -359,7 +359,7 @@ export default function ResultsScreen() {
           ? `AED ${detailRestaurant.priceMin}–${detailRestaurant.priceMax}`
           : ''
       }
-      area={detailRestaurant ? prettyArea(detailRestaurant.area) : ''}
+      area={detailRestaurant ? displayArea(detailRestaurant) : ''}
       tags={detailRestaurant?.tags}
       googleRating={detailRestaurant?.googleRating}
       distanceKm={detailRestaurant?.distanceKm}

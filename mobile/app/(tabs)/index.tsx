@@ -15,7 +15,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import RedButton from '../../components/RedButton'
 import DailyCard from '../../components/DailyCard'
-import { getDailyPicks, prettyArea, photoUrls } from '../../lib/api'
+import { getDailyPicks, displayArea, photoUrls } from '../../lib/api'
 
 /** Shown when the daily picks fail to load — keeps the section populated, never crashes. */
 const FALLBACK_PICKS = [
@@ -356,7 +356,7 @@ export default function HomeScreen() {
                   rank={i + 1}
                   name={r.name}
                   cuisine={r.cuisineType}
-                  area={prettyArea(r.area)}
+                  area={displayArea(r)}
                   priceMin={r.priceMin}
                   priceMax={r.priceMax}
                   imageUrl={photoUrls(r)[0]}

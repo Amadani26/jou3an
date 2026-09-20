@@ -34,7 +34,7 @@ import RedButton from '../../components/RedButton'
 import RestaurantDetailSheet from '../../components/RestaurantDetailSheet'
 import {
   getNearbyRestaurants,
-  prettyArea,
+  displayArea,
   prettyDistance,
   deliveryUrl,
   photoUrls,
@@ -456,7 +456,7 @@ export default function TinderScreen() {
   // Sheet action handlers — act on whichever restaurant the sheet is showing.
   const mapsUrl = (r: Restaurant) =>
     `https://maps.google.com/?q=${encodeURIComponent(
-      `${r.name} ${prettyArea(r.area)} Dubai`,
+      `${r.name} ${displayArea(r)} Dubai`,
     )}`
   const openDirections = () => {
     if (sheetRestaurant) Linking.openURL(mapsUrl(sheetRestaurant))
@@ -624,7 +624,7 @@ export default function TinderScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <Ionicons name="location-outline" size={14} color="#8A847E" />
                   <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: '#8A847E' }}>
-                    {prettyArea(current.area)}
+                    {displayArea(current)}
                   </Text>
                   {prettyDistance(current.distanceKm) ? (
                     <>
@@ -760,7 +760,7 @@ export default function TinderScreen() {
           name={sheetRestaurant.name}
           cuisine={sheetRestaurant.cuisineType}
           priceRange={`AED ${sheetRestaurant.priceMin}–${sheetRestaurant.priceMax}`}
-          area={prettyArea(sheetRestaurant.area)}
+          area={displayArea(sheetRestaurant)}
           tags={sheetRestaurant.tags}
           googleRating={sheetRestaurant.googleRating}
           distanceKm={sheetRestaurant.distanceKm}

@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "discover": "ts-node src/scripts/discoverPlaces.ts",
     "import": "ts-node src/scripts/importPlaces.ts",
-    "unreject": "ts-node src/scripts/unreject.ts"
+    "unreject": "ts-node src/scripts/unreject.ts",
+    "sync:areas": "ts-node src/scripts/syncAreaNames.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

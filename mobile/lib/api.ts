@@ -89,6 +89,12 @@ export interface Restaurant {
    * on every other endpoint, so always render it conditionally.
    */
   reason?: string
+  /**
+   * Real Dubai neighbourhood from Google ("Al Satwa", "Mirdif", "Motor City").
+   * Null until the row has been Places-synced — render via displayArea(), never
+   * directly, so the deprecated `area` enum still covers the gap.
+   */
+  areaName?: string | null
   id: string
   name: string
   cuisineType: string
@@ -318,7 +324,9 @@ export interface HistoryItem {
   restaurantId: string
   restaurantName: string
   cuisine: string
+  /** @deprecated Coarse 5-value enum — use displayArea(). */
   area: LocationArea
+  areaName?: string | null
   priceRange: string
   actionTaken: 'DIRECTIONS' | 'CALL' | 'ORDER' | 'SELECT' | null
   createdAt: string
@@ -351,7 +359,31 @@ const AREA_LABELS: Record<LocationArea, string> = {
   OTHER: 'Dubai',
 }
 
+/**
+ * @deprecated The `LocationArea` enum only knows five districts, so most of
+ * Dubai collapses to OTHER. Use `displayArea()`, which prefers the real
+ * neighbourhood name and only falls back to this.
+ */
 export const prettyArea = (area: LocationArea) => AREA_LABELS[area] ?? 'Dubai'
+
+/**
+ * What to show for a restaurant's area.
+ *
+ * Prefers `areaName` (the real neighbourhood Google gave us) and falls back to
+ * the deprecated enum's label, so a row that has never been synced still reads
+ * sensibly instead of going blank.
+ *
+ * ⚠️ DISPLAY AND SEARCH ONLY. Nothing filters on this string — the radius
+ * ladder and the decision engine run entirely off lat/lng.
+ */
+export function displayArea(r: {
+  areaName?: string | null
+  area?: LocationArea | null
+}): string {
+  const name = r.areaName?.trim()
+  if (name) return name
+  return AREA_LABELS[r.area ?? 'OTHER'] ?? 'Dubai'
+}
 
 export const prettyTag = (tag: string) =>
   tag

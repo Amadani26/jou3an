@@ -36,6 +36,14 @@ export interface PlaceOpeningHours {
   weekdayDescriptions?: string[]
 }
 
+/** One entry from Places' structured address breakdown. */
+export interface PlaceAddressComponent {
+  longText?: string
+  shortText?: string
+  types?: string[]
+  languageCode?: string
+}
+
 export interface PlaceDetails {
   id: string
   displayName?: { text?: string }
@@ -43,6 +51,8 @@ export interface PlaceDetails {
   rating?: number
   photos?: PlacePhoto[]
   regularOpeningHours?: PlaceOpeningHours
+  addressComponents?: PlaceAddressComponent[]
+  formattedAddress?: string
 }
 
 export class PlacesConfigError extends Error {}
@@ -286,7 +296,22 @@ export async function discoverPlaces(
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
   return placesFetch<PlaceDetails>(
     `/places/${encodeURIComponent(placeId)}`,
-    'id,displayName,location,rating,photos,regularOpeningHours',
+    'id,displayName,location,rating,photos,regularOpeningHours,addressComponents,formattedAddress',
+    { method: 'GET' },
+  )
+}
+
+/**
+ * Address-only Place Details — the cheap call.
+ *
+ * Used by the areaName backfill, which needs nothing but the address. Keeping
+ * the field mask this narrow keeps the request on the Places "Essentials" SKU
+ * instead of dragging in the Advanced fields (photos, hours) we already have.
+ */
+export async function getPlaceAddress(placeId: string): Promise<PlaceDetails> {
+  return placesFetch<PlaceDetails>(
+    `/places/${encodeURIComponent(placeId)}`,
+    'id,displayName,addressComponents,formattedAddress',
     { method: 'GET' },
   )
 }
