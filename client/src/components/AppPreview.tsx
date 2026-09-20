@@ -103,7 +103,7 @@ function CuisineCard({
       } px-3.5 text-left transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.98]`}
       style={{
         background: selected ? '#1a0d0d' : 'var(--bg-2)',
-        border: `1px solid ${highlight ? 'rgba(255, 49, 51,0.55)' : 'var(--border)'}`,
+        border: `1px solid ${highlight ? 'rgba(254,0,0,0.55)' : 'var(--border)'}`,
         borderRadius: 16,
       }}
     >
@@ -415,7 +415,7 @@ function SwipeStage({
             width: 54,
             height: 54,
             background: 'var(--bg-2)',
-            border: '1px solid rgba(255, 49, 51,0.45)',
+            border: '1px solid rgba(254,0,0,0.45)',
             color: 'var(--red)',
           }}
         >
@@ -523,8 +523,8 @@ function ResultCard({
           className="inline-block mt-2.5 px-2.5 py-1 text-[11px] font-medium"
           style={{
             color: 'var(--red)',
-            background: 'rgba(255, 49, 51,0.12)',
-            border: '1px solid rgba(255, 49, 51,0.3)',
+            background: 'rgba(254,0,0,0.12)',
+            border: '1px solid rgba(254,0,0,0.3)',
             borderRadius: 999,
           }}
         >

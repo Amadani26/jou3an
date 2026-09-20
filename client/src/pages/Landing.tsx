@@ -1,8 +1,12 @@
 import AppPreview from '../components/AppPreview'
 import FAQ from '../components/FAQ'
 import Logo from '../components/Logo'
+import PhoneMockup from '../components/PhoneMockup'
+import Reveal from '../components/Reveal'
 import WaitlistCTA from '../components/WaitlistCTA'
 import WaitlistForm from '../components/WaitlistForm'
+import WhatIsJou3an from '../components/WhatIsJou3an'
+import { useParallax } from '../lib/reveal'
 
 /** The app's real flow, in three beats. */
 const STEPS = [
@@ -70,6 +74,13 @@ function StepRow({
 }
 
 export default function Landing() {
+  // Light hero parallax: the two orbs drift at different rates as the page
+  // scrolls away, and the copy lags just slightly behind it. Transform-only,
+  // rAF-throttled, and switched off entirely under prefers-reduced-motion.
+  const redOrb = useParallax<HTMLSpanElement>(0.22)
+  const goldOrb = useParallax<HTMLSpanElement>(-0.14)
+  const heroCopy = useParallax<HTMLDivElement>(0.06)
+
   return (
     <div className="relative overflow-hidden">
       {/* ============================================================ */}
@@ -78,14 +89,16 @@ export default function Landing() {
       <section className="relative min-h-[100svh] flex flex-col items-center justify-center text-center px-5 md:px-8">
         {/* Gradient orbs */}
         <span
+          ref={redOrb}
           className="pointer-events-none absolute top-0 -left-16 w-80 h-80 rounded-full"
           style={{
             background:
-              'radial-gradient(circle, rgba(255, 49, 51,0.28), transparent 70%)',
+              'radial-gradient(circle, rgba(254,0,0,0.28), transparent 70%)',
             filter: 'blur(70px)',
           }}
         />
         <span
+          ref={goldOrb}
           className="pointer-events-none absolute bottom-0 -right-16 w-96 h-96 rounded-full"
           style={{
             background:
@@ -94,7 +107,7 @@ export default function Landing() {
           }}
         />
 
-        <div className="relative flex flex-col items-center w-full">
+        <div ref={heroCopy} className="relative flex flex-col items-center w-full">
           <p
             className="text-red uppercase fade-up"
             style={{
@@ -155,26 +168,32 @@ export default function Landing() {
       {/* SECTION 2 — HOW IT WORKS (vertical timeline)                 */}
       {/* ============================================================ */}
       <section className="relative max-w-[860px] mx-auto px-5 md:px-8 py-24 md:py-32">
-        <p className="text-xs uppercase tracking-[0.2em] text-red mb-4">
-          How It Works
-        </p>
-        <h2
-          className="font-display font-extrabold text-text-primary"
-          style={{ fontSize: 'clamp(2rem, 5vw, 3.25rem)', lineHeight: 1.02 }}
-        >
-          From hungry to decided in{' '}
-          <em className="font-serif italic font-normal text-red">10 seconds</em>
-        </h2>
+        <Reveal>
+          <p className="text-xs uppercase tracking-[0.2em] text-red mb-4">
+            How It Works
+          </p>
+          <h2
+            className="font-display font-extrabold text-text-primary"
+            style={{ fontSize: 'clamp(2rem, 5vw, 3.25rem)', lineHeight: 1.02 }}
+          >
+            From hungry to decided in{' '}
+            <em className="font-serif italic font-normal text-red">
+              10 seconds
+            </em>
+          </h2>
+        </Reveal>
 
         <div className="mt-12">
           {STEPS.map((s, i) => (
-            <StepRow
-              key={s.n}
-              n={s.n}
-              title={s.title}
-              body={s.body}
-              last={i === STEPS.length - 1}
-            />
+            // Each step trails the one above it, so the rail draws downward.
+            <Reveal key={s.n} delay={i * 110}>
+              <StepRow
+                n={s.n}
+                title={s.title}
+                body={s.body}
+                last={i === STEPS.length - 1}
+              />
+            </Reveal>
           ))}
         </div>
       </section>
@@ -183,7 +202,7 @@ export default function Landing() {
       {/* SECTION 3 — THE 3 RULE                                       */}
       {/* ============================================================ */}
       <section className="relative px-5 md:px-8 py-24 md:py-32 text-center">
-        <div className="max-w-[760px] mx-auto flex flex-col items-center">
+        <Reveal className="max-w-[760px] mx-auto flex flex-col items-center">
           <h2
             className="font-display font-extrabold text-text-primary"
             style={{ fontSize: 'clamp(2.2rem, 6vw, 4rem)', lineHeight: 1.02 }}
@@ -203,7 +222,7 @@ export default function Landing() {
             3. The right 3. Because the best decision engine isn&apos;t one that
             shows you everything — it&apos;s one that knows what to cut.
           </p>
-        </div>
+        </Reveal>
       </section>
 
       {/* ============================================================ */}
@@ -212,39 +231,57 @@ export default function Landing() {
       <AppPreview />
 
       {/* ============================================================ */}
-      {/* SECTION 5 — WAITLIST                                         */}
+      {/* SECTION 5 — WAITLIST (+ phone mockup alongside the form)     */}
       {/* ============================================================ */}
       <section
         id="waitlist"
-        className="relative px-5 md:px-8 py-24 md:py-32 text-center scroll-mt-20"
+        className="relative px-5 md:px-8 py-24 md:py-32 scroll-mt-20"
       >
-        <div className="max-w-[620px] mx-auto flex flex-col items-center">
-          <h2
-            className="font-display font-extrabold text-text-primary"
-            style={{ fontSize: 'clamp(2.2rem, 6vw, 3.75rem)', lineHeight: 1.02 }}
-          >
-            Be first in Dubai.
-          </h2>
-          <p className="mt-5 max-w-[460px] text-text-secondary text-lg leading-relaxed">
-            We&apos;re launching soon. Drop your email and we&apos;ll let you
-            know the moment Jou3an is live.
-          </p>
+        {/* Form left, device right on desktop; device stacks below on mobile. */}
+        <div className="max-w-[1080px] mx-auto grid lg:grid-cols-[minmax(0,1fr)_auto] gap-14 lg:gap-16 items-center">
+          <Reveal className="flex flex-col items-center lg:items-start text-center lg:text-left">
+            <h2
+              className="font-display font-extrabold text-text-primary"
+              style={{
+                fontSize: 'clamp(2.2rem, 6vw, 3.75rem)',
+                lineHeight: 1.02,
+              }}
+            >
+              Be first in Dubai.
+            </h2>
+            <p className="mt-5 max-w-[460px] text-text-secondary text-lg leading-relaxed">
+              We&apos;re launching soon. Drop your email and we&apos;ll let you
+              know the moment Jou3an is live.
+            </p>
 
-          <WaitlistForm />
+            <WaitlistForm />
 
-          <p className="mt-4 text-text-muted text-sm">
-            No spam. Just one email when we launch.
-          </p>
+            <p className="mt-4 text-text-muted text-sm">
+              No spam. Just one email when we launch.
+            </p>
+          </Reveal>
+
+          <Reveal delay={120} className="flex justify-center">
+            <PhoneMockup
+              src="/brand/app-screens/home-daily-top-3.png"
+              alt="The Jou3an app showing today's Daily Top 3 picks in Dubai"
+            />
+          </Reveal>
         </div>
       </section>
 
       {/* ============================================================ */}
-      {/* SECTION 6 — FAQ                                              */}
+      {/* SECTION 6 — WHAT IS JOU3AN (+ feature grid)                  */}
+      {/* ============================================================ */}
+      <WhatIsJou3an />
+
+      {/* ============================================================ */}
+      {/* SECTION 7 — FAQ                                              */}
       {/* ============================================================ */}
       <FAQ />
 
       {/* ============================================================ */}
-      {/* SECTION 7 — FOOTER                                           */}
+      {/* SECTION 8 — FOOTER                                           */}
       {/* ============================================================ */}
       <footer className="relative px-5 md:px-8 pt-16 pb-14 border-t border-border-soft text-center">
         <div className="max-w-[720px] mx-auto flex flex-col items-center gap-3">

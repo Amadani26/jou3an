@@ -53,7 +53,7 @@ function Item({ q, a, open, onToggle }: {
             width: 30,
             height: 30,
             transform: open ? 'rotate(45deg)' : 'rotate(0deg)',
-            borderColor: open ? 'rgba(255, 49, 51,0.55)' : 'var(--border)',
+            borderColor: open ? 'rgba(254,0,0,0.55)' : 'var(--border)',
             color: open ? 'var(--red)' : 'var(--text-secondary)',
           }}
         >

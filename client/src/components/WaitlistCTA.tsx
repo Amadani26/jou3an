@@ -21,8 +21,12 @@ export default function WaitlistCTA({
         className="btn-primary rounded-full w-full sm:w-auto"
         style={{
           padding: '18px 40px',
-          fontSize: 17,
-          boxShadow: '0 18px 44px -20px rgba(255, 49, 51,0.85)',
+          // 19px/700 clears the WCAG "large text" bar (18.66px bold), where
+          // white on #FE0000 (4.03:1) passes AA. Pure red caps out below the
+          // 4.5:1 normal-text threshold, so the size is doing the work here.
+          fontSize: 19,
+          fontWeight: 700,
+          boxShadow: '0 18px 44px -20px rgba(254,0,0,0.85)',
         }}
       >
         {label}

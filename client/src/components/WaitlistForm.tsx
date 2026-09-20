@@ -98,13 +98,13 @@ export default function WaitlistForm() {
           placeholder="you@email.com"
           aria-label="Email address"
           aria-invalid={status === 'invalid'}
-          className="flex-1 min-w-0 bg-bg-2 border text-text-primary placeholder:text-text-muted outline-none transition-colors duration-300 focus:border-[rgba(255,49,51,0.55)]"
+          className="flex-1 min-w-0 bg-bg-2 border text-text-primary placeholder:text-text-muted outline-none transition-colors duration-300 focus:border-[rgba(254,0,0,0.55)]"
           style={{
             borderRadius: 32,
             padding: '15px 22px',
             fontSize: 16,
             borderColor:
-              status === 'invalid' ? 'rgba(255, 49, 51,0.6)' : 'var(--border)',
+              status === 'invalid' ? 'rgba(254,0,0,0.6)' : 'var(--border)',
           }}
         />
         <button
