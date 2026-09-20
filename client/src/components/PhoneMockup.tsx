@@ -36,7 +36,11 @@ export default function PhoneMockup({
             src={src}
             alt={alt}
             className="phone-shot"
-            loading="lazy"
+            // Eager, not lazy: this sits beside the primary CTA, and at 158 kB
+            // it should be on screen the moment the reveal animation plays
+            // rather than popping in afterwards.
+            width={900}
+            height={1957}
             decoding="async"
             // If the asset ever goes missing, drop the <img> rather than let the
             // browser paint alt text across the panel — the frame then reads as
