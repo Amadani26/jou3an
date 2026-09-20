@@ -9,6 +9,96 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
     />
 
+    <!--
+      Stale-deploy recovery.
+
+      This MUST be inline, and MUST run before the module script: the failure it
+      recovers from is an index.html that a cache served from an older deploy,
+      still pointing at hashed bundles the server no longer has. Those 404, the
+      app's entry module never executes, and the page is a white screen — so
+      nothing shipped inside the bundle can repair it. A reload refetches
+      index.html and picks up the current hashes.
+    -->
+    <script>
+      (function () {
+        var KEY = 'jou3an:stale-reload'
+        // A reload-loop retries within seconds, so a cooldown is enough to make
+        // looping impossible — while still letting a long-lived tab recover
+        // from a *later* deploy instead of being stuck for the whole session.
+        var COOLDOWN_MS = 10 * 60 * 1000
+
+        function recover(what) {
+          var now = Date.now()
+          try {
+            var last = Number(sessionStorage.getItem(KEY) || 0)
+            if (last && now - last < COOLDOWN_MS) return
+            sessionStorage.setItem(KEY, String(now))
+          } catch (err) {
+            // Storage blocked (private mode, third-party context). Without the
+            // guard we cannot prove we won't loop, so decline to reload.
+            return
+          }
+
+          if (window.console && console.warn) {
+            console.warn('[jou3an] stale asset (' + what + ') — reloading once')
+          }
+
+          // A cache-first service worker would just re-serve the same stale
+          // HTML, so drop its caches before reloading.
+          var reload = function () {
+            location.reload()
+          }
+          if (
+            window.caches &&
+            navigator.serviceWorker &&
+            navigator.serviceWorker.controller
+          ) {
+            caches
+              .keys()
+              .then(function (keys) {
+                return Promise.all(
+                  keys.map(function (k) {
+                    return caches.delete(k)
+                  }),
+                )
+              })
+              .then(reload, reload)
+          } else {
+            reload()
+          }
+        }
+
+        // Resource load errors do not bubble, so this has to be capture phase.
+        window.addEventListener(
+          'error',
+          function (e) {
+            var el = e.target
+            if (!el || el === window) return
+            var url = el.src || el.href
+            if (!url) return
+            // Only our own assets. A font CDN blip is not a stale deploy, and
+            // reloading on it would be both useless and user-hostile.
+            if (url.lastIndexOf(location.origin, 0) !== 0) return
+
+            if (el.tagName === 'SCRIPT') recover(url)
+            else if (
+              el.tagName === 'LINK' &&
+              (el.rel === 'stylesheet' || el.rel === 'modulepreload')
+            ) {
+              recover(url)
+            }
+          },
+          true,
+        )
+
+        // Vite dispatches this when a lazy chunk's preload fails after boot.
+        window.addEventListener('vite:preloadError', function (e) {
+          if (e.preventDefault) e.preventDefault()
+          recover('vite:preloadError')
+        })
+      })()
+    </script>
+
     <!-- Favicons — the standalone red "3" mark (transparent, reads on both
          light and dark browser chrome) -->
     <link rel="icon" type="image/png" sizes="32x32" href="/brand/jou3an-icon-32.png" />
