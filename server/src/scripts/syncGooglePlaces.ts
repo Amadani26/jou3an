@@ -16,11 +16,13 @@
 import 'dotenv/config'
 import prisma from '../lib/prisma'
 import {
+  extractPeriods,
   getPlaceDetails,
   rankPhotos,
   searchPlace,
   PlacesConfigError,
 } from '../services/googlePlaces'
+import { Prisma } from '@prisma/client'
 
 const MAX_PHOTOS = 6
 
@@ -39,6 +41,8 @@ interface Row {
   photos: number
   rating: number | null
   coords: string
+  /** Number of opening periods stored, or null when Google had none. */
+  hours: number | null
   note?: string
 }
 
@@ -66,7 +70,14 @@ async function main() {
 
       if (!match?.id) {
         console.log(`  ✗ ${r.name} — no match for "${query}"`)
-        rows.push({ name: r.name, status: 'no match', photos: 0, rating: null, coords: '—' })
+        rows.push({
+          name: r.name,
+          status: 'no match',
+          photos: 0,
+          rating: null,
+          coords: '—',
+          hours: null,
+        })
         unmatched.push(r.name)
         continue
       }
@@ -80,6 +91,8 @@ async function main() {
 
       const location = details.location ?? match.location
       const rating = details.rating ?? match.rating ?? null
+      // Stored verbatim; interpreted by isOpenNow() in src/lib/hours.ts.
+      const periods = extractPeriods(details)
 
       await prisma.restaurant.update({
         where: { id: r.id },
@@ -89,6 +102,9 @@ async function main() {
           lat: location?.latitude ?? null,
           lng: location?.longitude ?? null,
           googleRating: rating,
+          // Prisma.DbNull (not JS null) is how a Json column is set back to
+          // SQL NULL; plain null would be rejected by the generated type.
+          openingHours: (periods ?? Prisma.DbNull) as unknown as Prisma.InputJsonValue,
           googleSyncedAt: new Date(),
         },
       })
@@ -99,7 +115,9 @@ async function main() {
       console.log(
         `  ${pinned ? '📌' : '✓'} ${r.name} → "${placeName}" · ${
           photoRefs.length
-        } photo(s) · rating ${rating ?? '—'} · ${coords}`,
+        } photo(s) · rating ${rating ?? '—'} · ${
+          periods ? `${periods.length} period(s)` : 'no hours'
+        } · ${coords}`,
       )
       rows.push({
         name: r.name,
@@ -107,6 +125,7 @@ async function main() {
         photos: photoRefs.length,
         rating,
         coords,
+        hours: periods?.length ?? null,
         // Only search results need a name sanity check — pins are deliberate.
         note: !pinned && placeName !== r.name ? `matched "${placeName}"` : undefined,
       })
@@ -114,7 +133,15 @@ async function main() {
       if (err instanceof PlacesConfigError) throw err
       const message = err instanceof Error ? err.message : String(err)
       console.log(`  ! ${r.name} — ${message}`)
-      rows.push({ name: r.name, status: 'error', photos: 0, rating: null, coords: '—', note: message })
+      rows.push({
+        name: r.name,
+        status: 'error',
+        photos: 0,
+        rating: null,
+        coords: '—',
+        hours: null,
+        note: message,
+      })
       unmatched.push(r.name)
     }
   }
@@ -123,7 +150,7 @@ async function main() {
   const w = (s: string, n: number) => s.padEnd(n).slice(0, n)
   console.log('\n' + '─'.repeat(78))
   console.log(
-    `${w('RESTAURANT', 24)}${w('STATUS', 10)}${w('PHOTOS', 8)}${w('RATING', 8)}LAT, LNG`,
+    `${w('RESTAURANT', 24)}${w('STATUS', 10)}${w('PHOTOS', 8)}${w('RATING', 8)}${w('HOURS', 8)}LAT, LNG`,
   )
   console.log('─'.repeat(78))
   for (const row of rows) {
@@ -131,15 +158,16 @@ async function main() {
       `${w(row.name, 24)}${w(row.status, 10)}${w(String(row.photos), 8)}${w(
         row.rating == null ? '—' : row.rating.toFixed(1),
         8,
-      )}${row.coords}`,
+      )}${w(row.hours == null ? '—' : String(row.hours), 8)}${row.coords}`,
     )
   }
   console.log('─'.repeat(78))
 
   const matched = rows.filter((r) => r.status === 'matched' || r.status === 'pinned').length
   const withPhotos = rows.filter((r) => r.photos > 0).length
+  const withHours = rows.filter((r) => (r.hours ?? 0) > 0).length
   console.log(
-    `\n${matched}/${rows.length} matched · ${withPhotos} with photos · ${unmatched.length} needing attention`,
+    `\n${matched}/${rows.length} matched · ${withPhotos} with photos · ${withHours} with hours · ${unmatched.length} needing attention`,
   )
   if (unmatched.length) {
     console.log(`\n⚠️  Not synced: ${unmatched.join(', ')}`)

@@ -18,12 +18,31 @@ export interface PlacePhoto {
   authorAttributions?: { displayName?: string; uri?: string; photoUri?: string }[]
 }
 
+/** One end of an opening period; `day` is 0=Sunday..6=Saturday, place-local. */
+export interface PlaceHoursPoint {
+  day: number
+  hour: number
+  minute?: number
+}
+
+/** A period with no `close` means the place is open 24/7. */
+export interface PlaceHoursPeriod {
+  open: PlaceHoursPoint
+  close?: PlaceHoursPoint
+}
+
+export interface PlaceOpeningHours {
+  periods?: PlaceHoursPeriod[]
+  weekdayDescriptions?: string[]
+}
+
 export interface PlaceDetails {
   id: string
   displayName?: { text?: string }
   location?: { latitude: number; longitude: number }
   rating?: number
   photos?: PlacePhoto[]
+  regularOpeningHours?: PlaceOpeningHours
 }
 
 export class PlacesConfigError extends Error {}
@@ -150,13 +169,42 @@ export async function searchAreas(
   })
 }
 
-/** Place Details — the photo list, coordinates and rating for one place id. */
+/**
+ * Place Details — photos, coordinates, rating and opening hours for one id.
+ *
+ * `regularOpeningHours` is billed on the Places "Advanced" SKU, so it is worth
+ * knowing this call costs more than the plain fields. We store the periods
+ * verbatim and interpret them in src/lib/hours.ts.
+ */
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
   return placesFetch<PlaceDetails>(
     `/places/${encodeURIComponent(placeId)}`,
-    'id,displayName,location,rating,photos',
+    'id,displayName,location,rating,photos,regularOpeningHours',
     { method: 'GET' },
   )
+}
+
+/**
+ * Just the periods array, or null when Google has no hours for the place.
+ *
+ * Normalised to drop entries without a usable `open`, so a malformed period can
+ * never reach `isOpenNow()` and be mistaken for "closed".
+ */
+export function extractPeriods(
+  details: PlaceDetails,
+): PlaceHoursPeriod[] | null {
+  const periods = details.regularOpeningHours?.periods
+  if (!Array.isArray(periods) || !periods.length) return null
+
+  const usable = periods.filter(
+    (p) =>
+      p?.open &&
+      Number.isFinite(p.open.day) &&
+      Number.isFinite(p.open.hour) &&
+      p.open.day >= 0 &&
+      p.open.day <= 6,
+  )
+  return usable.length ? usable : null
 }
 
 const normalize = (s: string) =>

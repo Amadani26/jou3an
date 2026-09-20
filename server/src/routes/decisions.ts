@@ -4,6 +4,7 @@ import prisma from '../lib/prisma'
 import { decideRestaurants } from '../services/decisionEngine'
 import { optionalAuth, requireAuth } from '../middleware/auth'
 import { photoProxyPath, withPhotoUrlsAll } from '../lib/photos'
+import { applyTasteEvent, applyTasteEvents, type TasteEvent } from '../services/tasteProfile'
 import {
   distanceKm as kmBetween,
   hasCoords,
@@ -116,8 +117,23 @@ router.post('/query', optionalAuth, async (req, res) => {
   })
 })
 
+/**
+ * DecisionEngine v2: the client may now send the FULL swipe log so we can learn
+ * from passes as well as likes.
+ *
+ * `likedIds` stays supported and is still what picks the results — older app
+ * builds send only that, and they must keep working. When `swipes` is present
+ * its right-swipes are merged into the liked set, so a client can send either
+ * shape (or both) and get the same behaviour.
+ */
+const swipeSchema = z.object({
+  restaurantId: z.string().min(1),
+  direction: z.enum(['LEFT', 'RIGHT']),
+})
+
 const tinderSchema = z.object({
   likedIds: z.array(z.string()).default([]),
+  swipes: z.array(swipeSchema).default([]),
 })
 
 // POST /api/decisions/tinder-suggest — 3 picks from the swiped-right list
@@ -129,11 +145,19 @@ router.post('/tinder-suggest', optionalAuth, async (req, res) => {
     res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() })
     return
   }
-  const { likedIds } = parsed.data
+  const { likedIds, swipes } = parsed.data
 
-  const liked = likedIds.length
+  // Right-swipes from the log count as likes too, so a client that sends only
+  // `swipes` behaves identically to one that sends only `likedIds`.
+  const likedSet = new Set([
+    ...likedIds,
+    ...swipes.filter((s) => s.direction === 'RIGHT').map((s) => s.restaurantId),
+  ])
+  const effectiveLikedIds = [...likedSet]
+
+  const liked = effectiveLikedIds.length
     ? await prisma.restaurant.findMany({
-        where: { id: { in: likedIds }, isActive: true },
+        where: { id: { in: effectiveLikedIds }, isActive: true },
       })
     : []
 
@@ -146,6 +170,43 @@ router.post('/tinder-suggest', optionalAuth, async (req, res) => {
   }
 
   const results = shuffle(pool).slice(0, 3)
+
+  // --- DecisionEngine v2: learn from the swipe log -------------------
+  // Only for signed-in users (a profile needs a userId to hang off), and only
+  // from `swipes`, which is the shape that carries direction. A bare `likedIds`
+  // list from an older build teaches nothing about what was rejected, so it is
+  // recorded as right-swipes only.
+  if (req.userId) {
+    const swipedIds = swipes.length
+      ? swipes.map((s) => s.restaurantId)
+      : effectiveLikedIds
+    const cuisineById = new Map(
+      (swipedIds.length
+        ? await prisma.restaurant.findMany({
+            where: { id: { in: swipedIds } },
+            select: { id: true, cuisineType: true },
+          })
+        : []
+      ).map((r) => [r.id, r.cuisineType]),
+    )
+
+    const events = (
+      swipes.length
+        ? swipes.map((s) => ({
+            cuisine: cuisineById.get(s.restaurantId) ?? '',
+            event: (s.direction === 'RIGHT' ? 'SWIPE_RIGHT' : 'SWIPE_LEFT') as TasteEvent,
+          }))
+        : effectiveLikedIds.map((id) => ({
+            cuisine: cuisineById.get(id) ?? '',
+            event: 'SWIPE_RIGHT' as TasteEvent,
+          }))
+    ).filter((e) => e.cuisine)
+
+    // Never let a telemetry failure cost the user their suggestions.
+    await applyTasteEvents(req.userId, events).catch((err) =>
+      console.error('[tasteProfile] tinder-suggest update failed:', err),
+    )
+  }
 
   const session = await prisma.decisionSession.create({
     data: {
@@ -224,6 +285,30 @@ router.patch('/:sessionId/select', async (req, res) => {
         actionTaken: parsed.data.actionTaken,
       },
     })
+
+    // --- DecisionEngine v2: SELECT is the strongest taste signal ------
+    // Only an actual SELECT counts. DIRECTIONS/CALL/ORDER are intents that
+    // frequently go nowhere, and learning from them would overweight
+    // restaurants the user merely considered.
+    //
+    // The learner is the session's OWN userId, not the request's. This endpoint
+    // takes no auth (the mobile client fires it in the background, often without
+    // a token) and the session already records who it belongs to. An
+    // anonymously-created session has no one to learn for, which is correct —
+    // attributing it to whoever happens to be holding a token would be wrong.
+    const learnerId = session.userId
+    if (learnerId && parsed.data.actionTaken === 'SELECT') {
+      const restaurant = await prisma.restaurant.findUnique({
+        where: { id: parsed.data.selectedResultId },
+        select: { cuisineType: true },
+      })
+      if (restaurant) {
+        await applyTasteEvent(learnerId, restaurant.cuisineType, 'SELECT').catch((err) =>
+          console.error('[tasteProfile] select update failed:', err),
+        )
+      }
+    }
+
     res.json({ session })
   } catch {
     res.status(404).json({ error: 'Decision session not found' })

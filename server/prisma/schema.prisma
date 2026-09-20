@@ -36,22 +36,23 @@ enum DecisionAction {
 }
 
 model User {
-  id                String       @id @default(cuid())
-  email             String       @unique
-  passwordHash      String?
-  name              String?
-  phoneNumber       String?
-  googleId          String?      @unique
-  locationArea      LocationArea @default(OTHER)
+  id                 String       @id @default(cuid())
+  email              String       @unique
+  passwordHash       String?
+  name               String?
+  phoneNumber        String?
+  googleId           String?      @unique
+  locationArea       LocationArea @default(OTHER)
   cuisinePreferences String[]
-  budgetRange       BudgetRange  @default(MID)
-  dietary           String[]
-  accountTier       AccountTier  @default(FREE)
-  stripeCustomerId  String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  budgetRange        BudgetRange  @default(MID)
+  dietary            String[]
+  accountTier        AccountTier  @default(FREE)
+  stripeCustomerId   String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
-  decisionSessions  DecisionSession[]
+  decisionSessions DecisionSession[]
+  tasteProfile     UserTasteProfile?
 }
 
 model Restaurant {
@@ -73,17 +74,23 @@ model Restaurant {
   averageCalories Int?
 
   // --- Google Places (populated by `npm run sync:places`) ---
-  googlePlaceId   String?      @unique
+  googlePlaceId  String?   @unique
   /// Places photo resource names ("places/{placeId}/photos/{photoId}"), max 6.
   /// Served to clients via the /api/photos proxy so the API key never ships.
-  photoRefs       String[]
-  lat             Float?
-  lng             Float?
-  googleRating    Float?
-  googleSyncedAt  DateTime?
+  photoRefs      String[]
+  lat            Float?
+  lng            Float?
+  googleRating   Float?
+  /// Google `regularOpeningHours.periods` verbatim:
+  /// [{ open: { day, hour, minute }, close?: { day, hour, minute } }].
+  /// day is 0=Sunday..6=Saturday in the PLACE's local time (Asia/Dubai here).
+  /// A period with no `close` means the place is open 24/7.
+  /// Read through `isOpenNow()` in src/lib/hours.ts — never inline.
+  openingHours   Json?
+  googleSyncedAt DateTime?
 
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   dailyPicksAsResult1 DailyPick[] @relation("DailyPickResult1")
   dailyPicksAsResult2 DailyPick[] @relation("DailyPickResult2")
@@ -103,8 +110,8 @@ model DecisionSession {
 }
 
 model DailyPick {
-  id         String   @id @default(cuid())
-  date       DateTime @unique
+  id         String     @id @default(cuid())
+  date       DateTime   @unique
   themeLabel String
   result1Id  String
   result1    Restaurant @relation("DailyPickResult1", fields: [result1Id], references: [id])
@@ -112,6 +119,39 @@ model DailyPick {
   result2    Restaurant @relation("DailyPickResult2", fields: [result2Id], references: [id])
   result3Id  String
   result3    Restaurant @relation("DailyPickResult3", fields: [result3Id], references: [id])
-  isLive     Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  isLive     Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+}
+
+/// DecisionEngine v2 — learned cuisine affinity per user.
+///
+/// `weights` is a flat map of lowercased cuisine/tag -> float in [-5, 10],
+/// updated by `applyTasteEvent()` in src/services/tasteProfile.ts. Stored as
+/// Json rather than rows because it is always read and written whole.
+model UserTasteProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weights   Json     @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+/// DecisionEngine v2 — one row per engine invocation.
+///
+/// Kept deliberately denormalised: this is an audit/telemetry trail for tuning
+/// the weights, not something the app reads back. `breakdown` holds the full
+/// per-candidate component scores so a pick can be explained after the fact.
+model DecisionLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  sessionId    String?
+  /// { formatFilter, vibe, budget, lat, lng, dateISO, seed, candidateCount, relaxed[] }
+  inputSummary Json
+  /// [{ restaurantId, quality, taste, context, total, damping, reason }]
+  breakdown    Json
+  chosenIds    String[]
+  radiusTier   String
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

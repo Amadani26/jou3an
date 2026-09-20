@@ -10,7 +10,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed": "ts-node prisma/seed.ts",
-    "sync:places": "ts-node src/scripts/syncGooglePlaces.ts"
+    "sync:places": "ts-node src/scripts/syncGooglePlaces.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -44,7 +46,8 @@
     "@types/passport-local": "^1.0.38",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
   },
   "engines": {
     "node": ">=20"
