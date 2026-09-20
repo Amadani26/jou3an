@@ -2,38 +2,30 @@
  * Google Places sync — `npm run sync:places`
  *
  * For every restaurant in the DB: Text Search "{name} {area} Dubai" to resolve a
- * place id, then Place Details for photos / coordinates / rating. Stores up to
- * MAX_PHOTOS photo resource names (owner uploads first where detectable).
+ * place id, then Place Details for photos / coordinates / rating / hours.
  *
  * A restaurant that already has a `googlePlaceId` is treated as PINNED: the
  * text search is skipped entirely and details are fetched for that id. This is
  * how we lock a specific branch when search picks the wrong one (e.g. Ravi
  * Satwa vs Ravi Al Nahda). Clear the column to let search decide again.
  *
+ * The per-row work lives in `services/placesSync.ts` so the import pipeline can
+ * run exactly the same enrichment on just the rows it creates.
+ *
  * Restaurants Google can't match are skipped, left untouched, and listed at the
  * end. The API key is read from the environment and never printed.
+ *
+ * Flags:
+ *   --only <id | name fragment>   sync a single restaurant
  */
 import 'dotenv/config'
 import prisma from '../lib/prisma'
-import {
-  extractPeriods,
-  getPlaceDetails,
-  rankPhotos,
-  searchPlace,
-  PlacesConfigError,
-} from '../services/googlePlaces'
-import { Prisma } from '@prisma/client'
+import { PlacesConfigError } from '../services/googlePlaces'
+import { syncRestaurantPlaces } from '../services/placesSync'
+import { col, parseArgs, sleep } from '../lib/importFiles'
 
-const MAX_PHOTOS = 6
-
-/** Areas are enum values (BUSINESS_BAY) — make them searchable ("Business Bay"). */
-const areaLabel = (area: string) =>
-  area === 'OTHER'
-    ? ''
-    : area
-        .split('_')
-        .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
-        .join(' ')
+/** Polite gap between restaurants. */
+const DELAY_MS = 300
 
 interface Row {
   name: string
@@ -47,29 +39,38 @@ interface Row {
 }
 
 async function main() {
-  const restaurants = await prisma.restaurant.findMany({ orderBy: { name: 'asc' } })
+  const args = parseArgs(process.argv.slice(2))
+  const only = typeof args.only === 'string' ? args.only.trim() : ''
+
+  const restaurants = await prisma.restaurant.findMany({
+    where: only
+      ? { OR: [{ id: only }, { name: { contains: only, mode: 'insensitive' } }] }
+      : undefined,
+    orderBy: { name: 'asc' },
+  })
+
   if (!restaurants.length) {
-    console.log('No restaurants in the database — nothing to sync.')
+    console.log(
+      only
+        ? `No restaurant matched "${only}".`
+        : 'No restaurants in the database — nothing to sync.',
+    )
     return
   }
 
-  console.log(`🔎 Syncing ${restaurants.length} restaurants with Google Places…\n`)
+  console.log(`🔎 Syncing ${restaurants.length} restaurant(s) with Google Places…\n`)
 
   const rows: Row[] = []
   const unmatched: string[] = []
+  let apiCalls = 0
 
   for (const r of restaurants) {
-    const query = [r.name, areaLabel(r.area), 'Dubai'].filter(Boolean).join(' ')
-
     try {
-      // Pinned rows bypass search so a hand-picked branch is never overwritten.
-      const pinned = Boolean(r.googlePlaceId)
-      const match = pinned
-        ? ({ id: r.googlePlaceId as string } as Awaited<ReturnType<typeof searchPlace>>)
-        : await searchPlace(query)
+      const outcome = await syncRestaurantPlaces(r)
+      apiCalls += outcome.apiCalls
 
-      if (!match?.id) {
-        console.log(`  ✗ ${r.name} — no match for "${query}"`)
+      if (outcome.status === 'no match') {
+        console.log(`  ✗ ${r.name} — no match`)
         rows.push({
           name: r.name,
           status: 'no match',
@@ -82,52 +83,26 @@ async function main() {
         continue
       }
 
-      const details = await getPlaceDetails(match.id)
-      const placeName = details.displayName?.text ?? match.displayName?.text ?? r.name
-
-      const photoRefs = rankPhotos(details.photos ?? [], placeName)
-        .slice(0, MAX_PHOTOS)
-        .map((p) => p.name)
-
-      const location = details.location ?? match.location
-      const rating = details.rating ?? match.rating ?? null
-      // Stored verbatim; interpreted by isOpenNow() in src/lib/hours.ts.
-      const periods = extractPeriods(details)
-
-      await prisma.restaurant.update({
-        where: { id: r.id },
-        data: {
-          googlePlaceId: match.id,
-          photoRefs,
-          lat: location?.latitude ?? null,
-          lng: location?.longitude ?? null,
-          googleRating: rating,
-          // Prisma.DbNull (not JS null) is how a Json column is set back to
-          // SQL NULL; plain null would be rejected by the generated type.
-          openingHours: (periods ?? Prisma.DbNull) as unknown as Prisma.InputJsonValue,
-          googleSyncedAt: new Date(),
-        },
-      })
-
-      const coords = location
-        ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
-        : '—'
       console.log(
-        `  ${pinned ? '📌' : '✓'} ${r.name} → "${placeName}" · ${
-          photoRefs.length
-        } photo(s) · rating ${rating ?? '—'} · ${
-          periods ? `${periods.length} period(s)` : 'no hours'
-        } · ${coords}`,
+        `  ${outcome.status === 'pinned' ? '📌' : '✓'} ${r.name} → "${outcome.placeName}" · ${
+          outcome.photos
+        } photo(s) · rating ${outcome.rating ?? '—'} · ${
+          outcome.hours ? `${outcome.hours} period(s)` : 'no hours'
+        } · ${outcome.coords}`,
       )
+
       rows.push({
         name: r.name,
-        status: pinned ? 'pinned' : 'matched',
-        photos: photoRefs.length,
-        rating,
-        coords,
-        hours: periods?.length ?? null,
+        status: outcome.status,
+        photos: outcome.photos,
+        rating: outcome.rating,
+        coords: outcome.coords,
+        hours: outcome.hours,
         // Only search results need a name sanity check — pins are deliberate.
-        note: !pinned && placeName !== r.name ? `matched "${placeName}"` : undefined,
+        note:
+          outcome.status === 'matched' && outcome.placeName !== r.name
+            ? `matched "${outcome.placeName}"`
+            : undefined,
       })
     } catch (err) {
       if (err instanceof PlacesConfigError) throw err
@@ -144,24 +119,25 @@ async function main() {
       })
       unmatched.push(r.name)
     }
+
+    await sleep(DELAY_MS)
   }
 
   // ---- Summary table ----
-  const w = (s: string, n: number) => s.padEnd(n).slice(0, n)
-  console.log('\n' + '─'.repeat(78))
+  console.log('\n' + '─'.repeat(86))
   console.log(
-    `${w('RESTAURANT', 24)}${w('STATUS', 10)}${w('PHOTOS', 8)}${w('RATING', 8)}${w('HOURS', 8)}LAT, LNG`,
+    `${col('RESTAURANT', 24)}${col('STATUS', 10)}${col('PHOTOS', 8)}${col('RATING', 8)}${col('HOURS', 8)}LAT, LNG`,
   )
-  console.log('─'.repeat(78))
+  console.log('─'.repeat(86))
   for (const row of rows) {
     console.log(
-      `${w(row.name, 24)}${w(row.status, 10)}${w(String(row.photos), 8)}${w(
+      `${col(row.name, 24)}${col(row.status, 10)}${col(String(row.photos), 8)}${col(
         row.rating == null ? '—' : row.rating.toFixed(1),
         8,
-      )}${w(row.hours == null ? '—' : String(row.hours), 8)}${row.coords}`,
+      )}${col(row.hours == null ? '—' : String(row.hours), 8)}${row.coords}`,
     )
   }
-  console.log('─'.repeat(78))
+  console.log('─'.repeat(86))
 
   const matched = rows.filter((r) => r.status === 'matched' || r.status === 'pinned').length
   const withPhotos = rows.filter((r) => r.photos > 0).length
@@ -169,15 +145,17 @@ async function main() {
   console.log(
     `\n${matched}/${rows.length} matched · ${withPhotos} with photos · ${withHours} with hours · ${unmatched.length} needing attention`,
   )
+  console.log(`📊 Places API calls: ${apiCalls}`)
+
+  const pinnedCount = rows.filter((r) => r.status === 'pinned').length
+  if (pinnedCount) console.log(`📌 ${pinnedCount} pinned by googlePlaceId (search skipped)`)
+
   if (unmatched.length) {
     console.log(`\n⚠️  Not synced: ${unmatched.join(', ')}`)
     console.log('   Adjust the name/area in the DB (or set googlePlaceId by hand) and re-run.')
   }
 
-  const pinnedCount = rows.filter((r) => r.status === 'pinned').length
-  if (pinnedCount) console.log(`📌 ${pinnedCount} pinned by googlePlaceId (search skipped)`)
-
-  const renamed = rows.filter((r) => r.note && r.status === 'matched')
+  const renamed = rows.filter((r) => r.note?.startsWith('matched "'))
   if (renamed.length) {
     console.log('\nℹ️  Matched under a different Google name — worth a sanity check:')
     for (const r of renamed) console.log(`   ${r.name}: ${r.note}`)

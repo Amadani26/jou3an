@@ -42,3 +42,8 @@ mobile/web-build/
 # Editor
 .vscode/
 .idea/
+
+# Restaurant import pipeline working files.
+# Candidate/approved files are one curation session's scratch, and rejected.json
+# is a local memory of what a human has already declined — none of it is code.
+server/imports/

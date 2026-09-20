@@ -169,6 +169,113 @@ export async function searchAreas(
   })
 }
 
+/* ------------------------------------------------------------------ */
+/* Discovery — paged Text Search for the import pipeline               */
+/* ------------------------------------------------------------------ */
+
+/** Google's price band enum (Places API New). */
+export type PriceLevel =
+  | 'PRICE_LEVEL_FREE'
+  | 'PRICE_LEVEL_INEXPENSIVE'
+  | 'PRICE_LEVEL_MODERATE'
+  | 'PRICE_LEVEL_EXPENSIVE'
+  | 'PRICE_LEVEL_VERY_EXPENSIVE'
+
+/** One Text Search hit, slimmed to what the import pipeline actually needs. */
+export interface DiscoveryPlace {
+  id: string
+  displayName?: { text?: string }
+  formattedAddress?: string
+  location?: { latitude: number; longitude: number }
+  rating?: number
+  userRatingCount?: number
+  businessStatus?: string
+  priceLevel?: PriceLevel
+  primaryType?: string
+  primaryTypeDisplayName?: { text?: string }
+  types?: string[]
+}
+
+/** Google caps a Text Search page at 20. */
+export const DISCOVERY_PAGE_SIZE = 20
+
+const DISCOVERY_FIELD_MASK = [
+  'places.id',
+  'places.displayName',
+  'places.formattedAddress',
+  'places.location',
+  'places.rating',
+  'places.userRatingCount',
+  'places.businessStatus',
+  'places.priceLevel',
+  'places.primaryType',
+  'places.primaryTypeDisplayName',
+  'places.types',
+  'nextPageToken',
+].join(',')
+
+export interface DiscoveryResult {
+  places: DiscoveryPlace[]
+  /** How many HTTP calls this took — surfaced so billing stays visible. */
+  apiCalls: number
+  /** True when Google still had more pages when we stopped. */
+  truncated: boolean
+}
+
+/**
+ * Paged Text Search, restricted to Dubai.
+ *
+ * `onPage` fires after each page so the caller can show progress and apply its
+ * own pacing between requests — this function deliberately does NOT sleep, so
+ * the rate-limiting policy lives with the script that owns the run.
+ */
+export async function discoverPlaces(
+  textQuery: string,
+  opts: {
+    maxPages?: number
+    onPage?: (pageIndex: number, count: number) => Promise<void> | void
+  } = {},
+): Promise<DiscoveryResult> {
+  const maxPages = opts.maxPages ?? 3
+  const places: DiscoveryPlace[] = []
+  let pageToken: string | undefined
+  let apiCalls = 0
+  let truncated = false
+
+  for (let page = 0; page < maxPages; page++) {
+    const data = await placesFetch<{
+      places?: DiscoveryPlace[]
+      nextPageToken?: string
+    }>('/places:searchText', DISCOVERY_FIELD_MASK, {
+      method: 'POST',
+      body: JSON.stringify({
+        textQuery,
+        pageSize: DISCOVERY_PAGE_SIZE,
+        regionCode: 'AE',
+        languageCode: 'en',
+        // Keeps a loosely-worded query from drifting to another emirate.
+        locationRestriction: { rectangle: DUBAI_BOUNDS },
+        // Text alone surfaces hotels and malls that merely contain a
+        // restaurant; this keeps the result set to actual eateries.
+        includedType: 'restaurant',
+        ...(pageToken ? { pageToken } : {}),
+      }),
+    })
+    apiCalls++
+
+    const batch = data.places ?? []
+    places.push(...batch)
+    await opts.onPage?.(page, batch.length)
+
+    pageToken = data.nextPageToken
+    if (!pageToken) break
+    if (page === maxPages - 1) truncated = true
+  }
+
+  return { places, apiCalls, truncated }
+}
+
+
 /**
  * Place Details — photos, coordinates, rating and opening hours for one id.
  *

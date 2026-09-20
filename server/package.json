@@ -12,7 +12,10 @@
     "seed": "ts-node prisma/seed.ts",
     "sync:places": "ts-node src/scripts/syncGooglePlaces.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "discover": "ts-node src/scripts/discoverPlaces.ts",
+    "import": "ts-node src/scripts/importPlaces.ts",
+    "unreject": "ts-node src/scripts/unreject.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
