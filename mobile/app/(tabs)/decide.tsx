@@ -482,7 +482,7 @@ export default function DecideScreen() {
     goNext()
   }
 
-  // Step 4 — Vibe is the final choice: build the prompt string and go to results.
+  // Step 4 — Vibe is the final choice: build the brief and go to results.
   const chooseVibe = (vibe: Vibe) => {
     // Every selected cuisine goes into the prompt; "Surprise me" / Skip add none.
     const parts = [
@@ -492,14 +492,29 @@ export default function DecideScreen() {
       vibe,
     ]
     const prompt = parts.join(', ')
+
+    // "Near JBR" -> "JBR". Display only: the coords are what actually filter.
+    const areaName = locationChoice?.startsWith('Near ')
+      ? locationChoice.slice('Near '.length)
+      : undefined
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     router.push({
       pathname: '/results',
       params: {
+        // The prompt survives for DISPLAY and history only — DecisionEngine v2
+        // ranks off the structured fields below, not off this string.
         prompt,
         chips: '[]',
         // Only sent for "Nearby" — "Anywhere in Dubai" stays city-wide.
         ...(coords ? { lat: String(coords.lat), lng: String(coords.lng) } : {}),
+        // --- structured filters for the engine ---
+        // Router params are strings, so the array is JSON-encoded here and
+        // parsed back in results.tsx.
+        cuisines: JSON.stringify(cuisines),
+        format: format ?? 'Dine In',
+        vibe,
+        ...(areaName ? { areaName } : {}),
       },
     })
   }

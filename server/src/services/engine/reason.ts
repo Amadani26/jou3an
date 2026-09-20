@@ -19,15 +19,21 @@ function titleCase(s: string): string {
 export function buildReason(
   restaurant: Candidate,
   breakdown: ScoreBreakdown,
-  opts: { vibe: string; wildcard: boolean },
+  opts: { vibe: string; wildcard: boolean; requestedCuisines?: string[] },
 ): string {
   const cuisine = titleCase(restaurant.cuisineType)
 
   if (opts.wildcard) return `Something different — ${cuisine}`
 
   switch (breakdown.topComponent) {
-    case 'taste':
-      return `You keep going back to ${cuisine}`
+    case 'taste': {
+      // An explicitly requested cuisine reaches the taste term at full weight,
+      // so "you keep going back to X" would be a lie on a first-ever query.
+      const asked = (opts.requestedCuisines ?? []).some((c) =>
+        restaurant.cuisineType.toLowerCase().includes(c.trim().toLowerCase()),
+      )
+      return asked ? `The ${cuisine} you asked for` : `You keep going back to ${cuisine}`
+    }
 
     case 'quality': {
       if (typeof restaurant.googleRating === 'number' && restaurant.googleRating > 0) {

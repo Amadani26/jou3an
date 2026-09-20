@@ -4,7 +4,10 @@ import prisma from '../lib/prisma'
 import { decideRestaurants } from '../services/decisionEngine'
 import { optionalAuth, requireAuth } from '../middleware/auth'
 import { photoProxyPath, withPhotoUrlsAll } from '../lib/photos'
-import { applyTasteEvent, applyTasteEvents, type TasteEvent } from '../services/tasteProfile'
+import { applyTasteEvent, applyTasteEvents, getTasteWeights, type TasteEvent } from '../services/tasteProfile'
+import { decide, type Decision3, type EngineInput } from '../services/engine'
+import { getPickRates, getRecentSelections, logDecision } from '../services/engine/log'
+import { boostedTasteWeights, toEngineContext } from '../services/engine/request'
 import {
   distanceKm as kmBetween,
   hasCoords,
@@ -25,13 +28,32 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 const querySchema = z.object({
+  // Still required, but now for DISPLAY and history only — the engine reads the
+  // structured fields below. Older clients send only this.
   prompt: z.string().min(1, 'prompt is required'),
   moodChips: z.array(z.string()).default([]),
   userId: z.string().optional(),
-  // Present only when the user picked "Nearby" in the Decide flow.
+  // Present only when the user picked "Nearby" or an area in the Decide flow.
   lat: z.number().optional(),
   lng: z.number().optional(),
+
+  // --- DecisionEngine v2 structured filters -------------------------
+  // All optional: a build that predates them still gets a valid decision,
+  // just a less constrained one.
+  cuisines: z.array(z.string()).default([]),
+  format: z.enum(['Delivery', 'Dine In']).optional(),
+  vibe: z.enum(['Casual', 'Fancy']).optional(),
+  /** Display label for a picked area ("JBR"); coords are what actually filter. */
+  areaName: z.string().optional(),
+  /**
+   * Increments on each Refresh tap. 0 (the default) keeps a first load
+   * deterministic for the whole Dubai day; any other value re-rolls.
+   */
+  refreshNonce: z.number().int().min(0).default(0),
 })
+
+/** Engine v2 is opt-in per environment while it runs alongside the matcher. */
+const engineV2Enabled = () => process.env.ENGINE_V2 === 'true'
 
 /**
  * Radius tiers for a located query, widest-last. The product rule is ALWAYS
@@ -52,45 +74,8 @@ router.post('/query', optionalAuth, async (req, res) => {
     res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() })
     return
   }
-  const { prompt, moodChips, userId, lat, lng } = parsed.data
-
-  const restaurants = await prisma.restaurant.findMany({ where: { isActive: true } })
-
-  const origin: Coords | null =
-    typeof lat === 'number' && typeof lng === 'number' ? { lat, lng } : null
-
-  // Prefer nearby, but widen rather than ever return fewer than 3.
-  let pool = restaurants
-  let radiusKm: number | null = null
-  let radiusTier: RadiusTier = 'CITY'
-
-  if (origin) {
-    for (const { km, tier } of RADIUS_TIERS) {
-      const within = withinRadius(restaurants, origin, km)
-      if (within.length >= 3) {
-        pool = within
-        radiusKm = km
-        radiusTier = tier
-        break
-      }
-    }
-  }
-
-  const picked = decideRestaurants(prompt, moodChips, pool)
-
-  // Distance is attached whenever we know where the user is, even on the
-  // city-wide fallback — it's useful context either way.
-  const distances = origin
-    ? new Map(
-        restaurants
-          .filter(hasCoords)
-          .map((r) => [r.id, roundKm(kmBetween(origin, { lat: r.lat, lng: r.lng }))]),
-      )
-    : null
-
-  const results = picked.map((r) =>
-    distances?.has(r.id) ? { ...r, distanceKm: distances.get(r.id) } : r,
-  )
+  const { prompt, moodChips, userId, lat, lng, cuisines, format, vibe, refreshNonce } =
+    parsed.data
 
   // Prefer the authenticated user; fall back to a body userId that exists (FK safety)
   let validUserId: string | null = req.userId ?? null
@@ -98,6 +83,106 @@ router.post('/query', optionalAuth, async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: userId } })
     if (user) validUserId = user.id
   }
+
+  const origin: Coords | null =
+    typeof lat === 'number' && typeof lng === 'number' ? { lat, lng } : null
+
+  // Distance is attached whenever we know where the user is, even on the
+  // city-wide fallback — it's useful context either way. Computed over ALL
+  // restaurants so it is available regardless of which path picked the 3.
+  const allRestaurants = await prisma.restaurant.findMany()
+  const distances = origin
+    ? new Map(
+        allRestaurants
+          .filter(hasCoords)
+          .map((r) => [r.id, roundKm(kmBetween(origin, { lat: r.lat, lng: r.lng }))]),
+      )
+    : null
+
+  let results: (typeof allRestaurants[number] & { distanceKm?: number; reason?: string })[]
+  let radiusKm: number | null = null
+  let radiusTier: RadiusTier = 'CITY'
+  let engineUsed: 'v1' | 'v2' = 'v1'
+  // Captured on the v2 path so the audit row can be written once the session
+  // exists (DecisionLog.sessionId is the join back to what the user saw).
+  let auditInput: EngineInput | null = null
+  let auditDecision: Decision3 | null = null
+
+  if (engineV2Enabled()) {
+    // ---------------- DecisionEngine v2 ----------------
+    engineUsed = 'v2'
+
+    const [profileWeights, recentSelections, pickRates] = await Promise.all([
+      getTasteWeights(validUserId),
+      getRecentSelections(validUserId),
+      getPickRates(validUserId),
+    ])
+
+    const budgetRange = validUserId
+      ? (await prisma.user.findUnique({
+          where: { id: validUserId },
+          select: { budgetRange: true },
+        }))?.budgetRange ?? null
+      : null
+
+    const engineInput: EngineInput = {
+      // The engine does its own isActive filtering, and needs the inactive rows
+      // present so its relaxation ladder has something to fall back on.
+      candidates: allRestaurants,
+      tasteWeights: boostedTasteWeights(profileWeights, cuisines),
+      context: toEngineContext(
+        { format, vibe, lat, lng, refreshNonce, cuisines },
+        budgetRange,
+        new Date(),
+      ),
+      userId: validUserId,
+      recentSelections,
+      pickRates,
+    }
+
+    const decision = decide(engineInput)
+
+    radiusKm = decision.radiusKm
+    radiusTier = decision.radiusTier
+    results = decision.picks.map((p) => ({
+      ...p.restaurant,
+      ...(p.distanceKm !== null ? { distanceKm: p.distanceKm } : {}),
+      reason: p.reason,
+    }))
+
+    auditInput = engineInput
+    auditDecision = decision
+  } else {
+    // ---------------- Legacy keyword matcher ----------------
+    const restaurants = allRestaurants.filter((r) => r.isActive)
+
+    // Prefer nearby, but widen rather than ever return fewer than 3.
+    let pool = restaurants
+    if (origin) {
+      for (const { km, tier } of RADIUS_TIERS) {
+        const within = withinRadius(restaurants, origin, km)
+        if (within.length >= 3) {
+          pool = within
+          radiusKm = km
+          radiusTier = tier
+          break
+        }
+      }
+    }
+
+    const picked = decideRestaurants(prompt, moodChips, pool)
+    results = picked.map((r) =>
+      distances?.has(r.id) ? { ...r, distanceKm: distances.get(r.id) } : r,
+    )
+  }
+
+  // v1 attaches distance from the map; v2 already carries its own (identical)
+  // value, so only fill the gap where it is missing.
+  results = results.map((r) =>
+    r.distanceKm === undefined && distances?.has(r.id)
+      ? { ...r, distanceKm: distances.get(r.id) }
+      : r,
+  )
 
   const session = await prisma.decisionSession.create({
     data: {
@@ -108,12 +193,21 @@ router.post('/query', optionalAuth, async (req, res) => {
     },
   })
 
+  // Audit the invocation now that the session id exists. logDecision swallows
+  // its own errors, so this can never cost the user their decision.
+  if (auditInput && auditDecision) {
+    await logDecision(auditInput, auditDecision, session.id)
+  }
+
   res.json({
     results: withPhotoUrlsAll(results),
     sessionId: session.id,
     // Which radius tier actually produced these picks.
     radiusKm,
     radiusTier,
+    // Which engine answered — lets the client (and a curl) tell the paths
+    // apart while v2 is behind a flag.
+    engine: engineUsed,
   })
 })
 

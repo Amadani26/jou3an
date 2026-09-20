@@ -14,6 +14,11 @@ export interface ResultCardProps {
   area: string
   /** Km from the user, shown next to the area when known. */
   distanceKm?: number
+  /**
+   * DecisionEngine v2's one-line "why this pick". Absent on the v1 path, so the
+   * card must lay out correctly without it.
+   */
+  reason?: string
   /** Google Places photo URL; falls back to the placeholder when absent. */
   imageUrl?: string
   // Tap the card body to open the inline confirmation.
@@ -82,6 +87,7 @@ export default function ResultCard({
   priceRange,
   area,
   distanceKm,
+  reason,
   imageUrl,
   onSelect,
   onLongPress,
@@ -200,6 +206,33 @@ export default function ResultCard({
               </>
             ) : null}
           </View>
+
+          {/* Why this pick — engine v2 only, so it is rendered conditionally. */}
+          {reason ? (
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                marginTop: 6,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 999,
+                backgroundColor: 'rgba(232,39,42,0.12)',
+                borderWidth: 1,
+                borderColor: 'rgba(232,39,42,0.30)',
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: 'DMSans_500Medium',
+                  fontSize: 11,
+                  color: '#E8272A',
+                }}
+                numberOfLines={1}
+              >
+                {reason}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </Pressable>
 

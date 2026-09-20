@@ -30,6 +30,11 @@ export default function ResultsScreen() {
     title?: string
     lat?: string
     lng?: string
+    // Structured filters from the Decide flow — what engine v2 ranks off.
+    cuisines?: string
+    format?: string
+    vibe?: string
+    areaName?: string
   }>()
 
   // Present only when the Decide flow captured a "Nearby" position.
@@ -55,6 +60,20 @@ export default function ResultsScreen() {
     likedIds = []
   }
 
+  // Structured filters. Router params are strings, so the array arrives
+  // JSON-encoded; anything malformed degrades to "no cuisine preference"
+  // rather than breaking the screen.
+  let cuisines: string[] = []
+  try {
+    cuisines = params.cuisines ? (JSON.parse(params.cuisines) as string[]) : []
+  } catch {
+    cuisines = []
+  }
+  const format =
+    params.format === 'Delivery' || params.format === 'Dine In' ? params.format : undefined
+  const vibe =
+    params.vibe === 'Casual' || params.vibe === 'Fancy' ? params.vibe : undefined
+
   const effectivePrompt = prompt || chips.join(' ') || 'surprise me'
   const displayQuery =
     params.title || prompt || chips.join(', ') || 'Your pick'
@@ -67,6 +86,12 @@ export default function ResultsScreen() {
   const [flashVisible, setFlashVisible] = useState(false)
   // Long-press opens the read-only detail sheet (view, not select).
   const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null)
+  /**
+   * 0 on first load, so opening the same brief twice in one day returns the
+   * same 3. Each Refresh increments it, which changes the engine's seed and
+   * forces a genuine re-roll rather than a re-render of the same answer.
+   */
+  const [refreshNonce, setRefreshNonce] = useState(0)
 
   // Tapping a card expands it into the inline confirmation overlay.
   const selectedRestaurant = results.find((r) => r.id === selectedId) ?? null
@@ -89,7 +114,7 @@ export default function ResultsScreen() {
     }, 1200)
   }
 
-  const run = useCallback(async () => {
+  const run = useCallback(async (nonce: number) => {
     setLoading(true)
     setError(false)
     setSelectedId(null)
@@ -97,7 +122,13 @@ export default function ResultsScreen() {
     try {
       const res = isTinder
         ? await tinderSuggest(likedIds)
-        : await getDecision(effectivePrompt, chips, coords)
+        : await getDecision(effectivePrompt, chips, coords, {
+            cuisines,
+            format,
+            vibe,
+            areaName: params.areaName,
+            refreshNonce: nonce,
+          })
       const elapsed = Date.now() - started
       if (elapsed < 1200) {
         await new Promise((r) => setTimeout(r, 1200 - elapsed))
@@ -119,9 +150,19 @@ export default function ResultsScreen() {
   }, [effectivePrompt])
 
   useEffect(() => {
-    run()
+    run(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /** Refresh: bump the nonce so the engine re-rolls, then re-run with it. */
+  const refresh = useCallback(() => {
+    setRefreshNonce((n) => {
+      const next = n + 1
+      run(next)
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run])
 
   // Record the action in the background — never awaited, never blocks the UI.
   const recordSelection = (r: Restaurant, action: 'DIRECTIONS' | 'CALL' | 'ORDER') => {
@@ -246,7 +287,9 @@ export default function ResultsScreen() {
           <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: '#504B47' }}>
             Couldn&apos;t reach the kitchen. Try again.
           </Text>
-          <GhostButton label="Retry" onPress={run} />
+          {/* Retry re-runs the SAME roll — a failed request should return the
+              brief the user asked for, not silently re-roll it. */}
+          <GhostButton label="Retry" onPress={() => run(refreshNonce)} />
         </View>
       ) : (
         <>
@@ -262,6 +305,7 @@ export default function ResultsScreen() {
                 priceRange={`AED ${r.priceMin}–${r.priceMax}`}
                 area={prettyArea(r.area)}
                 distanceKm={r.distanceKm}
+                reason={r.reason}
                 imageUrl={photoUrls(r)[0]}
                 onSelect={() => setSelectedId(r.id)}
                 onLongPress={() => setDetailRestaurant(r)}
@@ -289,7 +333,7 @@ export default function ResultsScreen() {
             <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: '#504B47' }}>
               Not what you&apos;re looking for?
             </Text>
-            <GhostButton label="Refresh" onPress={run} />
+            <GhostButton label="Refresh" onPress={refresh} />
           </View>
         </>
       )}

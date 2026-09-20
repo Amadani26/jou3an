@@ -29,6 +29,13 @@ export interface EngineContext {
   /** Present only when the caller knows where the user is. */
   lat?: number | null
   lng?: number | null
+  /**
+   * Cuisines the user explicitly picked this query. Used ONLY for wording the
+   * reason line: a requested cuisine is folded into the taste weights (see
+   * boostedTasteWeights), so without this the engine cannot tell "you asked
+   * for burgers" apart from "you keep choosing burgers".
+   */
+  requestedCuisines?: string[]
   /** "Now" — injected so tests and replays are deterministic. */
   date: Date
   /**

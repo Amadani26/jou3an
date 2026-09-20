@@ -15,6 +15,17 @@ import type { Candidate, RecentSelection, ScoreBreakdown } from './types'
 /** Probability that slot 3 is a wildcard rather than the next-best candidate. */
 export const EPSILON = 0.15
 
+/**
+ * Exploration ceiling reached after this many Refresh taps.
+ *
+ * A refresh is an explicit "not these" from the user, so each tap should widen
+ * the search rather than merely re-order the same winners. With a small fixed
+ * noise the top three by score ARE the top three every time, and Refresh would
+ * hand back the same restaurants in a different order — which reads as broken.
+ */
+export const MAX_EXPLORATION_REFRESHES = 4
+export const MAX_EPSILON = 0.45
+
 /** Multiplier applied to a restaurant picked today; decays to 1 over a week. */
 export const DAMPING_FLOOR = 0.5
 export const DAMPING_DAYS = 7
@@ -25,7 +36,31 @@ export const DAMPING_EXEMPT_PICK_RATE = 0.4
 /** Jitter added to every score to break ties without reordering real gaps. */
 export const NOISE_AMPLITUDE = 0.02
 
+/** Jitter once the user has refreshed enough to say "show me something else". */
+export const MAX_NOISE_AMPLITUDE = 0.18
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+/**
+ * How adventurous to be, given how many times the user has hit Refresh.
+ *
+ * Nonce 0 (first load) keeps the tuned defaults, so the best answer is the
+ * one that leads. Each subsequent tap raises both the score jitter and the
+ * wildcard odds, ramping to the ceiling by MAX_EXPLORATION_REFRESHES.
+ */
+export function explorationFor(refreshNonce: number | string | undefined | null): {
+  noiseAmplitude: number
+  epsilon: number
+} {
+  const raw = typeof refreshNonce === 'number' ? refreshNonce : Number(refreshNonce ?? 0)
+  const n = Number.isFinite(raw) ? Math.max(0, raw) : 0
+  const t = Math.min(n, MAX_EXPLORATION_REFRESHES) / MAX_EXPLORATION_REFRESHES
+
+  return {
+    noiseAmplitude: NOISE_AMPLITUDE + t * (MAX_NOISE_AMPLITUDE - NOISE_AMPLITUDE),
+    epsilon: EPSILON + t * (MAX_EPSILON - EPSILON),
+  }
+}
 
 /**
  * Repeat-damping multiplier for one restaurant.
@@ -76,6 +111,7 @@ export interface SelectResult {
 export function selectThree(
   ranked: ScoreBreakdown[],
   random: () => number,
+  epsilon: number = EPSILON,
 ): SelectResult {
   const chosen: ScoreBreakdown[] = []
   const usedCuisines = new Set<string>()
@@ -90,7 +126,7 @@ export function selectThree(
     const isLastSlot = chosen.length === 2
     let index: number
 
-    if (isLastSlot && wildcardRoll < EPSILON && remaining.length > 1) {
+    if (isLastSlot && wildcardRoll < epsilon && remaining.length > 1) {
       // ε-wildcard: any remaining candidate except the obvious top one, so the
       // wildcard is actually a departure rather than sometimes a no-op.
       const pool = remaining.slice(1)

@@ -21,7 +21,7 @@ import { distanceKm as kmBetween, hasCoords, roundKm, type Coords } from '../../
 import { filterCandidates, REQUIRED } from './filter'
 import { buildReason, withDistance } from './reason'
 import { dubaiDateString, hashSeed, seededRandom } from './rng'
-import { NOISE_AMPLITUDE, byDistance, dampingFor, selectThree } from './select'
+import { byDistance, dampingFor, explorationFor, selectThree } from './select'
 import { scoreCandidate } from './score'
 import type { Candidate, Decision3, EngineInput, Pick, ScoreBreakdown } from './types'
 
@@ -33,7 +33,10 @@ export {
   DAMPING_EXEMPT_PICK_RATE,
   DAMPING_FLOOR,
   EPSILON,
+  MAX_EPSILON,
+  MAX_EXPLORATION_REFRESHES,
   dampingFor,
+  explorationFor,
 } from './select'
 export { WEIGHTS, NEUTRAL, qualityScore, tasteScore, contextScore } from './score'
 
@@ -47,7 +50,10 @@ export function seedFor(input: EngineInput): number {
   return hashSeed(
     input.userId ?? 'anon',
     dubaiDateString(input.context.date),
-    input.context.refreshNonce ?? '',
+    // Normalised to 0, NOT to '': an omitted nonce and an explicit 0 both mean
+    // "first load" and must hash identically, or a client that sends the
+    // default would disagree with one that omits the field.
+    input.context.refreshNonce ?? 0,
   )
 }
 
@@ -66,6 +72,8 @@ export function decide(input: EngineInput): Decision3 {
 
   const seed = seedFor(input)
   const random = seededRandom(seed)
+  // Each Refresh tap widens the search — see explorationFor().
+  const { noiseAmplitude, epsilon } = explorationFor(context.refreshNonce)
 
   const distanceOf = (r: Candidate): number | null => {
     if (!origin || !hasCoords(r)) return null
@@ -78,7 +86,7 @@ export function decide(input: EngineInput): Decision3 {
   const breakdown: ScoreBreakdown[] = pool.map((r) => {
     const components = scoreCandidate(r, tasteWeights, context)
     const damping = dampingFor(r.id, recent, pickRates, context.date)
-    const noise = (random() - 0.5) * 2 * NOISE_AMPLITUDE
+    const noise = (random() - 0.5) * 2 * noiseAmplitude
 
     return {
       restaurantId: r.id,
@@ -99,7 +107,7 @@ export function decide(input: EngineInput): Decision3 {
   const ranked = [...breakdown].sort((a, b) => b.total - a.total)
 
   // --- Stage 3 -------------------------------------------------------
-  const { chosen, wildcardUsed } = selectThree(ranked, random)
+  const { chosen, wildcardUsed } = selectThree(ranked, random, epsilon)
 
   // The product rule is absolute. If the catalogue genuinely cannot field three
   // distinct restaurants we would rather fail loudly here than return two and
@@ -126,7 +134,11 @@ export function decide(input: EngineInput): Decision3 {
       restaurant,
       rank: i + 1,
       reason: withDistance(
-        buildReason(restaurant, b, { vibe: context.vibe, wildcard: isWildcard }),
+        buildReason(restaurant, b, {
+          vibe: context.vibe,
+          wildcard: isWildcard,
+          requestedCuisines: context.requestedCuisines,
+        }),
         b.distanceKm,
       ),
       breakdown: b,

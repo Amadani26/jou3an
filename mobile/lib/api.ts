@@ -84,6 +84,11 @@ export interface User {
 }
 
 export interface Restaurant {
+  /**
+   * One-line "why this pick", from DecisionEngine v2. Absent on the v1 path and
+   * on every other endpoint, so always render it conditionally.
+   */
+  reason?: string
   id: string
   name: string
   cuisineType: string
@@ -123,6 +128,26 @@ export interface DecisionResponse {
   radiusKm?: number | null
   /** NEARBY = 5km, WIDER = 10km, CITY = no radius (all of Dubai). */
   radiusTier?: 'NEARBY' | 'WIDER' | 'CITY'
+  /** Which backend engine answered. Present while v2 sits behind ENGINE_V2. */
+  engine?: 'v1' | 'v2'
+}
+
+/**
+ * Structured filters from the Decide flow — what DecisionEngine v2 actually
+ * reads. The prompt string is still sent alongside, but only for display and
+ * history; nothing ranks off it any more.
+ */
+export interface DecisionFilters {
+  cuisines?: string[]
+  format?: 'Delivery' | 'Dine In'
+  vibe?: 'Casual' | 'Fancy'
+  /** Display label for a picked area; the coords are what actually filter. */
+  areaName?: string
+  /**
+   * 0 on first load (so a same-day repeat is deterministic), incremented by
+   * each Refresh tap to force a genuine re-roll.
+   */
+  refreshNonce?: number
 }
 
 export interface DecisionSession {
@@ -191,6 +216,11 @@ export async function postDecisionQuery(body: {
   userId?: string
   lat?: number
   lng?: number
+  cuisines?: string[]
+  format?: 'Delivery' | 'Dine In'
+  vibe?: 'Casual' | 'Fancy'
+  areaName?: string
+  refreshNonce?: number
 }): Promise<DecisionResponse> {
   const { data } = await api.post<DecisionResponse>('/api/decisions/query', body)
   return data
@@ -205,11 +235,17 @@ export async function getDecision(
   prompt: string,
   moodChips: string[],
   coords?: { lat: number; lng: number } | null,
+  filters?: DecisionFilters,
 ): Promise<DecisionResponse> {
   return postDecisionQuery({
     prompt,
     moodChips,
     ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+    ...(filters?.cuisines?.length ? { cuisines: filters.cuisines } : {}),
+    ...(filters?.format ? { format: filters.format } : {}),
+    ...(filters?.vibe ? { vibe: filters.vibe } : {}),
+    ...(filters?.areaName ? { areaName: filters.areaName } : {}),
+    refreshNonce: filters?.refreshNonce ?? 0,
   })
 }
 
