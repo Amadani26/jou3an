@@ -122,8 +122,13 @@ export default function Landing() {
           <h1
             className="font-display font-extrabold uppercase text-text-primary fade-up"
             style={{
-              fontSize: 'clamp(3.2rem, 9vw, 6.5rem)',
-              lineHeight: 0.92,
+              // The vw term has to LEAD on phones: with a 3.2rem floor the
+              // minimum won on every handset (9vw is only ~36px at 402pt), so
+              // "HUNGRY?" rendered wider than the padded viewport and clipped
+              // at both edges. 10.5vw keeps it inside with headroom down to
+              // 320pt, and the 6.5rem cap keeps desktop exactly as it was.
+              fontSize: 'clamp(2rem, 10.5vw, 6.5rem)',
+              lineHeight: 0.95,
               animationDelay: '0.05s',
             }}
           >

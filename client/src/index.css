@@ -324,34 +324,6 @@ a,
 
 
 /* ------------------------------------------------------------------ */
-/* Interactive app preview (landing demo)                              */
-/* ------------------------------------------------------------------ */
-
-/* Stories-style segmented progress bar on the swipe card's photo slideshow */
-@keyframes progressFill {
-  from {
-    width: 0%;
-  }
-  to {
-    width: 100%;
-  }
-}
-
-.progress-fill {
-  animation: progressFill 2500ms linear forwards;
-}
-
-/* Dragging the card pauses the slideshow, exactly like the mobile app */
-.progress-paused .progress-fill {
-  animation-play-state: paused;
-}
-
-/* Photo cross-fade between slideshow frames */
-.demo-photo {
-  transition: opacity 0.45s var(--ease);
-}
-
-/* ------------------------------------------------------------------ */
 /* Scroll choreography (reveal + parallax)                             */
 /* ------------------------------------------------------------------ */
 
@@ -488,8 +460,7 @@ a,
 
   .pulse-dot,
   .bounce-dot,
-  .shimmer,
-  .progress-fill {
+  .shimmer {
     animation: none;
   }
 

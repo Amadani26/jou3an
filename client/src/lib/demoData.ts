@@ -173,26 +173,67 @@ export const DEMO_RESTAURANTS: DemoRestaurant[] = [
   },
 ]
 
-/**
- * Deck order for the swipe stage: the picked cuisines float to the top so the
- * demo feels responsive to the choice, then everything else fills in.
- */
-export function buildDeck(picked: string[]): DemoRestaurant[] {
-  if (!picked.length) return DEMO_RESTAURANTS.slice(0, 6)
-  const matches = (r: DemoRestaurant) =>
-    picked.some((p) => r.cuisine.toLowerCase().includes(p.toLowerCase()))
-  return [
-    ...DEMO_RESTAURANTS.filter(matches),
-    ...DEMO_RESTAURANTS.filter((r) => !matches(r)),
-  ].slice(0, 6)
+/** Dubai areas offered by the demo's "Pick an area" step. */
+export const DEMO_AREAS = [
+  'JLT',
+  'DIFC',
+  'Marina',
+  'JBR',
+  'Downtown',
+  'Jumeirah',
+] as const
+
+export type DecisionFilters = {
+  /** null = "Anywhere in Dubai" / "Nearby" — no area constraint. */
+  area: string | null
+  cuisines: string[]
+  format: 'Delivery' | 'Dine In'
+  vibe: 'Casual' | 'Fancy'
 }
 
-/** Always exactly 3 — liked cards first, topped up from the deck. */
-export function pickThree(
-  deck: DemoRestaurant[],
-  likedIds: string[],
-): DemoRestaurant[] {
-  const liked = deck.filter((r) => likedIds.includes(r.id))
-  const rest = deck.filter((r) => !likedIds.includes(r.id))
-  return [...liked, ...rest].slice(0, 3)
+/**
+ * The demo's stand-in for `server/src/services/decisionEngine.ts`: score every
+ * restaurant against the brief, take the top 3.
+ *
+ * Scoring is soft on purpose — a filter that matches nothing must still return
+ * three, because "always exactly 3" is a product rule, not a best-effort.
+ */
+export function decideThree(filters: DecisionFilters): DemoRestaurant[] {
+  const { area, cuisines, format, vibe } = filters
+
+  const score = (r: DemoRestaurant) => {
+    let n = 0
+    if (cuisines.length && matchesCuisine(r, cuisines)) n += 5
+    if (area && r.area === area) n += 3
+    // Fancy leans to the pricier end of the list, casual to the cheaper.
+    n += vibe === 'Fancy' ? r.priceMax / 40 : (120 - r.priceMax) / 40
+    // Delivery favours the quick, close options.
+    if (format === 'Delivery') n += (8 - r.distanceKm) / 4
+    return n + r.rating / 2
+  }
+
+  return [...DEMO_RESTAURANTS].sort((a, b) => score(b) - score(a)).slice(0, 3)
+}
+
+function matchesCuisine(r: DemoRestaurant, cuisines: string[]) {
+  return cuisines.some((c) => r.cuisine.toLowerCase().includes(c.toLowerCase()))
+}
+
+/**
+ * The "why this one" pill. Built from the brief rather than stored on the
+ * restaurant, so the reasoning visibly reflects what the user just picked.
+ */
+export function reasonFor(r: DemoRestaurant, filters: DecisionFilters): string {
+  const parts: string[] = []
+
+  const hit = filters.cuisines.find((c) =>
+    r.cuisine.toLowerCase().includes(c.toLowerCase()),
+  )
+  if (hit) parts.push(hit)
+
+  if (filters.area && r.area === filters.area) parts.push(`In ${r.area}`)
+  else if (filters.format === 'Delivery') parts.push(`${r.distanceKm} km away`)
+
+  parts.push(filters.vibe)
+  return parts.slice(0, 3).join(' · ')
 }
