@@ -5,7 +5,16 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import * as Location from 'expo-location'
-import Animated, { FadeIn, SlideInLeft, SlideInRight } from 'react-native-reanimated'
+import Animated, {
+  FadeIn,
+  SlideInLeft,
+  SlideInRight,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated'
 import RedButton from '../../components/RedButton'
 import { searchAreas, type AreaSuggestion } from '../../lib/api'
 import AreaRow from '../../components/AreaRow'
@@ -31,6 +40,28 @@ const CUISINES: Cuisine[] = [
   { name: 'Pizza', descriptor: 'Wood-fired & Delivery', icon: 'pizza-outline' },
   { name: 'Asian', descriptor: 'Pan-Asian Fusion', icon: 'nutrition-outline' },
 ]
+
+/**
+ * A quiet identity colour per cuisine, used ONLY for the icon inside its chip.
+ *
+ * Muted and desaturated on purpose: eight saturated hues on a #080808 screen
+ * reads as a toy, and the red is the brand's — nothing here may compete with
+ * it. The two exceptions are design-system tokens already in use elsewhere
+ * (#2DCE89 green, #FFB547 gold).
+ */
+const CUISINE_ACCENT: Record<string, string> = {
+  Lebanese: '#D9A05B',
+  Japanese: '#D96C6C',
+  American: '#B2705B',
+  Pakistani: '#C9963F',
+  Emirati: '#9AA0C9',
+  Healthy: '#2DCE89',
+  Pizza: '#FFB547',
+  Asian: '#5FB3A6',
+}
+
+/** Fallback for a cuisine added to CUISINES without an accent. */
+const ACCENT_FALLBACK = '#8A847E'
 
 const SURPRISE: Cuisine = {
   name: 'Surprise me',
@@ -134,27 +165,160 @@ function BigCard({
   )
 }
 
-function CuisineCard({
+/**
+ * One cuisine in the 2-column grid.
+ *
+ * ⚠️ NOTHING here is centred. Eight centred boxes of identical grey read as a
+ * flat stack — the left-aligned chip/name/descriptor column is what gives the
+ * grid a direction to scan in.
+ */
+function CuisineTile({
   name,
   descriptor,
   icon,
   selected,
   onPress,
-  wide,
-  surprise,
 }: {
   name: string
   descriptor: string
   icon: keyof typeof Ionicons.glyphMap
   selected: boolean
   onPress: () => void
-  /** Full-width 64pt row instead of a half-row grid tile. */
-  wide?: boolean
-  /** Red accent treatment ("Surprise me"). Layout-independent. */
-  surprise?: boolean
 }) {
-  // Icon + name go red on selection; "Surprise me" is red at rest.
-  const accent = selected || surprise ? '#E63946' : undefined
+  const { pressed, pressHandlers } = usePressed()
+  const scale = useSharedValue(1)
+
+  const accent = CUISINE_ACCENT[name] ?? ACCENT_FALLBACK
+
+  const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
+
+  const handlePress = () => {
+    // A dip and a spring back — confirmation you can feel at a glance, on the
+    // card you actually touched rather than somewhere else on screen.
+    scale.value = withSequence(
+      withTiming(0.97, { duration: 70 }),
+      withSpring(1, { damping: 11, stiffness: 280 }),
+    )
+    tap()
+    onPress()
+  }
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      {...pressHandlers}
+      // NOTE: must be a PLAIN style, not the ({ pressed }) => ... function form
+      // — the function form is dropped on Pressable in this setup, which is why
+      // cards used to collapse to their text width. See lib/usePressed.
+      style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, alignSelf: 'stretch' }}
+    >
+      {/* Inner View carries all visual styling — Pressable drops backgroundColor
+          on some RN versions, so keep the fill/border/radius here. */}
+      <Animated.View
+        style={[
+          {
+            flex: 1,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: selected ? '#E63946' : '#242424',
+            backgroundColor: selected ? '#1a0d0d' : '#141414',
+            paddingHorizontal: 14,
+            // ⚠️ Vertical padding is tighter than horizontal, and the spacer
+            // below is what absorbs a short row. Four rows of 96 + two utility
+            // rows + the button do not fit an iPhone's Decide step, so the card
+            // has to stay legible when the grid is squeezed to ~80 rather than
+            // clipping its descriptor (which is exactly what it did at first).
+            paddingVertical: 9,
+            justifyContent: 'flex-start',
+            alignItems: 'flex-start',
+            overflow: 'hidden',
+            opacity: pressed ? 0.75 : 1,
+          },
+          popStyle,
+        ]}
+      >
+        {/* Icon chip — the only place a cuisine's own colour appears. */}
+        <View
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 10,
+            backgroundColor: selected ? '#E6394622' : '#1F1F1F',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons name={icon} size={18} color={selected ? '#E63946' : accent} />
+        </View>
+
+        {/* Breathing room when the row is tall, the first thing to go when it
+            is not — so the copy is never the thing that gets cut. */}
+        <View style={{ flexGrow: 1, minHeight: 6 }} />
+
+        <Text
+          numberOfLines={1}
+          style={{
+            fontFamily: 'DMSans_700Bold',
+            fontSize: 16,
+            lineHeight: 19,
+            color: selected ? '#E63946' : '#F2EDE8',
+          }}
+        >
+          {name}
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={{
+            fontFamily: 'DMSans_400Regular',
+            fontSize: 11,
+            lineHeight: 13,
+            color: '#8A847E',
+            marginTop: 1,
+          }}
+        >
+          {descriptor}
+        </Text>
+
+        {/* Corner dot — the selected state read from the far side of the grid. */}
+        {selected ? (
+          <View
+            style={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: '#E63946',
+            }}
+          />
+        ) : null}
+      </Animated.View>
+    </Pressable>
+  )
+}
+
+/**
+ * A slim full-width option above or below the grid.
+ *
+ * Both of these used to be grid-sized cards, which made three different kinds
+ * of choice look like one kind. They are utilities: shorter, hairline-bordered,
+ * single-line, and visibly not part of the grid.
+ */
+function UtilityRow({
+  icon,
+  title,
+  height,
+  accent,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  title: string
+  height: number
+  /** Red-tinted treatment ("Surprise me"); quiet and secondary otherwise. */
+  accent?: boolean
+  onPress: () => void
+}) {
   const { pressed, pressHandlers } = usePressed()
 
   return (
@@ -164,67 +328,35 @@ function CuisineCard({
         onPress()
       }}
       {...pressHandlers}
-      style={
-        // NOTE: must be a PLAIN style, not the ({ pressed }) => ... function
-        // form — the function form is dropped on Pressable in this setup, which
-        // is why cards used to collapse to their text width. Press feedback is
-        // handled by the inner View via onPressIn/onPressOut instead.
-        wide
-          ? { alignSelf: 'stretch', height: 64 }
-          : { flexGrow: 1, flexShrink: 1, flexBasis: 0, alignSelf: 'stretch' }
-      }
+      // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+      style={{ alignSelf: 'stretch', height }}
     >
-      {/* Inner View carries all visual styling — Pressable drops backgroundColor
-          on some RN versions, so keep the fill/border/radius here. flex: 1 makes
-          it fill whatever width/height the Pressable was given. */}
       <View
         style={{
           flex: 1,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: selected ? '#E63946' : surprise ? '#E6394666' : '#242424',
-          backgroundColor: selected ? '#1a0d0d' : '#141414',
-          overflow: 'hidden',
-          justifyContent: 'center',
+          flexDirection: 'row',
           alignItems: 'center',
-          paddingHorizontal: 14,
-          gap: wide ? 0 : 8,
-          flexDirection: wide ? 'row' : 'column',
+          gap: 10,
+          paddingHorizontal: 16,
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: accent ? '#E6394666' : '#1C1C1C',
+          backgroundColor: accent ? 'rgba(230,57,70,0.06)' : 'transparent',
           opacity: pressed ? 0.75 : 1,
         }}
       >
-        <Ionicons
-          name={icon}
-          size={wide ? 18 : 26}
-          color={accent ?? '#8A847E'}
-          style={wide ? { marginRight: 10 } : undefined}
-        />
-
-        <View style={wide ? undefined : { width: '100%' }}>
-          <Text
-            numberOfLines={1}
-            style={{
-              fontFamily: 'DMSans_700Bold',
-              fontSize: 16,
-              color: accent ?? '#F2EDE8',
-              textAlign: wide ? 'left' : 'center',
-            }}
-          >
-            {name}
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={{
-              fontFamily: 'DMSans_400Regular',
-              fontSize: 11,
-              color: '#8A847E',
-              textAlign: wide ? 'left' : 'center',
-              marginTop: 2,
-            }}
-          >
-            {descriptor}
-          </Text>
-        </View>
+        <Ionicons name={icon} size={17} color={accent ? '#E63946' : '#8A847E'} />
+        <Text
+          numberOfLines={1}
+          style={{
+            flex: 1,
+            fontFamily: accent ? 'DMSans_700Bold' : 'DMSans_500Medium',
+            fontSize: 14,
+            color: accent ? '#E63946' : '#8A847E',
+          }}
+        >
+          {title}
+        </Text>
       </View>
     </Pressable>
   )
@@ -234,9 +366,18 @@ function CuisineCard({
  * One search hit in the area picker. Its own component so it can hold press
  * state — hooks can't run inside the results `.map`.
  */
-function StepHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
+function StepHeading({
+  eyebrow,
+  title,
+  compact,
+}: {
+  eyebrow: string
+  title: string
+  /** Tighter heading for a step whose content has to fight for height. */
+  compact?: boolean
+}) {
   return (
-    <View style={{ marginBottom: 24 }}>
+    <View style={{ marginBottom: compact ? 14 : 24 }}>
       <Text
         style={{
           fontFamily: 'DMSans_700Bold',
@@ -244,7 +385,7 @@ function StepHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
           fontWeight: '700',
           letterSpacing: 2,
           color: '#504B47',
-          marginBottom: 10,
+          marginBottom: compact ? 8 : 10,
         }}
       >
         {eyebrow}
@@ -252,7 +393,7 @@ function StepHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
       <Text
         style={{
           fontFamily: 'DMSans_800ExtraBold',
-          fontSize: 32,
+          fontSize: compact ? 28 : 32,
           color: '#F2EDE8',
           letterSpacing: -1,
         }}
@@ -341,7 +482,7 @@ export default function DecideScreen() {
   // Cuisine is MULTI-select: tapping toggles, "Continue →" advances.
   const [cuisines, setCuisines] = useState<string[]>([])
   // "Surprise me" is mutually exclusive with any picked cuisine.
-  const [surprise, setSurprise] = useState(false)
+
   const [format, setFormat] = useState<Format | null>(null)
 
   const goNext = () => {
@@ -404,9 +545,8 @@ export default function DecideScreen() {
     goNext()
   }
 
-  // Step 2 — tapping a cuisine toggles it; the flow waits for "Continue →".
+  // Step 2 — tapping a cuisine toggles it; the flow waits for "Continue".
   const toggleCuisine = (name: string) => {
-    setSurprise(false)
     setCuisines((prev) =>
       prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name],
     )
@@ -414,15 +554,15 @@ export default function DecideScreen() {
 
   // "Surprise me" and "No preference" both advance immediately and clear any
   // picks — neither contributes a cuisine to the prompt.
+  // Neither has a selected state to render: both advance on the tap, so the
+  // flag the old card needed for its highlight had no reader left.
   const chooseSurprise = () => {
     setCuisines([])
-    setSurprise(true)
     goNext()
   }
 
   const chooseNoPreference = () => {
     setCuisines([])
-    setSurprise(false)
     goNext()
   }
 
@@ -615,67 +755,73 @@ export default function DecideScreen() {
         )}
 
         {step === 1 && (
-          <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 24 }}>
-            <StepHeading eyebrow="STEP 2 · CUISINE" title="Any cuisine?" />
+          <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 14 }}>
+            {/* `compact` only here: this is the one step with eight cards plus
+                two utility rows plus a button to fit above the tab bar. */}
+            <StepHeading compact eyebrow="STEP 2 · CUISINE" title="Any cuisine?" />
 
-            {/* "No preference" + 2-col grid + "Surprise me" + Continue all fit
-                without scrolling. Rows grow to share the leftover height.
-                Multi-select: tapping a grid card toggles, "Continue →" advances. */}
-            <View style={{ flex: 1, gap: 12, paddingBottom: 14 }}>
-              {/* Escape hatch for "I don't know" — advances with no cuisine */}
-              <CuisineCard
-                wide
-                name={NO_PREFERENCE.name}
-                descriptor={NO_PREFERENCE.descriptor}
+            {/* Utility row + 2-col grid + utility row + Continue, all without
+                scrolling. The GRID takes the leftover height (rows flex between
+                80 and 96); the utility rows and the button are fixed, so the
+                grid is what absorbs a shorter screen.
+                Multi-select: tapping a grid card toggles, "Continue" advances. */}
+            <View style={{ flex: 1, gap: 12, paddingBottom: 8 }}>
+              {/* Escape hatch for "I don't know" — advances with no cuisine.
+                  Deliberately the quietest thing on the step. */}
+              <UtilityRow
                 icon={NO_PREFERENCE.icon}
-                selected={false}
+                title={`${NO_PREFERENCE.name} · ${NO_PREFERENCE.descriptor}`}
+                height={52}
                 onPress={chooseNoPreference}
               />
 
-              {CUISINE_ROWS.map((row, ri) => (
-                <View
-                  key={ri}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'stretch',
-                    gap: 12,
-                    flexGrow: 1,
-                    flexShrink: 1,
-                    flexBasis: 0,
-                    minHeight: 64,
-                    maxHeight: 94,
-                  }}
-                >
-                  {row.map((c) => (
-                    <CuisineCard
-                      key={c.name}
-                      name={c.name}
-                      descriptor={c.descriptor}
-                      icon={c.icon}
-                      selected={cuisines.includes(c.name)}
-                      onPress={() => toggleCuisine(c.name)}
-                    />
-                  ))}
-                </View>
-              ))}
+              <View style={{ flex: 1, gap: 12 }}>
+                {CUISINE_ROWS.map((row, ri) => (
+                  <View
+                    key={ri}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'stretch',
+                      gap: 12,
+                      flexGrow: 1,
+                      flexShrink: 1,
+                      flexBasis: 0,
+                      minHeight: 80,
+                      maxHeight: 96,
+                    }}
+                  >
+                    {row.map((c) => (
+                      <CuisineTile
+                        key={c.name}
+                        name={c.name}
+                        descriptor={c.descriptor}
+                        icon={c.icon}
+                        selected={cuisines.includes(c.name)}
+                        onPress={() => toggleCuisine(c.name)}
+                      />
+                    ))}
+                  </View>
+                ))}
+              </View>
 
-              {/* "Surprise me" — full-width, sits at the bottom of the grid.
-                  Advances immediately and clears any selection. */}
-              <CuisineCard
-                wide
-                surprise
-                name={SURPRISE.name}
-                descriptor={SURPRISE.descriptor}
+              {/* "Surprise me" — advances immediately and clears any selection. */}
+              <UtilityRow
+                accent
                 icon={SURPRISE.icon}
-                selected={surprise}
+                title="Surprise me — let us decide"
+                height={56}
                 onPress={chooseSurprise}
               />
 
-              {/* Primary advance — dimmed until at least one cuisine is picked */}
+              {/* Primary advance — dimmed until at least one cuisine is picked.
+                  The count is the only confirmation that multi-select took. */}
               <RedButton
-                label="Continue →"
+                label={
+                  cuisines.length > 0 ? `Continue with ${cuisines.length} →` : 'Continue →'
+                }
                 disabled={cuisines.length === 0}
                 onPress={goNext}
+                style={{ paddingVertical: 14 }}
               />
             </View>
           </View>
