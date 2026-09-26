@@ -40,6 +40,7 @@ import {
   priceRangeFor,
 } from '../lib/importMapping'
 import { areaNameFromFormattedAddress } from '../lib/areaName'
+import { classifyVenue } from '../lib/venueType'
 
 /** Gap between Places calls during enrichment. */
 const SYNC_DELAY_MS = 400
@@ -53,6 +54,8 @@ interface ResultRow {
   /** Real neighbourhood once known, else the coarse enum. */
   area: string
   price: string
+  /** RESTAURANT, or CAFE for a row that is imported but parked. */
+  venue: string
   photos: number
   hours: number | null
   note?: string
@@ -136,6 +139,10 @@ async function main() {
     const areaNameGuess = areaNameFromFormattedAddress(c.address)
     const price = priceRangeFor(c.priceLevel)
     const priceLabel = `${price.min}–${price.max}`
+    // Classified from the candidate's own taxonomy, so a coffee shop is parked
+    // the moment it lands rather than sitting in the engine until someone runs
+    // `classify:cafes`. Correct a misread with `npm run setvenue`.
+    const venueType = classifyVenue(c.primaryType, null)
 
     if (knownIds.has(c.placeId)) {
       rows.push({
@@ -144,6 +151,7 @@ async function main() {
         cuisine,
         area,
         price: priceLabel,
+        venue: venueType,
         photos: 0,
         hours: null,
         note: `already "${knownIds.get(c.placeId)}"`,
@@ -158,6 +166,7 @@ async function main() {
         cuisine,
         area,
         price: priceLabel,
+        venue: venueType,
         photos: 0,
         hours: null,
         note: 'dry run',
@@ -178,6 +187,11 @@ async function main() {
           googlePlaceId: c.placeId,
           isActive: true,
           tags: [],
+          venueType,
+          // Google's raw taxonomy and review count, kept so a later
+          // re-classification never needs another Places call.
+          googlePrimaryType: c.primaryType,
+          ...(c.ratingCount !== null ? { googleRatingCount: c.ratingCount } : {}),
           ...(areaNameGuess ? { areaName: areaNameGuess } : {}),
           // Neutral — our editorial score is not Google's, and the engine
           // already reads quality from googleRating.
@@ -191,6 +205,10 @@ async function main() {
       let note: string | undefined
 
       let resolvedArea: string = areaNameGuess ?? area
+      // The sync sees Google's full `types` array, which the candidates file
+      // does not carry — so it can correct a classification made from the
+      // primary type alone.
+      let resolvedVenue: string = venueType
 
       if (!noSync) {
         const outcome = await syncRestaurantPlaces(created)
@@ -198,6 +216,7 @@ async function main() {
         photos = outcome.photos
         hours = outcome.hours
         if (outcome.areaName) resolvedArea = outcome.areaName
+        resolvedVenue = outcome.venueType
         // The area guess came from the address; now that the sync has real
         // coordinates, let them refine an OTHER into a real district.
         if (area === 'OTHER') {
@@ -225,6 +244,7 @@ async function main() {
         cuisine,
         area: resolvedArea,
         price: priceLabel,
+        venue: resolvedVenue,
         photos,
         hours,
         note,
@@ -238,6 +258,7 @@ async function main() {
         cuisine,
         area,
         price: priceLabel,
+        venue: venueType,
         photos: 0,
         hours: null,
         note: message.slice(0, 60),
@@ -246,27 +267,36 @@ async function main() {
   }
 
   /* ---- Table ---- */
-  console.log(`\n${'─'.repeat(104)}`)
+  console.log(`\n${'─'.repeat(116)}`)
   console.log(
-    `${col('RESTAURANT', 30)}${col('STATUS', 18)}${col('CUISINE', 18)}${col('AREA', 14)}${col('AED', 10)}${col('PHOTOS', 8)}HOURS`,
+    `${col('RESTAURANT', 30)}${col('STATUS', 18)}${col('CUISINE', 18)}${col('AREA', 14)}${col('AED', 10)}${col('VENUE', 12)}${col('PHOTOS', 8)}HOURS`,
   )
-  console.log('─'.repeat(104))
+  console.log('─'.repeat(116))
   for (const r of rows) {
     console.log(
       `${col(r.name, 30)}${col(r.status, 18)}${col(r.cuisine, 18)}${col(r.area, 14)}${col(
         r.price,
         10,
-      )}${col(String(r.photos), 8)}${r.hours ?? '—'}`,
+      )}${col(r.venue, 12)}${col(String(r.photos), 8)}${r.hours ?? '—'}`,
     )
     if (r.note) console.log(`${' '.repeat(30)}↳ ${r.note}`)
   }
-  console.log('─'.repeat(104))
+  console.log('─'.repeat(116))
 
+  const parked = rows.filter((r) => r.status === 'created' && r.venue === 'CAFE')
   const created = rows.filter((r) => r.status === 'created').length
   const skipped = rows.filter((r) => r.status === 'skipped (exists)').length
   const errored = rows.filter((r) => r.status === 'error').length
   console.log(`\n${created} created · ${skipped} skipped · ${errored} error(s)`)
   if (apiCalls) console.log(`📊 Places API calls: ${apiCalls}`)
+  if (parked.length) {
+    console.log(
+      `\n☕ ${parked.length} row(s) classified CAFE and PARKED — imported, but never served by\n` +
+        '   the engine, Food Tinder, /nearby or the Daily Top 3 until a Cafes feature exists:',
+    )
+    for (const r of parked) console.log(`     · ${r.name}`)
+    console.log('   Wrong call? npm run setvenue -- --placeId <id> --type RESTAURANT')
+  }
 
   /* ---- Rejection memory ---- */
   const candidatesPath =

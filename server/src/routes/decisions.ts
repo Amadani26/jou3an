@@ -4,6 +4,7 @@ import prisma from '../lib/prisma'
 import { decideRestaurants } from '../services/decisionEngine'
 import { optionalAuth, requireAuth } from '../middleware/auth'
 import { photoProxyPath, withPhotoUrlsAll } from '../lib/photos'
+import { SERVEABLE_WHERE, isServeable } from '../lib/venueType'
 import { applyTasteEvent, applyTasteEvents, getTasteWeights, type TasteEvent } from '../services/tasteProfile'
 import { decide, type Decision3, type EngineInput } from '../services/engine'
 import { getPickRates, getRecentSelections, logDecision } from '../services/engine/log'
@@ -126,8 +127,9 @@ router.post('/query', optionalAuth, async (req, res) => {
       : null
 
     const engineInput: EngineInput = {
-      // The engine does its own isActive filtering, and needs the inactive rows
-      // present so its relaxation ladder has something to fall back on.
+      // The engine applies its own hard gate (isActive + venueType) in Stage 1,
+      // so handing it the whole catalogue is safe — and keeps the one
+      // definition of "servable" in ../lib/venueType.ts.
       candidates: allRestaurants,
       tasteWeights: boostedTasteWeights(profileWeights, cuisines),
       context: toEngineContext(
@@ -154,7 +156,8 @@ router.post('/query', optionalAuth, async (req, res) => {
     auditDecision = decision
   } else {
     // ---------------- Legacy keyword matcher ----------------
-    const restaurants = allRestaurants.filter((r) => r.isActive)
+    // Same gate as the engine: de-listed rows and parked cafes are never served.
+    const restaurants = allRestaurants.filter(isServeable)
 
     // Prefer nearby, but widen rather than ever return fewer than 3.
     let pool = restaurants
@@ -251,14 +254,14 @@ router.post('/tinder-suggest', optionalAuth, async (req, res) => {
 
   const liked = effectiveLikedIds.length
     ? await prisma.restaurant.findMany({
-        where: { id: { in: effectiveLikedIds }, isActive: true },
+        where: { id: { in: effectiveLikedIds }, ...SERVEABLE_WHERE },
       })
     : []
 
-  // Top up with other active restaurants if we don't have 3 likes yet.
+  // Top up with other servable restaurants if we don't have 3 likes yet.
   let pool = liked
   if (pool.length < 3) {
-    const actives = await prisma.restaurant.findMany({ where: { isActive: true } })
+    const actives = await prisma.restaurant.findMany({ where: SERVEABLE_WHERE })
     const seen = new Set(pool.map((r) => r.id))
     pool = [...pool, ...actives.filter((r) => !seen.has(r.id))]
   }

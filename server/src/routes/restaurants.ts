@@ -2,6 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma'
 import { withPhotoUrls, withPhotoUrlsAll } from '../lib/photos'
 import { withinRadius } from '../lib/geo'
+import { SERVEABLE_WHERE } from '../lib/venueType'
 
 const router = Router()
 
@@ -10,14 +11,17 @@ const DEFAULT_RADIUS_KM = 5
 /**
  * GET /api/restaurants/nearby?lat=&lng=&radius=
  *
- * With coordinates: active restaurants within `radius` km (default 5), each
- * carrying `distanceKm`, nearest first. Without coordinates: all active, as
+ * With coordinates: servable restaurants within `radius` km (default 5), each
+ * carrying `distanceKm`, nearest first. Without coordinates: all servable, as
  * before. `radius` is in KILOMETRES.
+ *
+ * "Servable" = active AND venueType RESTAURANT: this feeds Food Tinder, whose
+ * swipes train the taste profile, so a parked cafe must never appear here.
  *
  * Must be declared BEFORE '/:id' so "nearby" isn't matched as an id.
  */
 router.get('/nearby', async (req, res) => {
-  const restaurants = await prisma.restaurant.findMany({ where: { isActive: true } })
+  const restaurants = await prisma.restaurant.findMany({ where: SERVEABLE_WHERE })
 
   const lat = Number(req.query.lat)
   const lng = Number(req.query.lng)
@@ -36,7 +40,12 @@ router.get('/nearby', async (req, res) => {
   res.json(withPhotoUrlsAll(nearby))
 })
 
-// GET /api/restaurants/:id
+/**
+ * GET /api/restaurants/:id
+ *
+ * Deliberately NOT gated on isActive/venueType: a restaurant the user picked
+ * before it was pruned or reclassified must still open from their history.
+ */
 router.get('/:id', async (req, res) => {
   const restaurant = await prisma.restaurant.findUnique({
     where: { id: req.params.id },

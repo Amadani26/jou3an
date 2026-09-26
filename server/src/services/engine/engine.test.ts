@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { decide } from './index'
 import { DAMPING_EXEMPT_PICK_RATE, dampingFor } from './select'
 import { filterCandidates } from './filter'
-import { DIFC, FAR, MARINA, catalogue, context, input, resetIds, restaurant } from './fixtures'
+import {
+  DIFC,
+  FAR,
+  MARINA,
+  cafe,
+  catalogue,
+  context,
+  input,
+  resetIds,
+  restaurant,
+} from './fixtures'
 
 const CUISINES = (d: ReturnType<typeof decide>) =>
   new Set(d.picks.map((p) => p.restaurant.cuisineType.toLowerCase()))
@@ -266,7 +276,94 @@ describe('decide — geography', () => {
   })
 })
 
+describe('decide — parked cafes never reach a result', () => {
+  it('never returns a CAFE, even when cafes outscore every restaurant', () => {
+    // The catalogue's two cafes are the highest-rated rows in it.
+    for (let nonce = 0; nonce < 8; nonce++) {
+      const d = decide(
+        input({
+          candidates: catalogue(),
+          context: context({ refreshNonce: nonce }),
+        }),
+      )
+      for (const p of d.picks) expect(p.restaurant.venueType).toBe('RESTAURANT')
+    }
+  })
+
+  it('keeps cafes out of the scored pool entirely, not just the top 3', () => {
+    const d = decide(input({ candidates: catalogue() }))
+    const scoredIds = new Set(d.breakdown.map((b) => b.restaurantId))
+    for (const r of catalogue().filter((x) => x.venueType === 'CAFE')) {
+      expect(scoredIds.has(r.id)).toBe(false)
+    }
+  })
+
+  it('never returns a CAFE the user has been taught to love', () => {
+    resetIds()
+    const candidates = [
+      restaurant({ cuisineType: 'Lebanese' }),
+      restaurant({ cuisineType: 'Japanese' }),
+      restaurant({ cuisineType: 'Pizza' }),
+      cafe({ name: 'Beloved Coffee', cuisineType: 'Coffee', googleRating: 5 }),
+    ]
+    const d = decide(
+      input({
+        candidates,
+        // A profile that adores coffee, and a query explicitly asking for it.
+        tasteWeights: { coffee: 10 },
+        context: context({ requestedCuisines: ['Coffee'] }),
+      }),
+    )
+    expect(d.picks.map((p) => p.restaurant.name)).not.toContain('Beloved Coffee')
+  })
+
+  it('throws rather than relaxing the cafe gate to reach 3', () => {
+    resetIds()
+    // Two restaurants and three cafes: three rows are available, but only two
+    // are servable. Reaching for a cafe would be worse than failing loudly.
+    const candidates = [restaurant(), restaurant(), cafe(), cafe(), cafe()]
+    expect(() => decide(input({ candidates }))).toThrow(/need 3/)
+  })
+
+  it('throws rather than relaxing isActive to reach 3', () => {
+    resetIds()
+    // Pruning is a human saying "never serve this" — not a constraint to drop.
+    const candidates = [
+      restaurant(),
+      restaurant(),
+      restaurant({ isActive: false }),
+      restaurant({ isActive: false }),
+    ]
+    expect(() => decide(input({ candidates }))).toThrow(/need 3/)
+  })
+})
+
 describe('filterCandidates — Stage 1', () => {
+  it('drops parked cafes', () => {
+    resetIds()
+    const candidates = [restaurant(), restaurant(), restaurant(), cafe()]
+    expect(filterCandidates(candidates, context()).pool).toHaveLength(3)
+  })
+
+  it('never reports isActive or venueType as relaxed — they are absolute', () => {
+    resetIds()
+    // Nothing matches the strict brief, so the ladder runs to the bottom.
+    const candidates = [
+      restaurant({ priceMin: 200, priceMax: 400 }),
+      restaurant({ priceMin: 200, priceMax: 400 }),
+      restaurant({ priceMin: 200, priceMax: 400 }),
+      cafe(),
+      restaurant({ isActive: false }),
+    ]
+    const { relaxed, pool } = filterCandidates(
+      candidates,
+      context({ formatFilter: 'DELIVERY', budget: 'LOW' }),
+    )
+    expect(relaxed).not.toContain('isActive')
+    expect(relaxed).not.toContain('venueType')
+    expect(pool).toHaveLength(3)
+  })
+
   it('drops closed restaurants', () => {
     resetIds()
     const closedMondays = [{ open: { day: 2, hour: 9 }, close: { day: 2, hour: 17 } }]

@@ -35,6 +35,17 @@ enum DecisionAction {
   SELECT
 }
 
+/// What kind of venue a row is.
+///
+/// Only RESTAURANT is served by any decision surface. CAFE rows are PARKED:
+/// imported, enriched and kept, but invisible to the engine, Food Tinder,
+/// /api/restaurants/nearby and the Daily Top 3 until a dedicated Cafes feature
+/// exists. Classified by `npm run classify:cafes`, corrected by `npm run setvenue`.
+enum VenueType {
+  RESTAURANT
+  CAFE
+}
+
 model User {
   id                 String       @id @default(cuid())
   email              String       @unique
@@ -73,6 +84,11 @@ model Restaurant {
   ratingScore     Float        @default(0)
   averageCalories Int?
 
+  /// RESTAURANT (default) or CAFE. A CAFE is parked, never served by a
+  /// decision surface — see the VenueType enum. `/api/restaurants/:id` and
+  /// decision history deliberately ignore this, so past picks still render.
+  venueType       VenueType    @default(RESTAURANT)
+
   // --- Google Places (populated by `npm run sync:places`) ---
   googlePlaceId  String?   @unique
   /// Places photo resource names ("places/{placeId}/photos/{photoId}"), max 6.
@@ -86,6 +102,15 @@ model Restaurant {
   /// Supersedes the coarse `area` enum, which cannot represent most of Dubai.
   areaName       String?
   googleRating   Float?
+  /// How many reviews Google's rating is based on. Curation signal only —
+  /// nothing ranks off it; the prune tool prints it so a 4.9/6-reviews row is
+  /// recognisable as noise.
+  googleRatingCount Int?
+  /// Google's raw `primaryType` ("hamburger_restaurant", "coffee_shop") and the
+  /// full `types` array, stored verbatim. Kept because they are what venue
+  /// classification reads: re-classifying must never need another Places call.
+  googlePrimaryType String?
+  googleTypes      String[]
   /// Google `regularOpeningHours.periods` verbatim:
   /// [{ open: { day, hour, minute }, close?: { day, hour, minute } }].
   /// day is 0=Sunday..6=Saturday in the PLACE's local time (Asia/Dubai here).

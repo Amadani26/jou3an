@@ -38,11 +38,16 @@ export function restaurant(over: Partial<Candidate> = {}): Candidate {
     tags: [] as string[],
     ratingScore: 8,
     averageCalories: null,
+    // Servable by default — a fixture should never accidentally be parked.
+    venueType: 'RESTAURANT',
     googlePlaceId: null,
     photoRefs: [] as string[],
     lat: MARINA.lat,
     lng: MARINA.lng,
     googleRating: 4.2,
+    googleRatingCount: 900,
+    googlePrimaryType: null,
+    googleTypes: [] as string[],
     // Open 24/7 — a period with no close, in Google's encoding.
     openingHours: [{ open: { day: 0, hour: 0, minute: 0 } }],
     googleSyncedAt: null,
@@ -50,6 +55,14 @@ export function restaurant(over: Partial<Candidate> = {}): Candidate {
     updatedAt: new Date('2026-01-01T00:00:00Z'),
   }
   return { ...base, ...over } as Candidate
+}
+
+/**
+ * A CAFE row — parked, and therefore something no decision surface may ever
+ * serve. Present in `catalogue()` so every scenario proves that by omission.
+ */
+export function cafe(over: Partial<Candidate> = {}): Candidate {
+  return restaurant({ venueType: 'CAFE', ...over })
 }
 
 /** Resets the id counter so ids are stable within a suite. */
@@ -77,7 +90,10 @@ export function input(over: Partial<EngineInput> = {}): EngineInput {
   }
 }
 
-/** Ten varied restaurants — the pool the golden scenarios draw from. */
+/**
+ * Ten varied restaurants plus two parked cafes — the pool the golden scenarios
+ * draw from. The cafes are catalogue rows that must never reach a result.
+ */
 export function catalogue(): Candidate[] {
   resetIds()
   return [
@@ -177,6 +193,31 @@ export function catalogue(): Candidate[] {
       noonUrl: 'https://noon.example/10',
       lat: MARINA.lat,
       lng: MARINA.lng + 0.02,
+    }),
+    // --- Parked cafes. Appended last so the restaurant ids above stay stable.
+    // Both are deliberately attractive (top ratings, on the doorstep, a cuisine
+    // the fixtures' burger lover would score highly) so that any scenario which
+    // starts serving cafes fails loudly instead of subtly.
+    cafe({
+      name: 'Marina Coffee House',
+      cuisineType: 'Coffee',
+      googlePrimaryType: 'coffee_shop',
+      googleTypes: ['coffee_shop', 'cafe', 'restaurant'],
+      priceMin: 25,
+      priceMax: 50,
+      googleRating: 4.9,
+      ...MARINA,
+    }),
+    cafe({
+      name: 'Bake & Burger Bar',
+      cuisineType: 'American Burgers',
+      googlePrimaryType: 'bakery',
+      googleTypes: ['bakery', 'cafe'],
+      priceMin: 45,
+      priceMax: 70,
+      googleRating: 4.8,
+      talabatUrl: 'https://talabat.example/12',
+      ...MARINA,
     }),
   ]
 }

@@ -5,10 +5,11 @@
  * exactly the same enrichment on just the rows it created, rather than
  * re-syncing the whole catalogue (and re-billing every Place Details call).
  */
-import { Prisma, type Restaurant } from '@prisma/client'
+import { Prisma, type Restaurant, type VenueType } from '@prisma/client'
 import prisma from '../lib/prisma'
 import { extractPeriods, getPlaceDetails, rankPhotos, searchPlace } from './googlePlaces'
 import { resolveAreaName } from '../lib/areaName'
+import { classifyVenue } from '../lib/venueType'
 
 export const MAX_PHOTOS = 6
 
@@ -30,6 +31,10 @@ export interface SyncOutcome {
   coords: string
   /** Real neighbourhood from Google's address, or null when unresolvable. */
   areaName: string | null
+  /** Google's raw primary type, as stored. */
+  primaryType: string | null
+  /** What `classifyVenue` makes of the taxonomy — RESTAURANT unless Google says cafe. */
+  venueType: VenueType
   /** How many Places calls this row cost. */
   apiCalls: number
 }
@@ -54,14 +59,16 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
     apiCalls++
     if (!match?.id) {
       return {
-      status: 'no match',
-      photos: 0,
-      rating: null,
-      hours: null,
-      coords: '—',
-      areaName: null,
-      apiCalls,
-    }
+        status: 'no match',
+        photos: 0,
+        rating: null,
+        hours: null,
+        coords: '—',
+        areaName: null,
+        primaryType: null,
+        venueType: r.venueType,
+        apiCalls,
+      }
     }
     placeId = match.id
     searchName = match.displayName?.text
@@ -77,6 +84,17 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
 
   const location = details.location
   const rating = details.rating ?? null
+  const ratingCount = details.userRatingCount ?? null
+  const primaryType = details.primaryType ?? null
+  const types = details.types ?? []
+  // ⚠️ A sync derives venueType ONLY on a row's FIRST enrichment (googleSyncedAt
+  // still null) — which is every freshly imported row, classified here from the
+  // full `types` array rather than the primary type alone. On a re-sync the
+  // stored value stands: by then it is either `classify:cafes`' verdict or a
+  // human's `setvenue` correction, and re-deriving it would silently undo those
+  // every time the catalogue is refreshed.
+  const firstEnrichment = !r.googleSyncedAt && Boolean(primaryType || types.length)
+  const classified = firstEnrichment ? classifyVenue(primaryType, types) : r.venueType
   const periods = extractPeriods(details)
   // Components first, formatted address as the fallback. Never overwrite a
   // resolved name with null: a transient gap in Google's data should not wipe
@@ -91,6 +109,10 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
       lat: location?.latitude ?? null,
       lng: location?.longitude ?? null,
       googleRating: rating,
+      ...(ratingCount !== null ? { googleRatingCount: ratingCount } : {}),
+      ...(primaryType ? { googlePrimaryType: primaryType } : {}),
+      ...(types.length ? { googleTypes: types } : {}),
+      ...(firstEnrichment ? { venueType: classified } : {}),
       ...(areaName ? { areaName } : {}),
       // Prisma.DbNull (not JS null) is how a Json column is set back to SQL
       // NULL; plain null would be rejected by the generated type.
@@ -106,6 +128,8 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
     rating,
     hours: periods?.length ?? null,
     areaName,
+    primaryType,
+    venueType: classified,
     coords: location
       ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
       : '—',

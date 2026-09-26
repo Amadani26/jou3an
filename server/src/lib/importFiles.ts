@@ -1,9 +1,10 @@
 /**
  * Filesystem side of the import pipeline.
  *
- * `server/imports/` is GITIGNORED: candidate and approved files are working
- * documents for a curation session, and the rejected list is a local memory of
- * what a human has already said no to. None of it belongs in the repo.
+ * `server/imports/` is GITIGNORED: candidate, approved and prune-candidate
+ * files are working documents for a curation session, and `rejected.json` /
+ * `venue-overrides.json` are a local memory of what a human has already decided.
+ * None of it belongs in the repo.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -131,8 +132,79 @@ export function removeRejected(placeId: string): boolean {
 }
 
 /* ------------------------------------------------------------------ */
+/* Venue-type overrides                                                */
+/* ------------------------------------------------------------------ */
+
+export const VENUE_OVERRIDES_PATH = path.join(IMPORTS_DIR, 'venue-overrides.json')
+
+export interface VenueOverridesFile {
+  /** placeId -> the venue type a human set by hand. */
+  types: Record<string, 'RESTAURANT' | 'CAFE'>
+  /** Why, for when someone wonders months later. */
+  notes?: Record<string, string>
+}
+
+/**
+ * Venue types a human has set by hand with `npm run setvenue`.
+ *
+ * Same idea as `rejected.json`: a local memory of a human decision, so the
+ * bulk classifier stops arguing with it. Google calls plenty of brunch places
+ * `cafe`, and re-proposing the same correction every run is how a curation tool
+ * becomes noise a person stops reading.
+ */
+export function readVenueOverrides(): VenueOverridesFile {
+  const data = readJson<VenueOverridesFile>(VENUE_OVERRIDES_PATH, { types: {}, notes: {} })
+  const types = data.types && typeof data.types === 'object' ? data.types : {}
+  return {
+    types: Object.fromEntries(
+      Object.entries(types).filter(
+        ([, v]) => v === 'RESTAURANT' || v === 'CAFE',
+      ) as [string, 'RESTAURANT' | 'CAFE'][],
+    ),
+    notes: data.notes && typeof data.notes === 'object' ? data.notes : {},
+  }
+}
+
+/** Records one hand-set venue type. A row with no placeId cannot be recorded. */
+export function setVenueOverride(
+  placeId: string,
+  type: 'RESTAURANT' | 'CAFE',
+  note?: string,
+): void {
+  const current = readVenueOverrides()
+  writeJson(VENUE_OVERRIDES_PATH, {
+    types: { ...current.types, [placeId]: type },
+    notes: { ...current.notes, ...(note ? { [placeId]: note } : {}) },
+  })
+}
+
+/* ------------------------------------------------------------------ */
 /* CLI helpers                                                         */
 /* ------------------------------------------------------------------ */
+
+/**
+ * y/N prompt on stdin. Anything but an explicit y/yes is a NO, and a
+ * non-interactive stdin (a pipe, CI) answers no rather than guessing — these
+ * scripts mutate the catalogue, so silence must never mean consent.
+ */
+export async function confirm(question: string): Promise<boolean> {
+  if (!process.stdin.isTTY) {
+    console.log(`${question} [y/N] — stdin is not a TTY, assuming NO.`)
+    return false
+  }
+
+  const readline = await import('node:readline/promises')
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    const answer = (await rl.question(`${question} [y/N] `)).trim().toLowerCase()
+    return answer === 'y' || answer === 'yes'
+  } finally {
+    rl.close()
+  }
+}
+
+/** True for `--flag`, `--flag true`, `--flag=true`. */
+export const flag = (v: string | true | undefined) => v === true || v === 'true'
 
 /** Minimal `--flag value` / `--flag=value` parser — no dependency needed. */
 export function parseArgs(argv: string[]): Record<string, string | true> {

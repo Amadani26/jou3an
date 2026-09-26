@@ -49,10 +49,15 @@ export interface PlaceDetails {
   displayName?: { text?: string }
   location?: { latitude: number; longitude: number }
   rating?: number
+  /** How many reviews `rating` is based on — a curation signal, never a ranking one. */
+  userRatingCount?: number
   photos?: PlacePhoto[]
   regularOpeningHours?: PlaceOpeningHours
   addressComponents?: PlaceAddressComponent[]
   formattedAddress?: string
+  /** Google's single best label ("coffee_shop"); what venue classification reads. */
+  primaryType?: string
+  types?: string[]
 }
 
 export class PlacesConfigError extends Error {}
@@ -287,16 +292,22 @@ export async function discoverPlaces(
 
 
 /**
- * Place Details — photos, coordinates, rating and opening hours for one id.
+ * Place Details — photos, coordinates, rating, review count, taxonomy and
+ * opening hours for one id.
  *
  * `regularOpeningHours` is billed on the Places "Advanced" SKU, so it is worth
- * knowing this call costs more than the plain fields. We store the periods
- * verbatim and interpret them in src/lib/hours.ts.
+ * knowing this call costs more than the plain fields. `primaryType`/`types` and
+ * `userRatingCount` ride along on the same request — free relative to the
+ * Advanced call already being made, and storing them means re-classifying a
+ * venue later never needs another call.
+ *
+ * We store the hours periods verbatim and interpret them in src/lib/hours.ts.
  */
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
   return placesFetch<PlaceDetails>(
     `/places/${encodeURIComponent(placeId)}`,
-    'id,displayName,location,rating,photos,regularOpeningHours,addressComponents,formattedAddress',
+    'id,displayName,location,rating,userRatingCount,primaryType,types,photos,' +
+      'regularOpeningHours,addressComponents,formattedAddress',
     { method: 'GET' },
   )
 }
@@ -312,6 +323,23 @@ export async function getPlaceAddress(placeId: string): Promise<PlaceDetails> {
   return placesFetch<PlaceDetails>(
     `/places/${encodeURIComponent(placeId)}`,
     'id,displayName,addressComponents,formattedAddress',
+    { method: 'GET' },
+  )
+}
+
+/**
+ * Taxonomy-and-review-count Place Details — the narrow call.
+ *
+ * Used by the venue-type backfill, which needs nothing but Google's own labels
+ * and how many reviews its rating rests on. The field mask deliberately omits
+ * photos, hours, coordinates and address components: those are already stored,
+ * and `regularOpeningHours` alone would push the call onto the expensive
+ * Enterprise SKU.
+ */
+export async function getPlaceTaxonomy(placeId: string): Promise<PlaceDetails> {
+  return placesFetch<PlaceDetails>(
+    `/places/${encodeURIComponent(placeId)}`,
+    'id,displayName,primaryType,types,userRatingCount,rating',
     { method: 'GET' },
   )
 }

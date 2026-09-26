@@ -16,7 +16,11 @@
     "discover": "ts-node src/scripts/discoverPlaces.ts",
     "import": "ts-node src/scripts/importPlaces.ts",
     "unreject": "ts-node src/scripts/unreject.ts",
-    "sync:areas": "ts-node src/scripts/syncAreaNames.ts"
+    "sync:areas": "ts-node src/scripts/syncAreaNames.ts",
+    "sync:types": "ts-node src/scripts/syncVenueTypes.ts",
+    "prune": "ts-node src/scripts/prune.ts",
+    "classify:cafes": "ts-node src/scripts/classifyCafes.ts",
+    "setvenue": "ts-node src/scripts/setVenue.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

@@ -24,8 +24,10 @@ function expectUniversalInvariants(d: Decision3, at: Date) {
   expect(new Set(d.picks.map((p) => p.restaurant.id)).size).toBe(3)
 
   for (const p of d.picks) {
-    // Never serve a de-listed or shut restaurant unless Stage 1 said it had to.
-    if (!d.relaxed.includes('isActive')) expect(p.restaurant.isActive).toBe(true)
+    // isActive and venueType are absolute — no brief can relax either, so these
+    // hold unconditionally. Hours can be relaxed when nothing nearby is open.
+    expect(p.restaurant.isActive).toBe(true)
+    expect(p.restaurant.venueType).toBe('RESTAURANT')
     if (!d.relaxed.includes('hours')) expect(isOpenNow(p.restaurant, at)).toBe(true)
 
     // Every pick is explained and ranked.

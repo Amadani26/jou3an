@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { LocationArea } from '@prisma/client'
 import prisma from '../lib/prisma'
 import { requireAuth, requireAdmin } from '../middleware/auth'
+import { SERVEABLE_WHERE } from '../lib/venueType'
 
 const router = Router()
 
@@ -30,12 +31,17 @@ router.post('/daily', async (req, res) => {
   }
   const { themeLabel, result1Id, result2Id, result3Id } = parsed.data
 
-  // Ensure the referenced restaurants exist (clearer error than an FK failure)
+  // Ensure the referenced restaurants exist AND are servable (clearer error than
+  // an FK failure — and than a pick that saves fine but 404s on /api/daily/today
+  // because one of its rows is de-listed or a parked cafe).
   const count = await prisma.restaurant.count({
-    where: { id: { in: [result1Id, result2Id, result3Id] } },
+    where: { id: { in: [result1Id, result2Id, result3Id] }, ...SERVEABLE_WHERE },
   })
   if (count < 3) {
-    res.status(400).json({ error: 'One or more restaurant ids are invalid' })
+    res.status(400).json({
+      error:
+        'One or more restaurant ids are invalid, inactive, or not a RESTAURANT venue',
+    })
     return
   }
 

@@ -9,6 +9,7 @@
  */
 import { isOpenNow } from '../../lib/hours'
 import { withinRadius, type Coords } from '../../lib/geo'
+import { isServeable } from '../../lib/venueType'
 import type { Budget, Candidate, EngineContext, FormatFilter, RadiusTier } from './types'
 
 /** Minimum viable result set. Never returns fewer. */
@@ -72,12 +73,18 @@ function applyRadiusLadder(
 
 /**
  * Stage 1. Constraints are dropped in this order when the pool is too small:
- *   budget -> format -> opening hours -> isActive.
+ *   budget -> format -> opening hours.
  *
- * Budget goes first because paying a bit more is the mildest disappointment;
- * `isActive` goes last because serving a de-listed restaurant is the worst
- * outcome, and is only ever reached if the catalogue itself has fewer than
- * three live rows.
+ * Budget goes first because paying a bit more is the mildest disappointment,
+ * and hours goes last because a shut restaurant is the worst thing to hand
+ * someone who is hungry now.
+ *
+ * ⚠️ `isActive` and `venueType` are NOT on that ladder — they are absolute.
+ * Deactivating a row (`npm run prune`) is a human saying "never serve this",
+ * and a CAFE is parked for a feature that does not exist yet; relaxing either
+ * one would quietly undo the curation. If fewer than three servable rows
+ * remain, `decide()` throws instead — a thin catalogue is a catalogue problem,
+ * not something to paper over with a de-listed restaurant.
  */
 export function filterCandidates(
   candidates: Candidate[],
@@ -88,8 +95,9 @@ export function filterCandidates(
       ? { lat: context.lat, lng: context.lng }
       : null
 
-  const active = candidates.filter((r) => r.isActive)
-  const open = active.filter((r) => isOpenNow(r, context.date))
+  // The hard gate, applied before anything that can be relaxed.
+  const servable = candidates.filter(isServeable)
+  const open = servable.filter((r) => isOpenNow(r, context.date))
 
   // Successively looser briefs; the first that yields REQUIRED wins.
   const attempts: { pool: Candidate[]; relaxed: string[] }[] = [
@@ -104,8 +112,7 @@ export function filterCandidates(
       relaxed: ['budget'],
     },
     { pool: open, relaxed: ['budget', 'format'] },
-    { pool: active, relaxed: ['budget', 'format', 'hours'] },
-    { pool: candidates, relaxed: ['budget', 'format', 'hours', 'isActive'] },
+    { pool: servable, relaxed: ['budget', 'format', 'hours'] },
   ]
 
   for (const attempt of attempts) {
@@ -114,12 +121,12 @@ export function filterCandidates(
     if (laddered.pool.length >= REQUIRED) return { ...laddered, relaxed: attempt.relaxed }
   }
 
-  // Everything was tried and the catalogue still cannot field three. Hand back
-  // the widest pool we have; `select` will surface the shortfall rather than
-  // this layer pretending otherwise.
-  const laddered = applyRadiusLadder(candidates, origin)
+  // Everything was tried and the catalogue still cannot field three servable
+  // rows. Hand back the widest LEGITIMATE pool; `select` will surface the
+  // shortfall rather than this layer reaching for a parked or de-listed row.
+  const laddered = applyRadiusLadder(servable, origin)
   return {
     ...laddered,
-    relaxed: ['budget', 'format', 'hours', 'isActive'],
+    relaxed: ['budget', 'format', 'hours'],
   }
 }

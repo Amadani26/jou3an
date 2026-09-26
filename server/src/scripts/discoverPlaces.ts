@@ -10,7 +10,7 @@
  * Flags:
  *   --area        (required) e.g. "Dubai Marina"
  *   --cuisine     (optional) e.g. "Japanese"
- *   --min-rating  default 3.8
+ *   --min-rating  default 4.2
  *   --min-reviews default 400
  *   --max-pages   default 3   (20 results per page)
  *   --out         override the output path
@@ -35,7 +35,12 @@ import {
 } from '../lib/importFiles'
 import { slugify } from '../lib/importMapping'
 
-const DEFAULT_MIN_RATING = 3.8
+/**
+ * Discovery is deliberately strict: it is cheaper to widen a threshold and run
+ * again than to import mediocre rows and prune them later. 4.2 is the bar a
+ * place has to clear before a human's time is worth spending on it.
+ */
+const DEFAULT_MIN_RATING = 4.2
 const DEFAULT_MIN_REVIEWS = 400
 const DEFAULT_MAX_PAGES = 3
 
