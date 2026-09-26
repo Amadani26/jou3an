@@ -8,6 +8,7 @@ import * as Location from 'expo-location'
 import Animated, { FadeIn, SlideInLeft, SlideInRight } from 'react-native-reanimated'
 import RedButton from '../../components/RedButton'
 import { searchAreas, type AreaSuggestion } from '../../lib/api'
+import AreaRow from '../../components/AreaRow'
 import { usePressed } from '../../lib/usePressed'
 
 type LocationChoice = 'Nearby' | 'Anywhere in Dubai' | `Near ${string}`
@@ -233,58 +234,6 @@ function CuisineCard({
  * One search hit in the area picker. Its own component so it can hold press
  * state — hooks can't run inside the results `.map`.
  */
-function AreaRow({
-  suggestion,
-  onPress,
-}: {
-  suggestion: AreaSuggestion
-  onPress: () => void
-}) {
-  const { pressed, pressHandlers } = usePressed()
-
-  return (
-    <Pressable
-      onPress={() => {
-        tap()
-        onPress()
-      }}
-      {...pressHandlers}
-      // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        paddingVertical: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: '#1C1C1C',
-        opacity: pressed ? 0.75 : 1,
-      }}
-    >
-      <Ionicons name="location-outline" size={18} color="#504B47" />
-      <View style={{ flex: 1 }}>
-        <Text
-          numberOfLines={1}
-          style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, color: '#F2EDE8' }}
-        >
-          {suggestion.name}
-        </Text>
-        <Text
-          numberOfLines={1}
-          style={{
-            fontFamily: 'DMSans_400Regular',
-            fontSize: 12,
-            color: '#8A847E',
-            marginTop: 2,
-          }}
-        >
-          {suggestion.area}
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={16} color="#3a3a3a" />
-    </Pressable>
-  )
-}
-
 function StepHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <View style={{ marginBottom: 24 }}>

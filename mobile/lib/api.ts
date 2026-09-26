@@ -275,14 +275,41 @@ export async function getRestaurant(id: string): Promise<Restaurant> {
   return data
 }
 
-/** Nearby (Food Tinder) — passes lat/lng when a location is available. */
+/** Paging + exclusion options for the Food Tinder deck. All optional. */
+export interface NearbyOptions {
+  /** KILOMETRES (the server reads km, not metres). Ignored without coords. */
+  radiusKm?: number
+  /** Page size. Omit for "everything", which is what older builds ask for. */
+  limit?: number
+  /** Rows to skip — how the deck pages through the pool. */
+  offset?: number
+  /**
+   * Ids to leave out, e.g. what this session already swiped. Capped server-side
+   * (it travels in the query string), so treat it as a courtesy, not a
+   * guarantee — `offset` is what actually paginates.
+   */
+  exclude?: string[]
+}
+
+/**
+ * Nearby (Food Tinder) — passes lat/lng when a location is available.
+ *
+ * Returns a bare array; a page SHORTER than `limit` means the pool is
+ * exhausted, which is how the deck knows to start looping instead of ending.
+ */
 export async function getNearbyRestaurants(
-  coords?: { lat: number; lng: number },
-  /** KILOMETRES (the server reads km, not metres). */
-  radiusKm = 5,
+  coords?: { lat: number; lng: number } | null,
+  options: NearbyOptions = {},
 ): Promise<Restaurant[]> {
-  const params = coords ? { lat: coords.lat, lng: coords.lng, radius: radiusKm } : undefined
-  const { data } = await api.get<Restaurant[]>('/api/restaurants/nearby', { params })
+  const { radiusKm = 5, limit, offset, exclude } = options
+  const { data } = await api.get<Restaurant[]>('/api/restaurants/nearby', {
+    params: {
+      ...(coords ? { lat: coords.lat, lng: coords.lng, radius: radiusKm } : {}),
+      ...(limit !== undefined ? { limit } : {}),
+      ...(offset ? { offset } : {}),
+      ...(exclude?.length ? { exclude: exclude.join(',') } : {}),
+    },
+  })
   return data
 }
 

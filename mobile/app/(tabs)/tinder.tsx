@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler'
 import Animated, {
   Easing,
   Extrapolation,
+  FadeIn,
+  FadeOut,
   SlideInRight,
   cancelAnimation,
   interpolate,
@@ -32,12 +34,14 @@ import Animated, {
 } from 'react-native-reanimated'
 import RedButton from '../../components/RedButton'
 import RestaurantDetailSheet from '../../components/RestaurantDetailSheet'
+import AreaSearchSheet from '../../components/AreaSearchSheet'
 import {
   getNearbyRestaurants,
   displayArea,
   prettyDistance,
   deliveryUrl,
   photoUrls,
+  type AreaSuggestion,
   type Restaurant,
 } from '../../lib/api'
 import { getPlaceholderImage } from '../../lib/placeholderImages'
@@ -47,6 +51,45 @@ const { width: W, height: H } = Dimensions.get('window')
 const THRESHOLD = W * 0.28
 const SWIPE_OUT = W * 1.5
 const SPRING = { damping: 18, stiffness: 180 }
+
+/* ---------------- Deck paging ---------------- */
+
+/** Rows per fetch. Small enough to be instant, big enough to outrun a thumb. */
+const PAGE_SIZE = 20
+/** Refill this many cards from the end, so the next batch lands before it's needed. */
+const REFILL_AT = 3
+/**
+ * Radius ladder for a located deck. 5 km is the neighbourhood; 15 km is "still
+ * worth the drive". Past that we stop pretending and widen to the whole city.
+ */
+const RADIUS_LADDER = [5, 15]
+/** The server caps this too — matching it here keeps the URL honest. */
+const EXCLUDE_CAP = 300
+
+/** Height of the always-present "Liked" tray. Reserved so the deck never jumps. */
+const TRAY_H = 86
+
+type LocationMode = 'nearby' | 'anywhere' | 'area'
+
+interface DeckLocation {
+  mode: LocationMode
+  /** Null for 'anywhere', and for 'nearby' until permission is granted. */
+  coords: { lat: number; lng: number } | null
+  /** The picked area's name, shown on the pill. Null unless mode is 'area'. */
+  areaLabel: string | null
+}
+
+const ANYWHERE: DeckLocation = { mode: 'anywhere', coords: null, areaLabel: null }
+
+/**
+ * The location choice, remembered for the session.
+ *
+ * Module-level on purpose: the tab unmounts when you leave it, and re-deciding
+ * "where am I eating" every time you come back to the deck is exactly the kind
+ * of re-work this app exists to remove. It is NOT persisted to disk — a new
+ * launch starts from Anywhere, because yesterday's area is rarely today's.
+ */
+let sessionLocation: DeckLocation = ANYWHERE
 
 /* ---------------- Card photo slideshow ---------------- */
 
@@ -220,31 +263,38 @@ function CardSlideshow({ photos, paused }: { photos: string[]; paused: boolean }
 }
 
 /**
- * Shown when nothing was within the search radius and the deck was widened to
- * the whole city. Dismissible — it explains the widening once, then gets out
- * of the way.
+ * A transient line over the top of the card.
+ *
+ * ⚠️ ABSOLUTELY POSITIONED on purpose. Its predecessor sat in the layout flow,
+ * so the card jumped every time it appeared or was dismissed. Nothing about the
+ * deck's geometry may depend on whether there is something to say.
  */
-function RadiusBanner({ onDismiss }: { onDismiss: () => void }) {
+function Notice({ text, onDismiss }: { text: string; onDismiss: () => void }) {
   const { pressed, pressHandlers } = usePressed()
 
   return (
-    <View
+    <Animated.View
+      entering={FadeIn.duration(220)}
+      exiting={FadeOut.duration(180)}
       style={{
-        marginHorizontal: 20,
-        marginBottom: 4,
-        paddingVertical: 10,
-        paddingLeft: 12,
-        paddingRight: 6,
+        position: 'absolute',
+        top: 0,
+        left: 20,
+        right: 20,
+        zIndex: 20,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-        backgroundColor: '#141414',
+        paddingVertical: 10,
+        paddingLeft: 12,
+        paddingRight: 6,
+        backgroundColor: 'rgba(20,20,20,0.96)',
         borderWidth: 1,
         borderColor: '#242424',
         borderRadius: 12,
       }}
     >
-      <Ionicons name="location-outline" size={16} color="#FFB547" />
+      <Ionicons name="information-circle-outline" size={16} color="#FFB547" />
       <Text
         style={{
           flex: 1,
@@ -254,7 +304,7 @@ function RadiusBanner({ onDismiss }: { onDismiss: () => void }) {
           color: '#8A847E',
         }}
       >
-        Nothing within 5 km — showing all of Dubai
+        {text}
       </Text>
       <Pressable
         {...pressHandlers}
@@ -264,7 +314,57 @@ function RadiusBanner({ onDismiss }: { onDismiss: () => void }) {
       >
         <Ionicons name="close" size={16} color="#504B47" />
       </Pressable>
-    </View>
+    </Animated.View>
+  )
+}
+
+/** One option in the location filter. */
+function LocationPill({
+  icon,
+  label,
+  active,
+  flex,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  label: string
+  active: boolean
+  flex?: boolean
+  onPress: () => void
+}) {
+  const { pressed, pressHandlers } = usePressed()
+
+  return (
+    <Pressable
+      onPress={onPress}
+      {...pressHandlers}
+      // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+      style={{
+        ...(flex ? { flexShrink: 1 } : {}),
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        height: 34,
+        paddingHorizontal: 13,
+        borderRadius: 999,
+        backgroundColor: active ? '#1a0d0d' : '#141414',
+        borderWidth: 1,
+        borderColor: active ? '#E8272A' : '#242424',
+        opacity: pressed ? 0.75 : 1,
+      }}
+    >
+      <Ionicons name={icon} size={14} color={active ? '#E8272A' : '#8A847E'} />
+      <Text
+        numberOfLines={1}
+        style={{
+          fontFamily: active ? 'DMSans_700Bold' : 'DMSans_500Medium',
+          fontSize: 13,
+          color: active ? '#E8272A' : '#8A847E',
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
   )
 }
 
@@ -326,52 +426,243 @@ export default function TinderScreen() {
   const [sheetRestaurant, setSheetRestaurant] = useState<Restaurant | null>(null)
   // Holds the slideshow timer while the card is being dragged.
   const [dragging, setDragging] = useState(false)
-  // True when the nearby fetch found nothing in radius and we fell back to the
-  // whole city — surfaced as a dismissible banner so "all of Dubai" isn't silent.
-  const [widened, setWidened] = useState(false)
-  const [bannerDismissed, setBannerDismissed] = useState(false)
+
+  /* ---------------- Location filter ---------------- */
+  const [location, setLocation] = useState<DeckLocation>(sessionLocation)
+  const [areaSheetOpen, setAreaSheetOpen] = useState(false)
+
+  /* ---------------- Deck paging ---------------- */
+  /** True once the server has no more rows for this filter — the loop's cue. */
+  const [exhausted, setExhausted] = useState(false)
+  /** One transient line over the card: widened radius, or "seen them all". */
+  const [notice, setNotice] = useState<string | null>(null)
+
+  /** Rows received from the server for the CURRENT filter — i.e. the next offset. */
+  const fetchedCount = useRef(0)
+  /** Guards against two refills racing each other into duplicate cards. */
+  const fetching = useRef(false)
+  /** Bumped on every filter change; in-flight responses for older tokens are dropped. */
+  const loadToken = useRef(0)
+  /** What the refills should ask for — set once the load settles on a radius. */
+  const activeQuery = useRef<{ coords: { lat: number; lng: number } | null; radiusKm: number }>({
+    coords: null,
+    radiusKm: RADIUS_LADDER[0],
+  })
+  /**
+   * Every swipe this session, in order, repeats included. It is what orders the
+   * loop (least-recently-swiped first) and what a filter change excludes.
+   */
+  const swipeLog = useRef<string[]>([])
+  /** Snapshot taken per filter load, so paging stays consistent within it. */
+  const excludeSnapshot = useRef<string[]>([])
+  /**
+   * Liked restaurants by id.
+   *
+   * ⚠️ The tray CANNOT resolve its thumbnails from the current deck: changing
+   * the location filter replaces the deck, and everything liked under the old
+   * filter would silently vanish from the tray while still counting towards
+   * Suggest 3. Likes belong to the session, not to a deck.
+   */
+  const likedById = useRef(new Map<string, Restaurant>())
+  /** The "showing them again" line is worth saying once, not every lap. */
+  const loopAnnounced = useRef(false)
 
   const translateX = useSharedValue(0)
 
-  useEffect(() => {
-    let active = true
-    ;(async () => {
-      let coords: { lat: number; lng: number } | undefined
-      try {
-        const perm = await Location.getForegroundPermissionsAsync()
-        if (perm.granted) {
-          const last = await Location.getLastKnownPositionAsync()
-          if (last) {
-            coords = { lat: last.coords.latitude, lng: last.coords.longitude }
+  const fetchPage = (offset: number) =>
+    getNearbyRestaurants(activeQuery.current.coords, {
+      radiusKm: activeQuery.current.radiusKm,
+      limit: PAGE_SIZE,
+      offset,
+      exclude: excludeSnapshot.current,
+    })
+
+  /**
+   * Loads the first page for a location choice, replacing the deck.
+   *
+   * A located deck climbs the radius ladder before giving up and going
+   * city-wide: an empty deck is never an acceptable answer, and "nothing within
+   * 5 km" is a statement about the radius, not about Dubai.
+   */
+  const loadDeck = useCallback(async (loc: DeckLocation) => {
+    const token = ++loadToken.current
+    setLoading(true)
+    setNotice(null)
+    setRestaurants([])
+    setIndex(0)
+    setExhausted(false)
+    fetchedCount.current = 0
+    fetching.current = false
+    loopAnnounced.current = false
+    // Switching filters should feel like fresh cards, not a re-run of what was
+    // just swiped. Capped — past the cap `offset` carries the paging anyway.
+    excludeSnapshot.current = [...new Set(swipeLog.current)].slice(-EXCLUDE_CAP)
+
+    try {
+      let rows: Restaurant[] = []
+      let message: string | null = null
+
+      if (loc.coords) {
+        for (const km of RADIUS_LADDER) {
+          activeQuery.current = { coords: loc.coords, radiusKm: km }
+          rows = await fetchPage(0)
+          if (token !== loadToken.current) return
+          if (rows.length) {
+            if (km !== RADIUS_LADDER[0]) {
+              message = `Nothing within ${RADIUS_LADDER[0]} km — widened to ${km} km`
+            }
+            break
           }
         }
-      } catch {
-        /* no location — fetch all */
-      }
-      try {
-        let data = await getNearbyRestaurants(coords)
-        // Nothing within the radius (user is outside Dubai, or the simulator's
-        // default location is): never show an empty deck — widen to every
-        // active restaurant rather than leaving the user with nothing to swipe.
-        if (coords && data.length === 0) {
-          data = await getNearbyRestaurants()
-          if (active && data.length > 0) setWidened(true)
+        if (!rows.length) {
+          // Outside Dubai entirely (the simulator defaults to San Francisco),
+          // or a very quiet corner of it.
+          activeQuery.current = { coords: null, radiusKm: RADIUS_LADDER[0] }
+          rows = await fetchPage(0)
+          if (token !== loadToken.current) return
+          if (rows.length) message = 'Nothing nearby — showing all of Dubai'
         }
-        if (active) setRestaurants(data)
+      } else {
+        activeQuery.current = { coords: null, radiusKm: RADIUS_LADDER[0] }
+        rows = await fetchPage(0)
+        if (token !== loadToken.current) return
+      }
+
+      setRestaurants(rows)
+      fetchedCount.current = rows.length
+      setExhausted(rows.length < PAGE_SIZE)
+      if (message) setNotice(message)
+    } catch {
+      if (token !== loadToken.current) return
+      setRestaurants([]) // graceful — empty deck, Suggest still works
+      setExhausted(true)
+    } finally {
+      if (token === loadToken.current) setLoading(false)
+    }
+    // fetchPage reads refs only, so it needs no dependency of its own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // First load. Restores whatever the session last chose.
+  useEffect(() => {
+    loadDeck(sessionLocation)
+  }, [loadDeck])
+
+  /**
+   * Refill BEFORE the deck runs out, so the next card is always already there.
+   * A short page means the pool is spent, which hands over to the loop below.
+   */
+  useEffect(() => {
+    if (loading || exhausted || fetching.current) return
+    if (restaurants.length - index > REFILL_AT) return
+
+    const token = loadToken.current
+    fetching.current = true
+    ;(async () => {
+      try {
+        const rows = await fetchPage(fetchedCount.current)
+        if (token !== loadToken.current) return
+        fetchedCount.current += rows.length
+        if (rows.length) setRestaurants((prev) => [...prev, ...rows])
+        if (rows.length < PAGE_SIZE) setExhausted(true)
       } catch {
-        if (active) setRestaurants([]) // graceful — empty deck, Suggest still works
+        // Keep what we have; the loop below means the deck still never dies.
+        if (token === loadToken.current) setExhausted(true)
       } finally {
-        if (active) setLoading(false)
+        fetching.current = false
       }
     })()
-    return () => {
-      active = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restaurants.length, index, loading, exhausted])
+
+  /**
+   * THE DECK NEVER DIES. Once the pool is spent, go round again — least
+   * recently swiped first, so the card you just passed on is the last one back.
+   */
+  useEffect(() => {
+    if (loading || !exhausted || restaurants.length === 0) return
+    if (index < restaurants.length) return
+
+    const lastSwipedAt = new Map<string, number>()
+    swipeLog.current.forEach((id, i) => lastSwipedAt.set(id, i))
+    const looped = [...restaurants].sort(
+      (a, b) => (lastSwipedAt.get(a.id) ?? -1) - (lastSwipedAt.get(b.id) ?? -1),
+    )
+
+    setRestaurants(looped)
+    setIndex(0)
+    if (!loopAnnounced.current) {
+      loopAnnounced.current = true
+      setNotice(
+        location.mode === 'anywhere'
+          ? "You've seen every restaurant — showing them again"
+          : "You've seen everyone nearby — showing them again",
+      )
     }
-  }, [])
+  }, [index, restaurants, loading, exhausted, location.mode])
+
+  /** Notices say their piece and get out of the way. */
+  useEffect(() => {
+    if (!notice) return
+    const timer = setTimeout(() => setNotice(null), 5000)
+    return () => clearTimeout(timer)
+  }, [notice])
+
+  /* ---------------- Changing the filter ---------------- */
+
+  const applyLocation = useCallback(
+    async (next: DeckLocation) => {
+      sessionLocation = next
+      setLocation(next)
+      await loadDeck(next)
+    },
+    [loadDeck],
+  )
+
+  const chooseNearby = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync()
+      if (status !== 'granted') {
+        // Denied permission is a fine answer — fall back rather than nag.
+        await applyLocation(ANYWHERE)
+        setNotice('Location is off — showing all of Dubai')
+        return
+      }
+      // Last known is instant; only pay for a fresh fix if there isn't one.
+      let pos = await Location.getLastKnownPositionAsync()
+      if (!pos) {
+        pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      }
+      if (!pos) {
+        await applyLocation(ANYWHERE)
+        setNotice("Couldn't get your location — showing all of Dubai")
+        return
+      }
+      await applyLocation({
+        mode: 'nearby',
+        coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+        areaLabel: null,
+      })
+    } catch {
+      await applyLocation(ANYWHERE)
+    }
+  }
+
+  const chooseArea = async (s: AreaSuggestion) => {
+    setAreaSheetOpen(false)
+    await applyLocation({
+      mode: 'area',
+      coords: { lat: s.lat, lng: s.lng },
+      areaLabel: s.name,
+    })
+  }
 
   const current = restaurants[index]
   const currentPhotos = photoUrls(current)
-  const done = !loading && (restaurants.length === 0 || index >= restaurants.length)
+  // With the loop in place this only happens when the filter genuinely has
+  // nothing in it — not merely because everything has been swiped.
+  const done = !loading && restaurants.length === 0
 
   // Advance to the next card (runs on the JS thread from the gesture callback).
   const advance = (dir: 'left' | 'right') => {
@@ -381,7 +672,15 @@ export default function TinderScreen() {
         ? Haptics.ImpactFeedbackStyle.Medium
         : Haptics.ImpactFeedbackStyle.Light,
     )
-    if (dir === 'right' && r) setLikedIds((prev) => [...prev, r.id])
+    // Every swipe is logged, re-swipes on looped cards included: they order the
+    // next lap, and a card seen twice is a card the user has now judged twice.
+    if (r) swipeLog.current.push(r.id)
+    // The liked SET is what Suggest 3 sends, so a second right-swipe on the
+    // same restaurant is not a second entry (the server de-duplicates it too).
+    if (dir === 'right' && r) {
+      likedById.current.set(r.id, r)
+      setLikedIds((prev) => (prev.includes(r.id) ? prev : [...prev, r.id]))
+    }
     setSwipeCount((c) => c + 1)
     setIndex((i) => i + 1)
     translateX.value = 0
@@ -471,9 +770,10 @@ export default function TinderScreen() {
     Linking.openURL(deliveryUrl(sheetRestaurant) ?? mapsUrl(sheetRestaurant))
   }
 
-  // Restaurants swiped right on this session — newest last — for the "Liked" tray.
+  // Restaurants swiped right on this session — newest last — for the "Liked"
+  // tray. Resolved from the session map, so a filter change never loses them.
   const likedRestaurants = likedIds
-    .map((id) => restaurants.find((r) => r.id === id))
+    .map((id) => likedById.current.get(id))
     .filter((r): r is Restaurant => !!r)
 
   const suggest = () => {
@@ -519,9 +819,45 @@ export default function TinderScreen() {
         </Text>
       </View>
 
-      {widened && !bannerDismissed ? (
-        <RadiusBanner onDismiss={() => setBannerDismissed(true)} />
-      ) : null}
+      {/* Location filter — FIXED height, always mounted. Nothing below it may
+          move because of what is (or isn't) selected. */}
+      <View
+        style={{
+          height: 34,
+          marginTop: 10,
+          marginBottom: 2,
+          paddingHorizontal: 20,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <LocationPill
+          icon="navigate-outline"
+          label="Nearby"
+          active={location.mode === 'nearby'}
+          onPress={chooseNearby}
+        />
+        <LocationPill
+          icon="map-outline"
+          label="Anywhere"
+          active={location.mode === 'anywhere'}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+            void applyLocation(ANYWHERE)
+          }}
+        />
+        <LocationPill
+          icon="search-outline"
+          label={location.areaLabel ?? 'Pick an area'}
+          active={location.mode === 'area'}
+          flex
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+            setAreaSheetOpen(true)
+          }}
+        />
+      </View>
 
       {/* Card area — flexes to fill the space between the header and the tray.
           The fixed paddingTop is a barrier the (fixed-height) card can't cross. */}
@@ -534,16 +870,26 @@ export default function TinderScreen() {
           paddingTop: 12,
         }}
       >
-        {loading ? (
+        {/* `!current` covers the gap between the last card of a page and the
+            refill landing — without it the deck would render an undefined
+            restaurant instead of waiting the half-second out. */}
+        {loading || (!current && !done) ? (
           <ActivityIndicator color="#E8272A" />
         ) : done ? (
           <View style={{ alignItems: 'center', gap: 10 }}>
             <Ionicons name="flame-outline" size={48} color="#242424" />
             <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 16, color: '#8A847E' }}>
-              You&apos;ve swiped through them all
+              Nothing to swipe here
             </Text>
-            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: '#504B47' }}>
-              Tap Suggest 3 for your picks
+            <Text
+              style={{
+                fontFamily: 'DMSans_400Regular',
+                fontSize: 13,
+                color: '#504B47',
+                textAlign: 'center',
+              }}
+            >
+              Try Anywhere, or pick a different area
             </Text>
           </View>
         ) : (
@@ -552,7 +898,13 @@ export default function TinderScreen() {
               style={[
                 {
                   width: W - 40,
-                  height: H * 0.52,
+                  // ⚠️ FLEX, not a fixed height. The card used to be H * 0.52
+                  // outright, which fitted only as long as nothing else was
+                  // added above it — the location filter took the last 46pt of
+                  // slack and the card started overlapping the pills and the
+                  // tray. It now takes the space it is given and no more.
+                  flex: 1,
+                  maxHeight: H * 0.52,
                   borderRadius: 28,
                   overflow: 'hidden',
                   backgroundColor: '#141414',
@@ -712,46 +1064,73 @@ export default function TinderScreen() {
             </Animated.View>
           </GestureDetector>
         )}
+
+        {/* Floats over the card — see Notice; it must never shift the deck.
+            ⚠️ Rendered LAST on purpose. As the first child it sat UNDER the
+            card (which is inset less than the notice, so it covered it
+            completely) and no message was ever actually visible — zIndex alone
+            did not save it. */}
+        {notice ? <Notice text={notice} onDismiss={() => setNotice(null)} /> : null}
       </View>
 
-      {/* "Liked" tray — session right-swipes; hidden until there's at least one */}
-      {likedRestaurants.length > 0 ? (
-        <View style={{ paddingTop: 4 }}>
-          <Text
-            style={{
-              fontFamily: 'DMSans_700Bold',
-              fontSize: 11,
-              color: '#555',
-              letterSpacing: 1,
-              paddingHorizontal: 20,
-              marginBottom: 8,
-            }}
-          >
-            Liked
-          </Text>
+      {/* "Liked" tray — session right-swipes.
+          ⚠️ ALWAYS RENDERED at a fixed height. It used to appear on the first
+          like, which shoved the whole deck upward mid-swipe. Reserving the slot
+          costs one band of empty space and buys a layout that never moves. */}
+      <View style={{ height: TRAY_H, paddingTop: 4 }}>
+        <Text
+          style={{
+            fontFamily: 'DMSans_700Bold',
+            fontSize: 11,
+            color: '#555',
+            letterSpacing: 1,
+            paddingHorizontal: 20,
+            marginBottom: 8,
+          }}
+        >
+          LIKED
+        </Text>
+        {likedRestaurants.length > 0 ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
           >
-            {likedRestaurants.map((r) => (
+            {likedRestaurants.map((r, i) => (
               <Animated.View key={r.id} entering={SlideInRight.springify().damping(14)}>
                 <LikedThumb
                   name={r.name}
-                  imageIndex={restaurants.indexOf(r)}
+                  imageIndex={i}
                   imageUrl={photoUrls(r)[0]}
                   onPress={() => openSheetFor(r)}
                 />
               </Animated.View>
             ))}
           </ScrollView>
-        </View>
-      ) : null}
+        ) : (
+          <Text
+            style={{
+              fontFamily: 'DMSans_400Regular',
+              fontSize: 12,
+              color: '#3a3a3a',
+              paddingHorizontal: 20,
+            }}
+          >
+            Swipe right to save a place here
+          </Text>
+        )}
+      </View>
 
       {/* Suggest 3 — always visible */}
       <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: insets.bottom + 12 }}>
         <RedButton label={suggestLabel} onPress={suggest} style={{ paddingVertical: 16 }} />
       </View>
+
+      <AreaSearchSheet
+        visible={areaSheetOpen}
+        onClose={() => setAreaSheetOpen(false)}
+        onPick={chooseArea}
+      />
 
       {sheetRestaurant ? (
         <RestaurantDetailSheet
