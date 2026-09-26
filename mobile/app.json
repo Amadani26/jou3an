@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.jou3an.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "config": {
         "usesNonExemptEncryption": false
       }
