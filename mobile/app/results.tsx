@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ScrollView, View, Text, Pressable, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -7,7 +7,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated'
 import ProcessingState from '../components/ProcessingState'
 import ResultCard from '../components/ResultCard'
 import GhostButton from '../components/GhostButton'
-import SelectionCelebration from '../components/SelectionCelebration'
+import SelectionReward from '../components/SelectionReward'
 import RestaurantDetailSheet from '../components/RestaurantDetailSheet'
 import {
   getDecision,
@@ -18,9 +18,6 @@ import {
   photoUrls,
   type Restaurant,
 } from '../lib/api'
-
-/** How long the "Enjoy your meal" beat holds before the reward sheet. */
-const CELEBRATION_MS = 1000
 
 export default function ResultsScreen() {
   const router = useRouter()
@@ -91,9 +88,7 @@ export default function ResultsScreen() {
    * happened, not a pending intent.
    */
   const [chosen, setChosen] = useState<Restaurant | null>(null)
-  /** The ~1s "Enjoy your meal" beat between the tap and the reward sheet. */
-  const [celebrating, setCelebrating] = useState(false)
-  /** The reward: full detail + actions, opened after the celebration. */
+  /** The reward: a FULL-SCREEN celebration of the pick, with the actions on it. */
   const [rewardVisible, setRewardVisible] = useState(false)
   // Long-press opens the read-only preview sheet (view, never select).
   const [preview, setPreview] = useState<Restaurant | null>(null)
@@ -103,15 +98,6 @@ export default function ResultsScreen() {
    * forces a genuine re-roll rather than a re-render of the same answer.
    */
   const [refreshNonce, setRefreshNonce] = useState(0)
-
-  /** Cleared on unmount so the celebration can never fire into a dead screen. */
-  const celebrationTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (celebrationTimer.current) clearTimeout(celebrationTimer.current)
-    },
-    [],
-  )
 
   /**
    * PATCHes the session, retrying ONCE after a short pause.
@@ -145,9 +131,10 @@ export default function ResultsScreen() {
   /**
    * THE DECISION. Tapping a card IS the selection — no second confirm tap.
    *
-   * Order matters: the SELECT goes out first (fire-and-forget, retry-once), so
-   * a user who kills the app during the celebration is still recorded as having
-   * chosen. Then the brief celebration, then the reward sheet.
+   * Order matters: the SELECT goes out FIRST (fire-and-forget, retry-once), so
+   * a user who kills the app mid-celebration is still recorded as having
+   * chosen. The full-screen reward then plays the celebration itself as its
+   * entrance, which is why there is no separate interstitial to time out.
    */
   const select = (r: Restaurant) => {
     // Guard against a double-tap selecting twice, or re-selecting after the
@@ -155,11 +142,7 @@ export default function ResultsScreen() {
     if (chosen) return
     setChosen(r)
     void record(r.id, 'SELECT')
-    setCelebrating(true)
-    celebrationTimer.current = setTimeout(() => {
-      setCelebrating(false)
-      setRewardVisible(true)
-    }, CELEBRATION_MS)
+    setRewardVisible(true)
   }
 
   /** Dismissing the reward ends the flow — the decision is final. */
@@ -172,7 +155,6 @@ export default function ResultsScreen() {
     setLoading(true)
     setError(false)
     setChosen(null)
-    setCelebrating(false)
     setRewardVisible(false)
     const started = Date.now()
     try {
@@ -223,13 +205,12 @@ export default function ResultsScreen() {
   /**
    * An action tap always implies the decision, wherever it comes from.
    *
-   * From the reward sheet the SELECT is already saved, so this only upgrades
+   * From the reward screen the SELECT is already saved, so this only upgrades
    * `actionTaken` (SELECT -> DIRECTIONS) — leaving for Maps and coming back
-   * changes nothing, which is the whole point of the new flow. From a card's
-   * own action row, or from a long-press preview, nothing has been recorded
-   * yet: the SELECT is sent FIRST so an action can never exist in History
-   * without the choice it implies, and so the taste profile still learns (the
-   * server only trains on SELECT).
+   * changes nothing, which is the whole point of the new flow. From a
+   * long-press preview nothing has been recorded yet: the SELECT is sent FIRST
+   * so an action can never exist in History without the choice it implies, and
+   * so the taste profile still learns (the server only trains on SELECT).
    */
   const recordAction = (r: Restaurant, action: 'DIRECTIONS' | 'CALL' | 'ORDER') => {
     if (chosen?.id === r.id) {
@@ -378,9 +359,6 @@ export default function ResultsScreen() {
                 imageUrl={photoUrls(r)[0]}
                 onSelect={() => select(r)}
                 onLongPress={() => setPreview(r)}
-                onDirections={() => openDirections(r)}
-                onCall={() => call(r)}
-                onOrder={() => order(r)}
               />
             </Animated.View>
           ))}
@@ -408,34 +386,21 @@ export default function ResultsScreen() {
       )}
     </ScrollView>
 
-    {/* The beat between the tap and the reward. */}
-    <SelectionCelebration visible={celebrating} name={chosen?.name ?? ''} />
-
-    {/* THE REWARD — full detail for the restaurant just chosen. The celebration
-        eyebrow is what tells it apart from the long-press preview below, and
-        dismissing it (X, swipe down, backdrop) goes Home: the decision is final. */}
-    <RestaurantDetailSheet
+    {/* THE REWARD — a FULL-SCREEN celebration of the pick, with the actions on
+        it. Dismissing (X or swipe down) goes Home: the decision is final. */}
+    <SelectionReward
       visible={rewardVisible}
+      restaurant={chosen}
       onClose={closeReward}
-      celebration={chosen ? `You're going to ${chosen.name}` : null}
-      showClose
-      name={chosen?.name ?? ''}
-      cuisine={chosen?.cuisineType ?? ''}
-      priceRange={chosen ? `AED ${chosen.priceMin}–${chosen.priceMax}` : ''}
-      area={chosen ? displayArea(chosen) : ''}
-      tags={chosen?.tags}
-      googleRating={chosen?.googleRating}
-      distanceKm={chosen?.distanceKm}
-      calories={chosen?.averageCalories}
-      images={photoUrls(chosen)}
       onDirections={() => chosen && openDirections(chosen)}
       onCall={() => chosen && call(chosen)}
       onOrder={() => chosen && order(chosen)}
     />
 
-    {/* PREVIEW — long-press on a card. No celebration eyebrow, and dismissing
-        it returns to the 3 cards: looking is not choosing, and nothing is
-        recorded unless an action is actually tapped. */}
+    {/* PREVIEW — long-press on a card: the HALF-SCREEN sheet. Sheet for
+        looking, whole screen for choosing — that contrast is what tells the two
+        apart, so this one never gets a celebration. Dismissing returns to the 3
+        cards, and nothing is recorded unless an action is actually tapped. */}
     <RestaurantDetailSheet
       visible={preview != null}
       onClose={() => setPreview(null)}

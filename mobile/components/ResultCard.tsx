@@ -4,7 +4,6 @@ import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { getPlaceholderImage } from '../lib/placeholderImages'
 import { prettyDistance } from '../lib/api'
-import { usePressed } from '../lib/usePressed'
 
 export interface ResultCardProps {
   rank: number
@@ -21,62 +20,26 @@ export interface ResultCardProps {
   reason?: string
   /** Google Places photo URL; falls back to the placeholder when absent. */
   imageUrl?: string
-  // Tap the card body to open the inline confirmation.
+  /**
+   * Tap the card body — in results.tsx this IS the decision: it saves the
+   * SELECT and opens the full-screen reward.
+   */
   onSelect?: () => void
-  // Long-press to open the read-only detail sheet.
+  /** Long-press for the read-only detail sheet. Looking is not choosing. */
   onLongPress?: () => void
-  // Quick actions on the compact card (open external links directly).
-  onDirections?: () => void
-  onCall?: () => void
-  onOrder?: () => void
 }
+
+/**
+ * ⚠️ NO ACTION ROW. Directions / Reserve / Order live on the full-screen
+ * SelectionReward, which is only reachable by choosing — so an action can no
+ * longer be taken from a card the user never picked. It also gave the compact
+ * card ~46pt back, which is why the image and padding here are roomier than
+ * they were.
+ */
 
 function Dot() {
   return (
     <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#3a3a3a' }} />
-  )
-}
-
-/** One column of the full-width action footer (flex:1 so the three split evenly). */
-function ActionCol({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap
-  label: string
-  onPress?: () => void
-}) {
-  const { pressed, pressHandlers } = usePressed()
-
-  return (
-    <View style={{ flex: 1 }}>
-      <Pressable
-        onPress={onPress}
-        {...pressHandlers}
-        // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
-        style={{
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 3,
-          minHeight: 34,
-          opacity: pressed ? 0.6 : 1,
-        }}
-      >
-        <Ionicons name={icon} size={18} color="#666" />
-        <Text
-          style={{
-            fontFamily: 'DMSans_600SemiBold',
-            fontSize: 9,
-            color: '#555',
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-          }}
-        >
-          {label}
-        </Text>
-      </Pressable>
-    </View>
   )
 }
 
@@ -91,9 +54,6 @@ export default function ResultCard({
   imageUrl,
   onSelect,
   onLongPress,
-  onDirections,
-  onCall,
-  onOrder,
 }: ResultCardProps) {
   const handleLongPress = onLongPress
     ? () => {
@@ -107,7 +67,7 @@ export default function ResultCard({
         backgroundColor: '#111111',
         borderRadius: 16,
         marginHorizontal: 20,
-        marginBottom: 10,
+        marginBottom: 12,
         shadowColor: '#000000',
         shadowOpacity: 0.3,
         shadowRadius: 8,
@@ -115,12 +75,12 @@ export default function ResultCard({
         elevation: 4,
       }}
     >
-      {/* Body — tap to select (confirmation), long-press for detail sheet */}
+      {/* Body — tap to select (the decision), long-press for the preview sheet */}
       <Pressable onPress={onSelect} onLongPress={handleLongPress} delayLongPress={400}>
         {/* Image header with rank overlay */}
         <View
           style={{
-            height: 120,
+            height: 132,
             borderTopLeftRadius: 16,
             borderTopRightRadius: 16,
             overflow: 'hidden',
@@ -128,7 +88,7 @@ export default function ResultCard({
         >
           <Image
             source={{ uri: imageUrl ?? getPlaceholderImage(rank - 1) }}
-            style={{ width: '100%', height: 120 }}
+            style={{ width: '100%', height: 132 }}
             resizeMode="cover"
           />
           <LinearGradient
@@ -155,7 +115,7 @@ export default function ResultCard({
         </View>
 
         {/* Content */}
-        <View style={{ paddingHorizontal: 14, paddingTop: 7, paddingBottom: 7 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 11, paddingBottom: 13 }}>
           <Text
             style={{
               fontFamily: 'DMSans_700Bold',
@@ -176,7 +136,7 @@ export default function ResultCard({
               alignItems: 'center',
               flexWrap: 'wrap',
               gap: 6,
-              marginTop: 2,
+              marginTop: 4,
             }}
           >
             <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: '#888888' }}>
@@ -212,7 +172,7 @@ export default function ResultCard({
             <View
               style={{
                 alignSelf: 'flex-start',
-                marginTop: 6,
+                marginTop: 8,
                 paddingHorizontal: 8,
                 paddingVertical: 3,
                 borderRadius: 999,
@@ -235,22 +195,6 @@ export default function ResultCard({
           ) : null}
         </View>
       </Pressable>
-
-      {/* Quick action row */}
-      <View
-        style={{
-          flexDirection: 'row',
-          borderTopWidth: 1,
-          borderTopColor: '#1e1e1e',
-          paddingTop: 5,
-          paddingBottom: 6,
-          paddingHorizontal: 14,
-        }}
-      >
-        <ActionCol icon="navigate-outline" label="Directions" onPress={onDirections} />
-        <ActionCol icon="call-outline" label="Reserve" onPress={onCall} />
-        <ActionCol icon="fast-food-outline" label="Order" onPress={onOrder} />
-      </View>
     </View>
   )
 }

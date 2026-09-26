@@ -37,13 +37,6 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 export interface RestaurantDetailSheetProps {
   visible: boolean
   onClose: () => void
-  /**
-   * Celebration eyebrow for the POST-SELECTION sheet ("You're going to").
-   * Its presence is what visually separates the two ways this sheet opens: a
-   * decision that has already been recorded, versus a read-only long-press
-   * preview that recorded nothing. Omit it for a preview.
-   */
-  celebration?: string | null
   /** Adds an explicit X. Backdrop-tap and swipe-down always work regardless. */
   showClose?: boolean
   name: string
@@ -182,17 +175,21 @@ function ImageCarousel({ images }: { images?: string[] }) {
 /**
  * Bottom-sheet restaurant detail overlay. Slides up with a spring, dims the
  * backdrop, and can be dismissed by tapping the backdrop, swiping the header
- * down, or (with `showClose`) an explicit X. Reusable — Food Tinder, History,
- * ResultCard's long-press preview, and the post-selection reward sheet.
+ * down, or (with `showClose`) an explicit X. Reusable — Food Tinder, History
+ * and ResultCard's long-press preview.
+ *
+ * ⚠️ HALF-SCREEN ON PURPOSE. The post-selection reward is the full-screen
+ * SelectionReward, and that contrast — sheet for looking, whole screen for
+ * choosing — is what tells a preview from a decision at a glance. Do not grow
+ * this into the reward, and do not present it as one.
  *
  * ⚠️ This sheet never records anything. Every caller owns what a tap MEANS:
- * results.tsx saves the selection before opening the reward sheet, and its
+ * results.tsx saves the selection before opening the reward, and its
  * long-press preview saves nothing at all.
  */
 export default function RestaurantDetailSheet({
   visible,
   onClose,
-  celebration,
   showClose = false,
   name,
   cuisine,
@@ -301,36 +298,6 @@ export default function RestaurantDetailSheet({
               </View>
             </GestureDetector>
 
-            {/* Celebration eyebrow — post-selection only. */}
-            {celebration ? (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 7,
-                  paddingVertical: 11,
-                  backgroundColor: '#1a0d0d',
-                  borderTopWidth: 1,
-                  borderBottomWidth: 1,
-                  borderColor: '#2a1010',
-                }}
-              >
-                <Ionicons name="checkmark-circle" size={14} color="#E8272A" />
-                <Text
-                  style={{
-                    fontFamily: 'DMSans_700Bold',
-                    fontSize: 10,
-                    fontWeight: '700',
-                    letterSpacing: 2,
-                    color: '#E8272A',
-                  }}
-                >
-                  {celebration.toUpperCase()}
-                </Text>
-              </View>
-            ) : null}
-
             {/* Explicit dismiss, floating over the carousel. */}
             {showClose ? (
               <Pressable
@@ -338,7 +305,7 @@ export default function RestaurantDetailSheet({
                 hitSlop={12}
                 style={{
                   position: 'absolute',
-                  top: celebration ? 58 : 26,
+                  top: 26,
                   right: 30,
                   zIndex: 10,
                   width: 32,
