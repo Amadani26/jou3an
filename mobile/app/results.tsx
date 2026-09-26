@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScrollView, View, Text, Pressable, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -7,7 +7,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated'
 import ProcessingState from '../components/ProcessingState'
 import ResultCard from '../components/ResultCard'
 import GhostButton from '../components/GhostButton'
-import SelectionConfirmCard from '../components/SelectionConfirmCard'
+import SelectionCelebration from '../components/SelectionCelebration'
 import RestaurantDetailSheet from '../components/RestaurantDetailSheet'
 import {
   getDecision,
@@ -18,6 +18,9 @@ import {
   photoUrls,
   type Restaurant,
 } from '../lib/api'
+
+/** How long the "Enjoy your meal" beat holds before the reward sheet. */
+const CELEBRATION_MS = 1000
 
 export default function ResultsScreen() {
   const router = useRouter()
@@ -82,10 +85,18 @@ export default function ResultsScreen() {
   const [error, setError] = useState(false)
   const [results, setResults] = useState<Restaurant[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [flashVisible, setFlashVisible] = useState(false)
-  // Long-press opens the read-only detail sheet (view, not select).
-  const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null)
+  /**
+   * The decision, once made. Set the instant a card is tapped — the selection
+   * is already on its way to the server by then, so this is a record of what
+   * happened, not a pending intent.
+   */
+  const [chosen, setChosen] = useState<Restaurant | null>(null)
+  /** The ~1s "Enjoy your meal" beat between the tap and the reward sheet. */
+  const [celebrating, setCelebrating] = useState(false)
+  /** The reward: full detail + actions, opened after the celebration. */
+  const [rewardVisible, setRewardVisible] = useState(false)
+  // Long-press opens the read-only preview sheet (view, never select).
+  const [preview, setPreview] = useState<Restaurant | null>(null)
   /**
    * 0 on first load, so opening the same brief twice in one day returns the
    * same 3. Each Refresh increments it, which changes the engine's seed and
@@ -93,31 +104,76 @@ export default function ResultsScreen() {
    */
   const [refreshNonce, setRefreshNonce] = useState(0)
 
-  // Tapping a card expands it into the inline confirmation overlay.
-  const selectedRestaurant = results.find((r) => r.id === selectedId) ?? null
-  const selectedRank =
-    selectedId != null ? results.findIndex((r) => r.id === selectedId) + 1 : 1
+  /** Cleared on unmount so the celebration can never fire into a dead screen. */
+  const celebrationTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (celebrationTimer.current) clearTimeout(celebrationTimer.current)
+    },
+    [],
+  )
 
-  // "This is it →": record the final pick (await), flash "Enjoy your meal",
-  // then replace to the home tab — the decision is final, no going back.
-  const confirmSelection = async () => {
-    if (selectedRestaurant && sessionId) {
-      try {
-        await saveDecisionSelection(sessionId, selectedRestaurant.id, 'SELECT')
-      } catch {
-        /* best-effort — don't block the confirmation on a network hiccup */
-      }
-    }
-    setFlashVisible(true)
-    setTimeout(() => {
-      router.replace('/(tabs)')
-    }, 1200)
+  /**
+   * PATCHes the session, retrying ONCE after a short pause.
+   *
+   * Never awaited by the UI and never throws: this screen is the source of
+   * truth for History, so a single dropped request is worth one quiet retry —
+   * but a hungry user must not wait on the network to see their decision
+   * land. Two attempts is the honest ceiling; a queue for a genuinely offline
+   * device would be a different feature.
+   */
+  const record = useCallback(
+    (id: string, action: 'SELECT' | 'DIRECTIONS' | 'CALL' | 'ORDER'): Promise<void> => {
+      if (!sessionId) return Promise.resolve()
+      const attempt = () => saveDecisionSelection(sessionId, id, action)
+      return attempt().catch(
+        () =>
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              attempt()
+                .catch(() => {
+                  /* gave it two honest tries — stay silent, never crash a decision */
+                })
+                .then(resolve, resolve)
+            }, 900)
+          }),
+      )
+    },
+    [sessionId],
+  )
+
+  /**
+   * THE DECISION. Tapping a card IS the selection — no second confirm tap.
+   *
+   * Order matters: the SELECT goes out first (fire-and-forget, retry-once), so
+   * a user who kills the app during the celebration is still recorded as having
+   * chosen. Then the brief celebration, then the reward sheet.
+   */
+  const select = (r: Restaurant) => {
+    // Guard against a double-tap selecting twice, or re-selecting after the
+    // decision is made — one session, one decision.
+    if (chosen) return
+    setChosen(r)
+    void record(r.id, 'SELECT')
+    setCelebrating(true)
+    celebrationTimer.current = setTimeout(() => {
+      setCelebrating(false)
+      setRewardVisible(true)
+    }, CELEBRATION_MS)
+  }
+
+  /** Dismissing the reward ends the flow — the decision is final. */
+  const closeReward = () => {
+    setRewardVisible(false)
+    router.replace('/(tabs)')
   }
 
   const run = useCallback(async (nonce: number) => {
     setLoading(true)
     setError(false)
-    setSelectedId(null)
+    setChosen(null)
+    setCelebrating(false)
+    setRewardVisible(false)
     const started = Date.now()
     try {
       const res = isTinder
@@ -164,16 +220,29 @@ export default function ResultsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run])
 
-  // Record the action in the background — never awaited, never blocks the UI.
-  const recordSelection = (r: Restaurant, action: 'DIRECTIONS' | 'CALL' | 'ORDER') => {
-    if (!sessionId) return
-    saveDecisionSelection(sessionId, r.id, action).catch(() => {
-      /* silent — selection tracking is best-effort */
-    })
+  /**
+   * An action tap always implies the decision, wherever it comes from.
+   *
+   * From the reward sheet the SELECT is already saved, so this only upgrades
+   * `actionTaken` (SELECT -> DIRECTIONS) — leaving for Maps and coming back
+   * changes nothing, which is the whole point of the new flow. From a card's
+   * own action row, or from a long-press preview, nothing has been recorded
+   * yet: the SELECT is sent FIRST so an action can never exist in History
+   * without the choice it implies, and so the taste profile still learns (the
+   * server only trains on SELECT).
+   */
+  const recordAction = (r: Restaurant, action: 'DIRECTIONS' | 'CALL' | 'ORDER') => {
+    if (chosen?.id === r.id) {
+      void record(r.id, action)
+      return
+    }
+    // Sequential, not parallel: both writes hit the same session row, and a
+    // SELECT landing last would erase the action label.
+    void record(r.id, 'SELECT').then(() => record(r.id, action))
   }
 
   const openDirections = (r: Restaurant) => {
-    recordSelection(r, 'DIRECTIONS')
+    recordAction(r, 'DIRECTIONS')
     Linking.openURL(
       `https://maps.google.com/?q=${encodeURIComponent(
         `${r.name} ${displayArea(r)} Dubai`,
@@ -181,7 +250,7 @@ export default function ResultsScreen() {
     )
   }
   const call = (r: Restaurant) => {
-    recordSelection(r, 'CALL')
+    recordAction(r, 'CALL')
     if (r.phone) Linking.openURL(`tel:${r.phone}`)
     else
       Linking.openURL(
@@ -191,7 +260,7 @@ export default function ResultsScreen() {
       )
   }
   const order = (r: Restaurant) => {
-    recordSelection(r, 'ORDER')
+    recordAction(r, 'ORDER')
     const url = deliveryUrl(r)
     if (url) Linking.openURL(url)
     else
@@ -307,8 +376,8 @@ export default function ResultsScreen() {
                 distanceKm={r.distanceKm}
                 reason={r.reason}
                 imageUrl={photoUrls(r)[0]}
-                onSelect={() => setSelectedId(r.id)}
-                onLongPress={() => setDetailRestaurant(r)}
+                onSelect={() => select(r)}
+                onLongPress={() => setPreview(r)}
                 onDirections={() => openDirections(r)}
                 onCall={() => call(r)}
                 onOrder={() => order(r)}
@@ -339,35 +408,50 @@ export default function ResultsScreen() {
       )}
     </ScrollView>
 
-    <SelectionConfirmCard
-      visible={selectedId != null}
-      restaurant={selectedRestaurant}
-      rank={selectedRank}
-      flashVisible={flashVisible}
-      onClose={() => setSelectedId(null)}
-      onConfirm={confirmSelection}
+    {/* The beat between the tap and the reward. */}
+    <SelectionCelebration visible={celebrating} name={chosen?.name ?? ''} />
+
+    {/* THE REWARD — full detail for the restaurant just chosen. The celebration
+        eyebrow is what tells it apart from the long-press preview below, and
+        dismissing it (X, swipe down, backdrop) goes Home: the decision is final. */}
+    <RestaurantDetailSheet
+      visible={rewardVisible}
+      onClose={closeReward}
+      celebration={chosen ? `You're going to ${chosen.name}` : null}
+      showClose
+      name={chosen?.name ?? ''}
+      cuisine={chosen?.cuisineType ?? ''}
+      priceRange={chosen ? `AED ${chosen.priceMin}–${chosen.priceMax}` : ''}
+      area={chosen ? displayArea(chosen) : ''}
+      tags={chosen?.tags}
+      googleRating={chosen?.googleRating}
+      distanceKm={chosen?.distanceKm}
+      calories={chosen?.averageCalories}
+      images={photoUrls(chosen)}
+      onDirections={() => chosen && openDirections(chosen)}
+      onCall={() => chosen && call(chosen)}
+      onOrder={() => chosen && order(chosen)}
     />
 
-    {/* Read-only detail sheet — long-press on a card */}
+    {/* PREVIEW — long-press on a card. No celebration eyebrow, and dismissing
+        it returns to the 3 cards: looking is not choosing, and nothing is
+        recorded unless an action is actually tapped. */}
     <RestaurantDetailSheet
-      visible={detailRestaurant != null}
-      onClose={() => setDetailRestaurant(null)}
-      name={detailRestaurant?.name ?? ''}
-      cuisine={detailRestaurant?.cuisineType ?? ''}
-      priceRange={
-        detailRestaurant
-          ? `AED ${detailRestaurant.priceMin}–${detailRestaurant.priceMax}`
-          : ''
-      }
-      area={detailRestaurant ? displayArea(detailRestaurant) : ''}
-      tags={detailRestaurant?.tags}
-      googleRating={detailRestaurant?.googleRating}
-      distanceKm={detailRestaurant?.distanceKm}
-      calories={detailRestaurant?.averageCalories}
-      images={photoUrls(detailRestaurant)}
-      onDirections={() => detailRestaurant && openDirections(detailRestaurant)}
-      onCall={() => detailRestaurant && call(detailRestaurant)}
-      onOrder={() => detailRestaurant && order(detailRestaurant)}
+      visible={preview != null}
+      onClose={() => setPreview(null)}
+      showClose
+      name={preview?.name ?? ''}
+      cuisine={preview?.cuisineType ?? ''}
+      priceRange={preview ? `AED ${preview.priceMin}–${preview.priceMax}` : ''}
+      area={preview ? displayArea(preview) : ''}
+      tags={preview?.tags}
+      googleRating={preview?.googleRating}
+      distanceKm={preview?.distanceKm}
+      calories={preview?.averageCalories}
+      images={photoUrls(preview)}
+      onDirections={() => preview && openDirections(preview)}
+      onCall={() => preview && call(preview)}
+      onOrder={() => preview && order(preview)}
     />
     </>
   )

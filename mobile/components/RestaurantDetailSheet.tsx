@@ -37,6 +37,15 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 export interface RestaurantDetailSheetProps {
   visible: boolean
   onClose: () => void
+  /**
+   * Celebration eyebrow for the POST-SELECTION sheet ("You're going to").
+   * Its presence is what visually separates the two ways this sheet opens: a
+   * decision that has already been recorded, versus a read-only long-press
+   * preview that recorded nothing. Omit it for a preview.
+   */
+  celebration?: string | null
+  /** Adds an explicit X. Backdrop-tap and swipe-down always work regardless. */
+  showClose?: boolean
   name: string
   cuisine: string
   priceRange: string
@@ -172,12 +181,19 @@ function ImageCarousel({ images }: { images?: string[] }) {
 
 /**
  * Bottom-sheet restaurant detail overlay. Slides up with a spring, dims the
- * backdrop, and can be dismissed by tapping the backdrop or swiping the header
- * down. Reusable — used by ResultCard's long-press and (future) the Tinder screen.
+ * backdrop, and can be dismissed by tapping the backdrop, swiping the header
+ * down, or (with `showClose`) an explicit X. Reusable — Food Tinder, History,
+ * ResultCard's long-press preview, and the post-selection reward sheet.
+ *
+ * ⚠️ This sheet never records anything. Every caller owns what a tap MEANS:
+ * results.tsx saves the selection before opening the reward sheet, and its
+ * long-press preview saves nothing at all.
  */
 export default function RestaurantDetailSheet({
   visible,
   onClose,
+  celebration,
+  showClose = false,
   name,
   cuisine,
   priceRange,
@@ -284,6 +300,58 @@ export default function RestaurantDetailSheet({
                 />
               </View>
             </GestureDetector>
+
+            {/* Celebration eyebrow — post-selection only. */}
+            {celebration ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 7,
+                  paddingVertical: 11,
+                  backgroundColor: '#1a0d0d',
+                  borderTopWidth: 1,
+                  borderBottomWidth: 1,
+                  borderColor: '#2a1010',
+                }}
+              >
+                <Ionicons name="checkmark-circle" size={14} color="#E8272A" />
+                <Text
+                  style={{
+                    fontFamily: 'DMSans_700Bold',
+                    fontSize: 10,
+                    fontWeight: '700',
+                    letterSpacing: 2,
+                    color: '#E8272A',
+                  }}
+                >
+                  {celebration.toUpperCase()}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Explicit dismiss, floating over the carousel. */}
+            {showClose ? (
+              <Pressable
+                onPress={dismiss}
+                hitSlop={12}
+                style={{
+                  position: 'absolute',
+                  top: celebration ? 58 : 26,
+                  right: 30,
+                  zIndex: 10,
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: 'rgba(0,0,0,0.55)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="close" size={20} color="#F2EDE8" />
+              </Pressable>
+            ) : null}
 
             {/* Scrollable content — flexShrink bounds it under the sheet's maxHeight */}
             <ScrollView
