@@ -38,6 +38,7 @@ import {
 } from '../lib/api'
 import { getPlaceholderImage } from '../lib/placeholderImages'
 import { usePressed } from '../lib/usePressed'
+import { useAuth } from '../contexts/AuthContext'
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window')
 
@@ -185,6 +186,39 @@ function ActionTile({
   )
 }
 
+/** The way out. The X and a swipe down do the same thing; this one is findable. */
+function DoneButton({ onPress }: { onPress: () => void }) {
+  const { pressed, pressHandlers } = usePressed()
+
+  return (
+    <Pressable
+      onPress={onPress}
+      {...pressHandlers}
+      // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
+      style={{
+        height: 50,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#242424',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: pressed ? 0.6 : 1,
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: 'DMSans_600SemiBold',
+          fontSize: 15,
+          letterSpacing: 0.3,
+          color: '#8A847E',
+        }}
+      >
+        Done
+      </Text>
+    </Pressable>
+  )
+}
+
 function MetaRow({
   icon,
   iconColor = '#504B47',
@@ -215,6 +249,11 @@ function MetaRow({
  * By the time it appears the SELECT has already been sent (see results.tsx), so
  * everything here celebrates and informs; nothing here is a confirmation step.
  * The actions only open their link and upgrade `actionTaken`.
+ *
+ * It does, though, have to SAY the decision was kept — celebrating a choice and
+ * then dropping the user on an unchanged Home screen is what made the flow feel
+ * unfinished. Hence the receipt line and the explicit Done. All three exits
+ * (Done, X, swipe) do the same thing: back to Home, decision final.
  */
 export default function SelectionReward({
   visible,
@@ -225,6 +264,7 @@ export default function SelectionReward({
   onOrder,
 }: Props) {
   const insets = useSafeAreaInsets()
+  const { isAuthenticated } = useAuth()
 
   /** Entrance progress; also drives the exit when the sheet is dragged away. */
   const enter = useSharedValue(0)
@@ -414,20 +454,50 @@ export default function SelectionReward({
                 ]}
               />
 
-              <Animated.Text
-                style={[
-                  {
+              <Animated.View style={[{ marginTop: 14 }, bodyStyle]}>
+                <Text
+                  style={{
                     fontFamily: 'DMSans_500Medium',
                     fontSize: 14,
                     fontStyle: 'italic',
                     color: '#8A847E',
-                    marginTop: 14,
-                  },
-                  bodyStyle,
-                ]}
-              >
-                Enjoy your meal.
-              </Animated.Text>
+                  }}
+                >
+                  Enjoy your meal.
+                </Text>
+
+                {/* The receipt. The decision was recorded the instant the card
+                    was tapped — this is the only place the app says so, and
+                    without it the flow celebrates without ever confirming.
+                    ⚠️ Signed out there is nothing to promise: the pick belongs
+                    to an anonymous session that History (auth-gated) can never
+                    show, so the copy is an invitation, never "saved". */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 7,
+                    marginTop: 12,
+                  }}
+                >
+                  <Ionicons
+                    name={isAuthenticated ? 'checkmark-circle' : 'time-outline'}
+                    size={14}
+                    color={isAuthenticated ? '#2DCE89' : '#504B47'}
+                  />
+                  <Text
+                    style={{
+                      fontFamily: 'DMSans_500Medium',
+                      fontSize: 13,
+                      color: isAuthenticated ? '#8A847E' : '#504B47',
+                    }}
+                  >
+                    {isAuthenticated
+                      ? 'Saved to your decisions'
+                      : 'Sign in to keep your decisions'}
+                  </Text>
+                </View>
+              </Animated.View>
             </View>
 
             {/* --- The detail ------------------------------------------ */}
@@ -556,7 +626,6 @@ export default function SelectionReward({
           <Animated.View
             style={[
               {
-                flexDirection: 'row',
                 gap: 10,
                 paddingHorizontal: 20,
                 paddingTop: 14,
@@ -568,9 +637,12 @@ export default function SelectionReward({
               bodyStyle,
             ]}
           >
-            <ActionTile icon="navigate-outline" label="DIRECTIONS" onPress={onDirections} />
-            <ActionTile icon="call-outline" label="RESERVE" onPress={onCall} />
-            <ActionTile icon="fast-food-outline" label="ORDER" onPress={onOrder} />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <ActionTile icon="navigate-outline" label="DIRECTIONS" onPress={onDirections} />
+              <ActionTile icon="call-outline" label="RESERVE" onPress={onCall} />
+              <ActionTile icon="fast-food-outline" label="ORDER" onPress={onOrder} />
+            </View>
+            <DoneButton onPress={dismiss} />
           </Animated.View>
         </Animated.View>
       </GestureHandlerRootView>
