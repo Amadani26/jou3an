@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { boostedTasteWeights, toEngineContext } from './request'
+import { boostedTasteWeights, epsilonFor, toEngineContext } from './request'
+import { EPSILON } from './select'
 import { WEIGHT_MAX } from '../tasteProfile'
 import { decide } from './index'
 import { catalogue, context, input } from './fixtures'
@@ -8,7 +9,11 @@ describe('toEngineContext', () => {
   const date = new Date('2026-09-21T12:00:00Z')
 
   it('maps the Decide flow wire values onto engine enums', () => {
-    const c = toEngineContext({ format: 'Delivery', vibe: 'Fancy' }, 'HIGH', date)
+    const c = toEngineContext(
+      { format: 'Delivery', vibe: 'Fancy' },
+      { budgetRange: 'HIGH' },
+      date,
+    )
     expect(c.formatFilter).toBe('DELIVERY')
     expect(c.vibe).toBe('FANCY')
     expect(c.budget).toBe('HIGH')
@@ -31,8 +36,62 @@ describe('toEngineContext', () => {
   })
 
   it('uses the signed-in user budget, ANY for anonymous', () => {
-    expect(toEngineContext({}, 'LOW', date).budget).toBe('LOW')
+    expect(toEngineContext({}, { budgetRange: 'LOW' }, date).budget).toBe('LOW')
     expect(toEngineContext({}, null, date).budget).toBe('ANY')
+  })
+
+  /* --- the taste quiz's three outputs ---------------------------- */
+
+  it('the saved budget is a DEFAULT — an explicit query budget wins', () => {
+    const prefs = { budgetRange: 'LOW' as const }
+    expect(toEngineContext({}, prefs, date).budget).toBe('LOW')
+    expect(toEngineContext({ budget: 'HIGH' }, prefs, date).budget).toBe('HIGH')
+    // And an explicit ANY is a real answer, not a missing one.
+    expect(toEngineContext({ budget: 'ANY' }, prefs, date).budget).toBe('ANY')
+  })
+
+  it('an unrecognised query budget falls back to the saved band, not to ANY', () => {
+    expect(
+      toEngineContext({ budget: 'CHEAPISH' }, { budgetRange: 'MID' }, date).budget,
+    ).toBe('MID')
+  })
+
+  it('passes declared dietary needs through', () => {
+    const c = toEngineContext({}, { dietary: ['vegetarian', 'no-pork'] }, date)
+    expect(c.dietary).toEqual(['vegetarian', 'no-pork'])
+  })
+
+  it('drops dietary values the filter cannot act on', () => {
+    // A junk value stored years ago must never silently shrink someone's pool.
+    const c = toEngineContext({}, { dietary: ['vegetarian', 'keto', ''] }, date)
+    expect(c.dietary).toEqual(['vegetarian'])
+  })
+
+  it('normalises dietary spelling on the way in', () => {
+    expect(toEngineContext({}, { dietary: ['GLUTEN FREE'] }, date).dietary).toEqual([
+      'gluten-free',
+    ])
+  })
+
+  it('maps adventurousness onto the base ε', () => {
+    expect(toEngineContext({}, { adventurousness: 'SAFE' }, date).baseEpsilon).toBe(0.05)
+    expect(toEngineContext({}, { adventurousness: 'BALANCED' }, date).baseEpsilon).toBe(
+      EPSILON,
+    )
+    expect(
+      toEngineContext({}, { adventurousness: 'ADVENTUROUS' }, date).baseEpsilon,
+    ).toBe(0.3)
+  })
+
+  it('falls back to the engine ε for anonymous callers and quiz-skippers', () => {
+    expect(toEngineContext({}, null, date).baseEpsilon).toBe(EPSILON)
+    expect(toEngineContext({}, {}, date).baseEpsilon).toBe(EPSILON)
+    expect(epsilonFor(null)).toBe(EPSILON)
+    expect(epsilonFor(undefined)).toBe(EPSILON)
+  })
+
+  it('a prefs-free context is dietary-free, so nothing is excluded', () => {
+    expect(toEngineContext({}, null, date).dietary).toEqual([])
   })
 
   it('passes coordinates through only when both are numbers', () => {

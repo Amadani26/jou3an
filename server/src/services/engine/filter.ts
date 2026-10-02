@@ -10,6 +10,7 @@
 import { isOpenNow } from '../../lib/hours'
 import { withinRadius, type Coords } from '../../lib/geo'
 import { isServeable } from '../../lib/venueType'
+import { conflictsWithDietary } from '../../lib/dietary'
 import type { Budget, Candidate, EngineContext, FormatFilter, RadiusTier } from './types'
 
 /** Minimum viable result set. Never returns fewer. */
@@ -73,11 +74,20 @@ function applyRadiusLadder(
 
 /**
  * Stage 1. Constraints are dropped in this order when the pool is too small:
- *   budget -> format -> opening hours.
+ *   budget -> format -> opening hours -> dietary.
  *
- * Budget goes first because paying a bit more is the mildest disappointment,
- * and hours goes last because a shut restaurant is the worst thing to hand
- * someone who is hungry now.
+ * Budget goes first because paying a bit more is the mildest disappointment.
+ * Hours comes late because a shut restaurant is a bad thing to hand someone who
+ * is hungry now — and DIETARY comes last of all, because handing a vegan a
+ * steakhouse is worse still: it is not an inconvenience, it is a result they
+ * cannot use at all.
+ *
+ * ⚠️ The dietary rung is reached only when every looser brief has already
+ * failed, which in practice means a catalogue of under ~10 servable rows. The
+ * exclusion itself removes a small, well-defined set (~36 of 664 for
+ * vegetarian), so on the real catalogue it never gets near the ladder. It is on
+ * the ladder at all because "always exactly 3" is the one rule above it — see
+ * src/lib/dietary.ts for what the available data can and cannot enforce.
  *
  * ⚠️ `isActive` and `venueType` are NOT on that ladder — they are absolute.
  * Deactivating a row (`npm run prune`) is a human saying "never serve this",
@@ -97,7 +107,10 @@ export function filterCandidates(
 
   // The hard gate, applied before anything that can be relaxed.
   const servable = candidates.filter(isServeable)
-  const open = servable.filter((r) => isOpenNow(r, context.date))
+  // Dietary sits just inside the hard gate: every rung below operates on the
+  // already-excluded pool, and only the very last rung gives it up.
+  const eligible = servable.filter((r) => !conflictsWithDietary(r, context.dietary))
+  const open = eligible.filter((r) => isOpenNow(r, context.date))
 
   // Successively looser briefs; the first that yields REQUIRED wins.
   const attempts: { pool: Candidate[]; relaxed: string[] }[] = [
@@ -112,7 +125,10 @@ export function filterCandidates(
       relaxed: ['budget'],
     },
     { pool: open, relaxed: ['budget', 'format'] },
-    { pool: servable, relaxed: ['budget', 'format', 'hours'] },
+    { pool: eligible, relaxed: ['budget', 'format', 'hours'] },
+    // Last resort. With no dietary needs declared this pool is identical to the
+    // rung above, so it is unreachable and the word never appears in relaxed[].
+    { pool: servable, relaxed: ['budget', 'format', 'hours', 'dietary'] },
   ]
 
   for (const attempt of attempts) {
@@ -127,6 +143,6 @@ export function filterCandidates(
   const laddered = applyRadiusLadder(servable, origin)
   return {
     ...laddered,
-    relaxed: ['budget', 'format', 'hours'],
+    relaxed: ['budget', 'format', 'hours', 'dietary'],
   }
 }

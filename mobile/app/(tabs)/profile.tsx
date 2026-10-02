@@ -7,7 +7,13 @@ import { useQuery } from '@tanstack/react-query'
 import RedButton from '../../components/RedButton'
 import GhostButton from '../../components/GhostButton'
 import { useAuth } from '../../contexts/AuthContext'
-import { getDecisionHistory, prettyTag, type User, type BudgetRange } from '../../lib/api'
+import {
+  getDecisionHistory,
+  prettyTag,
+  type Adventurousness,
+  type BudgetRange,
+  type User,
+} from '../../lib/api'
 import { usePressed } from '../../lib/usePressed'
 
 /* ------------------------------------------------------------------ */
@@ -18,6 +24,13 @@ const BUDGET_LABELS: Record<BudgetRange, string> = {
   LOW: 'Budget',
   MID: 'Mid-range',
   HIGH: 'Premium',
+}
+
+/** The taste quiz's step 4, as a one-word summary. */
+const ADVENTUROUSNESS_LABELS: Record<Adventurousness, string> = {
+  SAFE: 'My favorites',
+  BALANCED: 'Mix it up',
+  ADVENTUROUS: 'Surprise me',
 }
 
 /** Up to two initials from the user's name (falls back to the email). */
@@ -314,6 +327,10 @@ export default function ProfileScreen() {
       : 'Not set'
   const dietaryValue =
     user.dietary.length > 0 ? user.dietary.map(prettyTag).join(', ') : 'None'
+  const avoidValue =
+    user.dislikedCuisines.length > 0
+      ? user.dislikedCuisines.map(prettyTag).join(', ')
+      : 'None'
 
   return (
     <ScrollView
@@ -374,6 +391,23 @@ export default function ProfileScreen() {
         <Row
           label="Dietary"
           value={dietaryValue}
+          onPress={() => router.push('/onboarding')}
+        />
+        <Row
+          label="Avoid"
+          value={avoidValue}
+          onPress={() => router.push('/onboarding')}
+        />
+        <Row
+          label="How we pick"
+          value={ADVENTUROUSNESS_LABELS[user.adventurousness]}
+          onPress={() => router.push('/onboarding')}
+        />
+        {/* The quiz is skippable, so this is the nudge for anyone who skipped
+            it — and the same screens handle an edit, so there is one route. */}
+        <Row
+          label={user.tasteQuizCompletedAt ? 'Retake taste quiz' : 'Take the taste quiz'}
+          value={user.tasteQuizCompletedAt ? undefined : '30 seconds'}
           onPress={() => router.push('/onboarding')}
           last
         />

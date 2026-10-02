@@ -36,6 +36,18 @@ export interface EngineContext {
    * for burgers" apart from "you keep choosing burgers".
    */
   requestedCuisines?: string[]
+  /**
+   * Dietary needs declared by the user (the onboarding quiz's "avoid" step).
+   * Applied as a Stage-1 EXCLUSION — see src/lib/dietary.ts, which documents
+   * at length what the available data can and cannot actually enforce.
+   */
+  dietary?: string[]
+  /**
+   * This user's BASE wildcard ε, from their adventurousness answer
+   * (0.05 / 0.15 / 0.30). Omitted means the engine default — so anonymous
+   * callers and users who skipped the quiz behave exactly as before.
+   */
+  baseEpsilon?: number
   /** "Now" — injected so tests and replays are deterministic. */
   date: Date
   /**

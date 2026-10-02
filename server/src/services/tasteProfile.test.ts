@@ -4,8 +4,12 @@ import {
   EVENT_DELTA,
   WEIGHT_MAX,
   WEIGHT_MIN,
+  QUIZ_DISLIKE_DELTA,
+  QUIZ_LOVE_DELTA,
   applyEventToWeights,
   coerceWeights,
+  effectiveTasteWeights,
+  quizWeightsFrom,
 } from './tasteProfile'
 
 /** The pure core only — `applyTasteEvent` is the DB wrapper and isn't covered here. */
@@ -87,5 +91,102 @@ describe('coerceWeights', () => {
     expect(coerceWeights(null)).toEqual({})
     expect(coerceWeights([1, 2])).toEqual({})
     expect(coerceWeights('nope')).toEqual({})
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* The onboarding taste quiz's contribution                            */
+/* ------------------------------------------------------------------ */
+
+describe('quizWeightsFrom', () => {
+  it('gives every loved cuisine +2 and every disliked one -2', () => {
+    const w = quizWeightsFrom(['Japanese', 'Pizza'], ['Seafood'])
+    expect(w).toEqual({ japanese: 2, pizza: 2, seafood: -2 })
+    expect(QUIZ_LOVE_DELTA).toBe(2)
+    expect(QUIZ_DISLIKE_DELTA).toBe(-2)
+  })
+
+  it('normalises cuisine keys', () => {
+    expect(quizWeightsFrom([' Japanese '], [])).toEqual({ japanese: 2 })
+  })
+
+  it('is empty for a fully skipped quiz', () => {
+    expect(quizWeightsFrom([], [])).toEqual({})
+    expect(quizWeightsFrom(null, undefined)).toEqual({})
+  })
+
+  it('ignores blank entries', () => {
+    expect(quizWeightsFrom(['', '  ', 'Thai'], [])).toEqual({ thai: 2 })
+  })
+
+  // "I avoid this" is the more specific statement, and serving it anyway is the
+  // worse failure of the two.
+  it('resolves a cuisine on both lists to DISLIKE', () => {
+    expect(quizWeightsFrom(['Japanese'], ['Japanese'])).toEqual({ japanese: -2 })
+  })
+
+  /**
+   * The whole idempotency story: the quiz is a pure function of its stored
+   * answers, so re-taking it cannot stack. Re-deriving ten times is identical
+   * to deriving once.
+   */
+  it('is idempotent — re-deriving never stacks the deltas', () => {
+    const once = quizWeightsFrom(['Japanese'], [])
+    for (let i = 0; i < 10; i++) {
+      expect(quizWeightsFrom(['Japanese'], [])).toEqual(once)
+    }
+    expect(once.japanese).toBe(2)
+  })
+
+  it('does not decay — a stated preference is standing, not stale', () => {
+    // Contrast with applyEventToWeights, which decays everything on each call.
+    expect(quizWeightsFrom(['Japanese'], []).japanese).toBe(
+      quizWeightsFrom(['Japanese'], []).japanese,
+    )
+  })
+})
+
+describe('effectiveTasteWeights', () => {
+  it('sums learned and quiz weights rather than overwriting either', () => {
+    expect(effectiveTasteWeights({ japanese: 3 }, { japanese: 2 })).toEqual({
+      japanese: 5,
+    })
+  })
+
+  it('keeps keys that exist on only one side', () => {
+    expect(effectiveTasteWeights({ thai: 1 }, { pizza: 2 })).toEqual({
+      thai: 1,
+      pizza: 2,
+    })
+  })
+
+  it('lets a swipe-learned preference offset a quiz dislike', () => {
+    // The user said they avoid it, then kept choosing it. Both signals count.
+    expect(effectiveTasteWeights({ japanese: 3 }, { japanese: -2 }).japanese).toBe(1)
+  })
+
+  it('clamps the sum to the normal weight range', () => {
+    expect(effectiveTasteWeights({ japanese: 9 }, { japanese: 2 }).japanese).toBe(
+      WEIGHT_MAX,
+    )
+    expect(effectiveTasteWeights({ seafood: -4 }, { seafood: -2 }).seafood).toBe(
+      WEIGHT_MIN,
+    )
+  })
+
+  it('is a no-op for a user who skipped the quiz', () => {
+    expect(effectiveTasteWeights({ japanese: 3 }, {})).toEqual({ japanese: 3 })
+  })
+
+  it('is empty for a brand-new user who skipped everything', () => {
+    expect(effectiveTasteWeights({}, {})).toEqual({})
+  })
+
+  it('does not mutate either input', () => {
+    const learned = { japanese: 3 }
+    const quiz = { japanese: 2 }
+    effectiveTasteWeights(learned, quiz)
+    expect(learned).toEqual({ japanese: 3 })
+    expect(quiz).toEqual({ japanese: 2 })
   })
 })

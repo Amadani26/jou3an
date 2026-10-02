@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { decide } from './index'
-import { DAMPING_EXEMPT_PICK_RATE, dampingFor } from './select'
+import {
+  DAMPING_EXEMPT_PICK_RATE,
+  EPSILON,
+  EPSILON_BY_ADVENTUROUSNESS,
+  MAX_EPSILON,
+  MAX_EXPLORATION_REFRESHES,
+  dampingFor,
+  explorationFor,
+} from './select'
 import { filterCandidates } from './filter'
+import { NEUTRAL, tasteScore } from './score'
+import { conflictsWithDietary } from '../../lib/dietary'
+import { effectiveTasteWeights, quizWeightsFrom } from '../tasteProfile'
 import {
   DIFC,
   FAR,
@@ -461,5 +472,248 @@ describe('decide — breakdown', () => {
     for (const b of d.breakdown) {
       expect(b.base).toBeCloseTo(0.4 * b.quality + 0.4 * b.taste + 0.2 * b.context, 10)
     }
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* Taste quiz — the three ways its answers reach the engine            */
+/* ------------------------------------------------------------------ */
+
+describe('per-user wildcard ε (adventurousness)', () => {
+  it('maps the three answers onto 0.05 / 0.15 / 0.30', () => {
+    expect(EPSILON_BY_ADVENTUROUSNESS.SAFE).toBe(0.05)
+    expect(EPSILON_BY_ADVENTUROUSNESS.ADVENTUROUS).toBe(0.3)
+  })
+
+  // BALANCED must be the historical constant, or taking the quiz would change
+  // behaviour for a user who answered "the middle one".
+  it('BALANCED is exactly the engine default', () => {
+    expect(EPSILON_BY_ADVENTUROUSNESS.BALANCED).toBe(EPSILON)
+  })
+
+  it('an omitted base ε reproduces the old behaviour exactly', () => {
+    for (const nonce of [0, 1, 2, 3, 4, 9]) {
+      expect(explorationFor(nonce).epsilon).toBe(explorationFor(nonce, null).epsilon)
+      expect(explorationFor(nonce, undefined).epsilon).toBe(
+        explorationFor(nonce).epsilon,
+      )
+    }
+  })
+
+  it('uses the user ε on first load, not the default', () => {
+    expect(explorationFor(0, 0.05).epsilon).toBe(0.05)
+    expect(explorationFor(0, 0.3).epsilon).toBe(0.3)
+    expect(explorationFor(0).epsilon).toBe(EPSILON)
+  })
+
+  it('a safe user still explores less than an adventurous one at every nonce', () => {
+    for (const nonce of [0, 1, 2, 3]) {
+      expect(explorationFor(nonce, 0.05).epsilon).toBeLessThan(
+        explorationFor(nonce, 0.3).epsilon,
+      )
+    }
+  })
+
+  // Refresh is an explicit "not these", so it must still work for a safe user.
+  it('Refresh ramps every user to the shared ceiling', () => {
+    expect(explorationFor(MAX_EXPLORATION_REFRESHES, 0.05).epsilon).toBeCloseTo(
+      MAX_EPSILON,
+    )
+    expect(explorationFor(MAX_EXPLORATION_REFRESHES, 0.3).epsilon).toBeCloseTo(
+      MAX_EPSILON,
+    )
+  })
+
+  it('ramps monotonically from the user ε', () => {
+    const seen = [0, 1, 2, 3, 4].map((n) => explorationFor(n, 0.05).epsilon)
+    for (let i = 1; i < seen.length; i++) expect(seen[i]).toBeGreaterThan(seen[i - 1])
+    expect(seen[0]).toBe(0.05)
+  })
+
+  it('clamps a nonsensical stored ε instead of trusting it', () => {
+    expect(explorationFor(0, -1).epsilon).toBe(0)
+    expect(explorationFor(0, 5).epsilon).toBe(MAX_EPSILON)
+    expect(explorationFor(0, Number.NaN).epsilon).toBe(EPSILON)
+  })
+
+  it('still returns exactly 3 at either extreme', () => {
+    for (const baseEpsilon of [0.05, 0.3]) {
+      const d = decide(
+        input({ candidates: catalogue(), context: context({ baseEpsilon }) }),
+      )
+      expect(d.picks).toHaveLength(3)
+    }
+  })
+
+  it('leaves the result deterministic — ε is seeded, not random', () => {
+    const run = () =>
+      decide(input({ candidates: catalogue(), context: context({ baseEpsilon: 0.3 }) }))
+        .picks.map((p) => p.restaurant.id)
+        .join(',')
+    expect(run()).toBe(run())
+  })
+})
+
+describe('dietary needs as a Stage-1 exclusion', () => {
+  it('never serves a conflicting restaurant', () => {
+    const d = decide(
+      input({
+        candidates: catalogue(),
+        context: context({ dietary: ['vegetarian'] }),
+      }),
+    )
+    for (const p of d.picks) {
+      expect(conflictsWithDietary(p.restaurant, ['vegetarian'])).toBe(false)
+    }
+  })
+
+  it('drops the burger joints a vegetarian cannot use', () => {
+    const pool = filterCandidates(catalogue(), context({ dietary: ['vegetarian'] })).pool
+    expect(pool.map((r) => r.name)).not.toContain('Marina Burger Co')
+    expect(pool.map((r) => r.name)).not.toContain('Smokehouse Marina')
+    // And keeps everything it has no reason to exclude.
+    expect(pool.map((r) => r.name)).toContain('Green Bowl')
+    expect(pool.map((r) => r.name)).toContain('Beirut Table')
+  })
+
+  it('excludes pizza for a gluten-free user but not for anyone else', () => {
+    const gf = filterCandidates(catalogue(), context({ dietary: ['gluten-free'] })).pool
+    expect(gf.map((r) => r.name)).not.toContain('Pizza Yard')
+    const anyone = filterCandidates(catalogue(), context()).pool
+    expect(anyone.map((r) => r.name)).toContain('Pizza Yard')
+  })
+
+  it('still returns exactly 3', () => {
+    for (const need of ['vegetarian', 'vegan', 'gluten-free', 'no-pork']) {
+      const d = decide(
+        input({ candidates: catalogue(), context: context({ dietary: [need] }) }),
+      )
+      expect(d.picks, need).toHaveLength(3)
+    }
+  })
+
+  it('changes nothing when no needs are declared', () => {
+    const plain = filterCandidates(catalogue(), context()).pool.map((r) => r.id)
+    expect(filterCandidates(catalogue(), context({ dietary: [] })).pool.map((r) => r.id))
+      .toEqual(plain)
+  })
+
+  // Dietary is the LAST rung — worse to hand a vegan a steakhouse than to hand
+  // anyone a shut door — so it must not appear in relaxed[] on a healthy pool.
+  it('does not report dietary as relaxed when the pool is ample', () => {
+    const r = filterCandidates(catalogue(), context({ dietary: ['vegetarian'] }))
+    expect(r.relaxed).not.toContain('dietary')
+  })
+
+  it('relaxes dietary only as a last resort, and says so', () => {
+    resetIds()
+    // Three restaurants, all of them conflicting: the rule that there are
+    // always three outranks even this.
+    const allSteak = [
+      restaurant({ cuisineType: 'Steakhouse' }),
+      restaurant({ cuisineType: 'Steakhouse' }),
+      restaurant({ cuisineType: 'Steakhouse' }),
+    ]
+    const r = filterCandidates(allSteak, context({ dietary: ['vegetarian'] }))
+    expect(r.pool).toHaveLength(3)
+    expect(r.relaxed).toContain('dietary')
+    // And it is dropped after everything else, never before.
+    expect(r.relaxed.indexOf('dietary')).toBe(r.relaxed.length - 1)
+  })
+
+  it('a parked cafe is still never served, dietary or not', () => {
+    const d = decide(
+      input({ candidates: catalogue(), context: context({ dietary: ['vegetarian'] }) }),
+    )
+    for (const p of d.picks) expect(p.restaurant.venueType).toBe('RESTAURANT')
+  })
+})
+
+describe('quiz-seeded taste weights', () => {
+  /**
+   * A loved cuisine must score ABOVE neutral, not below it.
+   *
+   * This is the assertion that caught the `normalizeWeight` bug: with the old
+   * linear map a weight of +2 scored 0.467 against the 0.5 an unknown cuisine
+   * got, so "I love Pakistani food" actively demoted Pakistani food.
+   */
+  it('scores a loved cuisine above an unknown one, and a disliked one below', () => {
+    const loved = quizWeightsFrom(['Pakistani'], ['Japanese'])
+    const curry = restaurant({ cuisineType: 'Pakistani', tags: [] })
+    const sushi = restaurant({ cuisineType: 'Japanese', tags: [] })
+    const other = restaurant({ cuisineType: 'French', tags: [] })
+
+    expect(tasteScore(curry, loved)).toBeGreaterThan(NEUTRAL)
+    expect(tasteScore(other, loved)).toBe(NEUTRAL)
+    expect(tasteScore(sushi, loved)).toBeLessThan(NEUTRAL)
+  })
+
+  it('+2 decides between candidates the engine otherwise cannot separate', () => {
+    resetIds()
+    // Same rating, same price, same distance — taste is the only differentiator.
+    const even = [
+      restaurant({ name: 'Curry', cuisineType: 'Pakistani', googleRating: 4.2 }),
+      restaurant({ name: 'Sushi', cuisineType: 'Japanese', googleRating: 4.2 }),
+      restaurant({ name: 'Pasta', cuisineType: 'Italian', googleRating: 4.2 }),
+      restaurant({ name: 'Grill', cuisineType: 'Lebanese', googleRating: 4.2 }),
+    ]
+    const d = decide(
+      input({
+        candidates: even,
+        tasteWeights: effectiveTasteWeights({}, quizWeightsFrom(['Pakistani'], [])),
+      }),
+    )
+    expect(d.picks.map((p) => p.restaurant.name)).toContain('Curry')
+  })
+
+  /**
+   * On the real catalogue a stated preference is a NUDGE, not an override: a
+   * +2 is worth ~0.04 of base score and will not beat a 0.3-star rating gap.
+   * That is the intended strength — the quiz seeds taste, it does not replace
+   * quality — so the property worth asserting is that the rank improves.
+   */
+  it('improves a loved cuisine’s rank without overriding quality', () => {
+    const rankOf = (weights: Parameters<typeof decide>[0]['tasteWeights']) => {
+      const d = decide(input({ candidates: catalogue(), tasteWeights: weights }))
+      const sorted = [...d.breakdown].sort((a, b) => b.total - a.total)
+      return sorted.findIndex((b) => b.cuisine === 'Pakistani')
+    }
+
+    const cold = rankOf({})
+    const seeded = rankOf(effectiveTasteWeights({}, quizWeightsFrom(['Pakistani'], [])))
+    expect(seeded).toBeLessThan(cold)
+  })
+
+  it('a disliked cuisine is pushed out of the picks', () => {
+    // Japanese earns a slot on quality alone with a cold profile...
+    const cold = decide(input({ candidates: catalogue(), tasteWeights: {} }))
+    expect(CUISINES(cold)).toContain('japanese')
+
+    // ...and -2 is enough to lose it, without filtering it out of the pool.
+    const avoided = decide(
+      input({
+        candidates: catalogue(),
+        tasteWeights: effectiveTasteWeights({}, quizWeightsFrom([], ['Japanese'])),
+      }),
+    )
+    expect(CUISINES(avoided)).not.toContain('japanese')
+  })
+
+  it('seeds are additive with what swiping already learned', () => {
+    const merged = effectiveTasteWeights({ japanese: 3 }, quizWeightsFrom(['Japanese'], []))
+    expect(merged.japanese).toBe(5)
+  })
+
+  it('still returns exactly 3 for a fully-seeded profile', () => {
+    const d = decide(
+      input({
+        candidates: catalogue(),
+        tasteWeights: effectiveTasteWeights(
+          {},
+          quizWeightsFrom(['Pakistani', 'Lebanese'], ['Japanese', 'Pizza']),
+        ),
+      }),
+    )
+    expect(d.picks).toHaveLength(3)
   })
 })

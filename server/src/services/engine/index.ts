@@ -33,6 +33,7 @@ export {
   DAMPING_EXEMPT_PICK_RATE,
   DAMPING_FLOOR,
   EPSILON,
+  EPSILON_BY_ADVENTUROUSNESS,
   MAX_EPSILON,
   MAX_EXPLORATION_REFRESHES,
   dampingFor,
@@ -73,7 +74,10 @@ export function decide(input: EngineInput): Decision3 {
   const seed = seedFor(input)
   const random = seededRandom(seed)
   // Each Refresh tap widens the search — see explorationFor().
-  const { noiseAmplitude, epsilon } = explorationFor(context.refreshNonce)
+  const { noiseAmplitude, epsilon } = explorationFor(
+    context.refreshNonce,
+    context.baseEpsilon,
+  )
 
   const distanceOf = (r: Candidate): number | null => {
     if (!origin || !hasCoords(r)) return null

@@ -36,9 +36,26 @@ export function qualityScore(r: Candidate): number {
   return NEUTRAL
 }
 
-/** Map a raw taste weight in [WEIGHT_MIN, WEIGHT_MAX] onto [0,1]. */
-const normalizeWeight = (w: number) =>
-  clamp01((w - WEIGHT_MIN) / (WEIGHT_MAX - WEIGHT_MIN))
+/**
+ * Map a raw taste weight in [WEIGHT_MIN, WEIGHT_MAX] onto [0,1], with weight
+ * ZERO pinned to NEUTRAL.
+ *
+ * ⚠️ The two sides are scaled INDEPENDENTLY, and that matters. The clamp range
+ * is [-5, 10] — not centred on zero — so the obvious linear map
+ * `(w - MIN) / (MAX - MIN)` put weight 0 at 0.333 and a single SWIPE_RIGHT
+ * (+1) at 0.400. Both sit BELOW the 0.5 that `tasteScore` gives a cuisine it
+ * knows nothing about, which meant mild positive evidence scored strictly worse
+ * than no evidence at all: one right-swipe on Thai actively demoted Thai, and
+ * the taste quiz's +2 "I love this" demoted it too.
+ *
+ * Anchoring 0 at NEUTRAL is what makes a positive weight a promotion and a
+ * negative weight a demotion, which is the only reading of those numbers
+ * anybody writing them intended.
+ */
+const normalizeWeight = (w: number) => {
+  if (w >= 0) return clamp01(NEUTRAL + (w / WEIGHT_MAX) * (1 - NEUTRAL))
+  return clamp01(NEUTRAL - (w / WEIGHT_MIN) * NEUTRAL)
+}
 
 /**
  * How well this restaurant matches what the user has shown they like.

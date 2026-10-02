@@ -29,6 +29,12 @@ interface AuthContextValue {
     password: string,
   ) => Promise<User>
   logout: () => Promise<void>
+  /**
+   * Replace the cached user after a server write (the taste quiz, a preference
+   * edit). Without it the quiz saves successfully and then prefills from stale
+   * answers the next time it is opened from Profile.
+   */
+  applyUser: (user: User) => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -78,6 +84,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const applyUser = useCallback((next: User) => setUser(next), [])
+
   const logout = useCallback(async () => {
     try {
       await authLogout()
@@ -97,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         signup,
         logout,
+        applyUser,
       }}
     >
       {children}

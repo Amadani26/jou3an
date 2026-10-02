@@ -28,6 +28,18 @@ enum AccountTier {
   PRO
 }
 
+/// How far from a user's known favourites the engine should roam.
+///
+/// Set by the onboarding taste quiz and read as the user's BASE wildcard ε in
+/// `src/services/engine/select.ts` (SAFE 0.05 / BALANCED 0.15 / ADVENTUROUS
+/// 0.30). BALANCED is both the default and the engine's historical constant, so
+/// an existing user who never takes the quiz behaves exactly as before.
+enum Adventurousness {
+  SAFE
+  BALANCED
+  ADVENTUROUS
+}
+
 enum DecisionAction {
   DIRECTIONS
   CALL
@@ -57,6 +69,15 @@ model User {
   cuisinePreferences String[]
   budgetRange        BudgetRange  @default(MID)
   dietary            String[]
+  /// Cuisines the taste quiz's "anything you avoid?" step collected. Mirrors
+  /// `cuisinePreferences` (the loved side); both are translated into
+  /// `UserTasteProfile.quizWeights` on save, never applied as a hard filter.
+  dislikedCuisines   String[]
+  /// Base wildcard ε for this user. See the Adventurousness enum.
+  adventurousness    Adventurousness @default(BALANCED)
+  /// When the taste quiz was last completed. Null = never taken (the quiz is
+  /// skippable), which is what Home/Profile read to offer it again.
+  tasteQuizCompletedAt DateTime?
   accountTier        AccountTier  @default(FREE)
   stripeCustomerId   String?
   createdAt          DateTime     @default(now())
@@ -170,7 +191,15 @@ model UserTasteProfile {
   id        String   @id @default(cuid())
   userId    String   @unique
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// LEARNED weights — moved only by real swipes and selections.
   weights   Json     @default("{}")
+  /// The taste quiz's OWN contribution, kept separate on purpose.
+  ///
+  /// ⚠️ This is what makes re-taking the quiz idempotent: a save RECOMPUTES
+  /// this column from the stored answers and never touches `weights`, so the
+  /// +2/-2 deltas can't stack on every re-run. The engine reads the sum of the
+  /// two (`effectiveTasteWeights`), clamped to the normal [-5, 10] range.
+  quizWeights Json   @default("{}")
   updatedAt DateTime @updatedAt
 }
 

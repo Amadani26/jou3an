@@ -4,8 +4,10 @@
  * Kept pure and separate from the route so the mapping is unit-testable and so
  * the route stays about HTTP rather than about semantics.
  */
-import type { BudgetRange } from '@prisma/client'
+import type { Adventurousness, BudgetRange } from '@prisma/client'
 import { WEIGHT_MAX, normalizeCuisine, type TasteWeights } from '../tasteProfile'
+import { knownNeeds } from '../../lib/dietary'
+import { EPSILON, EPSILON_BY_ADVENTUROUSNESS } from './select'
 import type { Budget, EngineContext, FormatFilter, Vibe } from './types'
 
 /** The Decide flow's wire values (human-readable) -> engine enums. */
@@ -26,6 +28,14 @@ export const BUDGET_MAP: Record<BudgetRange, Budget> = {
   HIGH: 'HIGH',
 }
 
+/** The Decide flow's budget wire values, for the day a budget step exists. */
+export const BUDGET_WIRE: Record<string, Budget> = {
+  LOW: 'LOW',
+  MID: 'MID',
+  HIGH: 'HIGH',
+  ANY: 'ANY',
+}
+
 export interface RequestFilters {
   format?: string | null
   vibe?: string | null
@@ -34,6 +44,36 @@ export interface RequestFilters {
   refreshNonce?: number | null
   /** Cuisines the user picked — carried through purely for reason wording. */
   cuisines?: string[]
+  /**
+   * A budget for THIS query, which outranks the user's saved band.
+   *
+   * No client sends it yet (the Decide flow has no budget step), but the
+   * precedence is real and tested rather than implied: the taste quiz's answer
+   * is a DEFAULT, and a default is only a default if something can override it.
+   */
+  budget?: string | null
+}
+
+/**
+ * The saved preferences the taste quiz writes, as the engine needs them.
+ *
+ * Every field is optional: anonymous callers pass null, and a user who skipped
+ * the quiz has defaults that reproduce the engine's historical behaviour.
+ */
+export interface UserPrefs {
+  budgetRange?: BudgetRange | null
+  /** Declared dietary needs — a Stage-1 exclusion. See src/lib/dietary.ts. */
+  dietary?: string[] | null
+  /** Drives the per-user base wildcard ε. */
+  adventurousness?: Adventurousness | null
+}
+
+/** Base ε for a user, or the engine default when they never answered. */
+export function epsilonFor(
+  adventurousness: Adventurousness | null | undefined,
+): number {
+  if (!adventurousness) return EPSILON
+  return EPSILON_BY_ADVENTUROUSNESS[adventurousness] ?? EPSILON
 }
 
 /**
@@ -43,18 +83,25 @@ export interface RequestFilters {
  */
 export function toEngineContext(
   filters: RequestFilters,
-  budgetRange: BudgetRange | null | undefined,
+  prefs: UserPrefs | null | undefined,
   date: Date,
 ): EngineContext {
+  // An explicit per-query budget wins; otherwise the saved band from the taste
+  // quiz stands in; otherwise no budget constraint at all.
+  const queryBudget = filters.budget ? BUDGET_WIRE[filters.budget] : undefined
+  const savedBudget = prefs?.budgetRange ? BUDGET_MAP[prefs.budgetRange] : undefined
+
   return {
     formatFilter: (filters.format && FORMAT_MAP[filters.format]) || 'ANY',
     vibe: (filters.vibe && VIBE_MAP[filters.vibe]) || 'ANY',
-    // The Decide flow has no budget step, so the signed-in user's saved
-    // preference stands in. Anonymous callers get no budget constraint.
-    budget: budgetRange ? BUDGET_MAP[budgetRange] : 'ANY',
+    budget: queryBudget ?? savedBudget ?? 'ANY',
     lat: typeof filters.lat === 'number' ? filters.lat : null,
     lng: typeof filters.lng === 'number' ? filters.lng : null,
     requestedCuisines: filters.cuisines ?? [],
+    // Only needs this filter can actually act on reach the engine, so a junk
+    // value stored years ago can never silently shrink someone's pool.
+    dietary: knownNeeds(prefs?.dietary),
+    baseEpsilon: epsilonFor(prefs?.adventurousness),
     date,
     refreshNonce: filters.refreshNonce ?? 0,
   }

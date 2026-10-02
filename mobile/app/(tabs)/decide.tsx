@@ -5,63 +5,17 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import * as Location from 'expo-location'
-import Animated, {
-  FadeIn,
-  SlideInLeft,
-  SlideInRight,
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated'
+import Animated, { FadeIn, SlideInLeft, SlideInRight } from 'react-native-reanimated'
 import RedButton from '../../components/RedButton'
 import { searchAreas, type AreaSuggestion } from '../../lib/api'
 import AreaRow from '../../components/AreaRow'
+import CuisineTile from '../../components/CuisineTile'
+import { CUISINE_ROWS, type Cuisine } from '../../lib/cuisines'
 import { usePressed } from '../../lib/usePressed'
 
 type LocationChoice = 'Nearby' | 'Anywhere in Dubai' | `Near ${string}`
 type Format = 'Delivery' | 'Dine In'
 type Vibe = 'Casual' | 'Fancy'
-
-interface Cuisine {
-  name: string
-  descriptor: string
-  icon: keyof typeof Ionicons.glyphMap
-}
-
-const CUISINES: Cuisine[] = [
-  { name: 'Lebanese', descriptor: 'Mezze & Grills', icon: 'flame-outline' },
-  { name: 'Japanese', descriptor: 'Sushi & Ramen', icon: 'fish-outline' },
-  { name: 'American', descriptor: 'Burgers & Comfort', icon: 'fast-food-outline' },
-  { name: 'Pakistani', descriptor: 'Curries & Rice', icon: 'restaurant-outline' },
-  { name: 'Emirati', descriptor: 'Local & Traditional', icon: 'moon-outline' },
-  { name: 'Healthy', descriptor: 'Clean & Light', icon: 'leaf-outline' },
-  { name: 'Pizza', descriptor: 'Wood-fired & Delivery', icon: 'pizza-outline' },
-  { name: 'Asian', descriptor: 'Pan-Asian Fusion', icon: 'nutrition-outline' },
-]
-
-/**
- * A quiet identity colour per cuisine, used ONLY for the icon inside its chip.
- *
- * Muted and desaturated on purpose: eight saturated hues on a #080808 screen
- * reads as a toy, and the red is the brand's — nothing here may compete with
- * it. The two exceptions are design-system tokens already in use elsewhere
- * (#2DCE89 green, #FFB547 gold).
- */
-const CUISINE_ACCENT: Record<string, string> = {
-  Lebanese: '#D9A05B',
-  Japanese: '#D96C6C',
-  American: '#B2705B',
-  Pakistani: '#C9963F',
-  Emirati: '#9AA0C9',
-  Healthy: '#2DCE89',
-  Pizza: '#FFB547',
-  Asian: '#5FB3A6',
-}
-
-/** Fallback for a cuisine added to CUISINES without an accent. */
-const ACCENT_FALLBACK = '#8A847E'
 
 const SURPRISE: Cuisine = {
   name: 'Surprise me',
@@ -73,12 +27,6 @@ const NO_PREFERENCE: Cuisine = {
   name: 'No preference',
   descriptor: 'Show me anything',
   icon: 'help-circle-outline',
-}
-
-// Chunk the cuisines into rows of two for the 2-column grid.
-const CUISINE_ROWS: Cuisine[][] = []
-for (let i = 0; i < CUISINES.length; i += 2) {
-  CUISINE_ROWS.push(CUISINES.slice(i, i + 2))
 }
 
 const tap = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -161,139 +109,6 @@ function BigCard({
       <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: '#8A847E' }}>
         {subtitle}
       </Text>
-    </Pressable>
-  )
-}
-
-/**
- * One cuisine in the 2-column grid.
- *
- * ⚠️ NOTHING here is centred. Eight centred boxes of identical grey read as a
- * flat stack — the left-aligned chip/name/descriptor column is what gives the
- * grid a direction to scan in.
- */
-function CuisineTile({
-  name,
-  descriptor,
-  icon,
-  selected,
-  onPress,
-}: {
-  name: string
-  descriptor: string
-  icon: keyof typeof Ionicons.glyphMap
-  selected: boolean
-  onPress: () => void
-}) {
-  const { pressed, pressHandlers } = usePressed()
-  const scale = useSharedValue(1)
-
-  const accent = CUISINE_ACCENT[name] ?? ACCENT_FALLBACK
-
-  const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
-
-  const handlePress = () => {
-    // A dip and a spring back — confirmation you can feel at a glance, on the
-    // card you actually touched rather than somewhere else on screen.
-    scale.value = withSequence(
-      withTiming(0.97, { duration: 70 }),
-      withSpring(1, { damping: 11, stiffness: 280 }),
-    )
-    tap()
-    onPress()
-  }
-
-  return (
-    <Pressable
-      onPress={handlePress}
-      {...pressHandlers}
-      // NOTE: must be a PLAIN style, not the ({ pressed }) => ... function form
-      // — the function form is dropped on Pressable in this setup, which is why
-      // cards used to collapse to their text width. See lib/usePressed.
-      style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, alignSelf: 'stretch' }}
-    >
-      {/* Inner View carries all visual styling — Pressable drops backgroundColor
-          on some RN versions, so keep the fill/border/radius here. */}
-      <Animated.View
-        style={[
-          {
-            flex: 1,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: selected ? '#E63946' : '#242424',
-            backgroundColor: selected ? '#1a0d0d' : '#141414',
-            paddingHorizontal: 14,
-            // ⚠️ Vertical padding is tighter than horizontal, and the spacer
-            // below is what absorbs a short row. Four rows of 96 + two utility
-            // rows + the button do not fit an iPhone's Decide step, so the card
-            // has to stay legible when the grid is squeezed to ~80 rather than
-            // clipping its descriptor (which is exactly what it did at first).
-            paddingVertical: 9,
-            justifyContent: 'flex-start',
-            alignItems: 'flex-start',
-            overflow: 'hidden',
-            opacity: pressed ? 0.75 : 1,
-          },
-          popStyle,
-        ]}
-      >
-        {/* Icon chip — the only place a cuisine's own colour appears. */}
-        <View
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 10,
-            backgroundColor: selected ? '#E6394622' : '#1F1F1F',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name={icon} size={18} color={selected ? '#E63946' : accent} />
-        </View>
-
-        {/* Breathing room when the row is tall, the first thing to go when it
-            is not — so the copy is never the thing that gets cut. */}
-        <View style={{ flexGrow: 1, minHeight: 6 }} />
-
-        <Text
-          numberOfLines={1}
-          style={{
-            fontFamily: 'DMSans_700Bold',
-            fontSize: 16,
-            lineHeight: 19,
-            color: selected ? '#E63946' : '#F2EDE8',
-          }}
-        >
-          {name}
-        </Text>
-        <Text
-          numberOfLines={1}
-          style={{
-            fontFamily: 'DMSans_400Regular',
-            fontSize: 11,
-            lineHeight: 13,
-            color: '#8A847E',
-            marginTop: 1,
-          }}
-        >
-          {descriptor}
-        </Text>
-
-        {/* Corner dot — the selected state read from the far side of the grid. */}
-        {selected ? (
-          <View
-            style={{
-              position: 'absolute',
-              top: 10,
-              right: 10,
-              width: 6,
-              height: 6,
-              borderRadius: 3,
-              backgroundColor: '#E63946',
-            }}
-          />
-        ) : null}
-      </Animated.View>
     </Pressable>
   )
 }

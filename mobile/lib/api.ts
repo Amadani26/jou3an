@@ -67,6 +67,19 @@ export type LocationArea =
 export type BudgetRange = 'LOW' | 'MID' | 'HIGH'
 export type AccountTier = 'FREE' | 'PRO'
 
+/** How far from a user's favourites the engine may roam — the quiz's step 4. */
+export type Adventurousness = 'SAFE' | 'BALANCED' | 'ADVENTUROUS'
+
+/**
+ * The dietary needs the taste quiz collects.
+ *
+ * ⚠️ Only the first three actually filter anything. `no-pork` is stored and
+ * displayed but enforced nowhere — nothing in the catalogue marks pork and
+ * Dubai is overwhelmingly halal, so the server declines to guess. Never write
+ * UI copy that promises it is applied.
+ */
+export type DietaryNeed = 'vegetarian' | 'vegan' | 'no-pork' | 'gluten-free'
+
 export interface User {
   id: string
   email: string
@@ -74,9 +87,15 @@ export interface User {
   phoneNumber: string | null
   googleId: string | null
   locationArea: LocationArea
+  /** Cuisines the quiz's "love" step collected. Capped at 5 server-side. */
   cuisinePreferences: string[]
+  /** Cuisines the quiz's "avoid" step collected. */
+  dislikedCuisines: string[]
   budgetRange: BudgetRange
   dietary: string[]
+  adventurousness: Adventurousness
+  /** Null = the quiz was never completed (it is skippable). */
+  tasteQuizCompletedAt: string | null
   accountTier: AccountTier
   stripeCustomerId: string | null
   createdAt: string
@@ -344,6 +363,41 @@ export async function tinderSuggest(likedIds: string[]): Promise<DecisionRespons
   const { data } = await api.post<DecisionResponse>('/api/decisions/tinder-suggest', {
     likedIds,
   })
+  return data
+}
+
+/* ------------------------------------------------------------------ */
+/* Taste quiz                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What the onboarding quiz submits. Every field is optional because every step
+ * is skippable — answering two of four still applies those two.
+ */
+export interface TasteQuizAnswers {
+  lovedCuisines?: string[]
+  dislikedCuisines?: string[]
+  dietary?: DietaryNeed[]
+  budgetRange?: BudgetRange
+  adventurousness?: Adventurousness
+}
+
+export interface TasteQuizResponse {
+  user: User
+  /** The cuisine weights the quiz actually seeded, for debugging. */
+  quizWeights: Record<string, number>
+  /** Which declared needs filter anything — see DietaryNeed. */
+  dietary: { enforced: DietaryNeed[]; stored: DietaryNeed[] }
+}
+
+/**
+ * Submit the quiz. The server stores the answers AND re-derives the engine
+ * inputs from them, so this one call is the whole effect.
+ */
+export async function submitTasteQuiz(
+  answers: TasteQuizAnswers,
+): Promise<TasteQuizResponse> {
+  const { data } = await api.post<TasteQuizResponse>('/api/users/me/taste-quiz', answers)
   return data
 }
 

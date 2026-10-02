@@ -5,7 +5,12 @@ import { decideRestaurants } from '../services/decisionEngine'
 import { optionalAuth, requireAuth } from '../middleware/auth'
 import { photoProxyPath, withPhotoUrlsAll } from '../lib/photos'
 import { SERVEABLE_WHERE, isServeable } from '../lib/venueType'
-import { applyTasteEvent, applyTasteEvents, getTasteWeights, type TasteEvent } from '../services/tasteProfile'
+import {
+  applyTasteEvent,
+  applyTasteEvents,
+  getEffectiveTasteWeights,
+  type TasteEvent,
+} from '../services/tasteProfile'
 import { decide, type Decision3, type EngineInput } from '../services/engine'
 import { getPickRates, getRecentSelections, logDecision } from '../services/engine/log'
 import { boostedTasteWeights, toEngineContext } from '../services/engine/request'
@@ -113,18 +118,21 @@ router.post('/query', optionalAuth, async (req, res) => {
     // ---------------- DecisionEngine v2 ----------------
     engineUsed = 'v2'
 
-    const [profileWeights, recentSelections, pickRates] = await Promise.all([
-      getTasteWeights(validUserId),
+    // Effective weights = swipe/select-learned PLUS the onboarding quiz's own
+    // contribution, summed and clamped. The quiz seeds the profile; it does not
+    // replace it — see effectiveTasteWeights().
+    const [profileWeights, recentSelections, pickRates, prefs] = await Promise.all([
+      getEffectiveTasteWeights(validUserId),
       getRecentSelections(validUserId),
       getPickRates(validUserId),
+      validUserId
+        ? prisma.user.findUnique({
+            where: { id: validUserId },
+            // Exactly the three columns the taste quiz feeds into the engine.
+            select: { budgetRange: true, dietary: true, adventurousness: true },
+          })
+        : null,
     ])
-
-    const budgetRange = validUserId
-      ? (await prisma.user.findUnique({
-          where: { id: validUserId },
-          select: { budgetRange: true },
-        }))?.budgetRange ?? null
-      : null
 
     const engineInput: EngineInput = {
       // The engine applies its own hard gate (isActive + venueType) in Stage 1,
@@ -134,7 +142,7 @@ router.post('/query', optionalAuth, async (req, res) => {
       tasteWeights: boostedTasteWeights(profileWeights, cuisines),
       context: toEngineContext(
         { format, vibe, lat, lng, refreshNonce, cuisines },
-        budgetRange,
+        prefs,
         new Date(),
       ),
       userId: validUserId,

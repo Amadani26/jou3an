@@ -12,8 +12,24 @@
 import { normalizeCuisine } from '../tasteProfile'
 import type { Candidate, RecentSelection, ScoreBreakdown } from './types'
 
-/** Probability that slot 3 is a wildcard rather than the next-best candidate. */
+/**
+ * Default probability that slot 3 is a wildcard rather than the next-best
+ * candidate — and the value a user who never takes the taste quiz keeps.
+ */
 export const EPSILON = 0.15
+
+/**
+ * Per-user ε, from the taste quiz's "how adventurous are you?" answer.
+ *
+ * BALANCED is deliberately the historical constant, so the quiz can only ever
+ * move a user away from the behaviour they already had, never silently change
+ * the default for everyone.
+ */
+export const EPSILON_BY_ADVENTUROUSNESS = {
+  SAFE: 0.05,
+  BALANCED: EPSILON,
+  ADVENTUROUS: 0.3,
+} as const
 
 /**
  * Exploration ceiling reached after this many Refresh taps.
@@ -48,7 +64,10 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
  * one that leads. Each subsequent tap raises both the score jitter and the
  * wildcard odds, ramping to the ceiling by MAX_EXPLORATION_REFRESHES.
  */
-export function explorationFor(refreshNonce: number | string | undefined | null): {
+export function explorationFor(
+  refreshNonce: number | string | undefined | null,
+  baseEpsilon?: number | null,
+): {
   noiseAmplitude: number
   epsilon: number
 } {
@@ -56,9 +75,18 @@ export function explorationFor(refreshNonce: number | string | undefined | null)
   const n = Number.isFinite(raw) ? Math.max(0, raw) : 0
   const t = Math.min(n, MAX_EXPLORATION_REFRESHES) / MAX_EXPLORATION_REFRESHES
 
+  // The user's own ε is the FLOOR the ramp starts from; the ceiling is shared.
+  // A "stick to my favourites" user who taps Refresh four times has asked four
+  // times for something else, and should get it — their answer sets where the
+  // ramp begins, not how far it can go.
+  const base =
+    typeof baseEpsilon === 'number' && Number.isFinite(baseEpsilon)
+      ? Math.min(MAX_EPSILON, Math.max(0, baseEpsilon))
+      : EPSILON
+
   return {
     noiseAmplitude: NOISE_AMPLITUDE + t * (MAX_NOISE_AMPLITUDE - NOISE_AMPLITUDE),
-    epsilon: EPSILON + t * (MAX_EPSILON - EPSILON),
+    epsilon: base + t * (MAX_EPSILON - base),
   }
 }
 
