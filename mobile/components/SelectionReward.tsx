@@ -578,6 +578,23 @@ export default function SelectionReward({
                 </Text>
               </MetaRow>
 
+              {/* The vibe line — two sentences, directly under the meta rows.
+                  Clamped to 3 lines: this screen celebrates the choice, and a
+                  paragraph of context would start competing with the name. */}
+              {restaurant.description ? (
+                <Text
+                  numberOfLines={3}
+                  style={{
+                    fontFamily: 'DMSans_400Regular',
+                    fontSize: 13,
+                    lineHeight: 19,
+                    color: '#8A847E',
+                  }}
+                >
+                  {restaurant.description}
+                </Text>
+              ) : null}
+
               {tags.length > 0 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                   {tags.map((t) => (

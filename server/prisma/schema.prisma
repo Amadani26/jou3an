@@ -84,6 +84,14 @@ model Restaurant {
   ratingScore     Float        @default(0)
   averageCalories Int?
 
+  /// Short "vibe" line — two sentences, shown under the meta line in the
+  /// detail sheet and the selection reward and NOWHERE else (cards stay
+  /// compact). Filled from Google's `editorialSummary` by `npm run sync:places`
+  /// / `npm run sync:descriptions`, and for the rows Google has nothing for by
+  /// `npm run generate:descriptions`. Null is normal — every surface hides the
+  /// line rather than showing a placeholder.
+  description     String?
+
   /// RESTAURANT (default) or CAFE. A CAFE is parked, never served by a
   /// decision surface — see the VenueType enum. `/api/restaurants/:id` and
   /// decision history deliberately ignore this, so past picks still render.

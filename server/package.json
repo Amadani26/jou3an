@@ -18,6 +18,8 @@
     "unreject": "ts-node src/scripts/unreject.ts",
     "sync:areas": "ts-node src/scripts/syncAreaNames.ts",
     "sync:types": "ts-node src/scripts/syncVenueTypes.ts",
+    "sync:descriptions": "ts-node src/scripts/syncDescriptions.ts",
+    "generate:descriptions": "ts-node src/scripts/generateDescriptions.ts",
     "prune": "ts-node src/scripts/prune.ts",
     "classify:cafes": "ts-node src/scripts/classifyCafes.ts",
     "setvenue": "ts-node src/scripts/setVenue.ts"

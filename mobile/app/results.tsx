@@ -413,6 +413,7 @@ export default function ResultsScreen() {
       googleRating={preview?.googleRating}
       distanceKm={preview?.distanceKm}
       calories={preview?.averageCalories}
+      description={preview?.description}
       images={photoUrls(preview)}
       onDirections={() => preview && openDirections(preview)}
       onCall={() => preview && call(preview)}

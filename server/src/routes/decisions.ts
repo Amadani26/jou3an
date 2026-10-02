@@ -356,6 +356,8 @@ router.get('/history', requireAuth, async (req, res) => {
         ratingScore: r.ratingScore,
         googleRating: r.googleRating,
         calories: r.averageCalories,
+        // The two-sentence vibe line, for the detail sheet a history row opens.
+        description: r.description,
         photoUrls: r.photoRefs.map(photoProxyPath),
       },
     ]

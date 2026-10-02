@@ -58,6 +58,13 @@ export interface PlaceDetails {
   /** Google's single best label ("coffee_shop"); what venue classification reads. */
   primaryType?: string
   types?: string[]
+  /**
+   * Google's own one-or-two-sentence blurb for the place, when it has one.
+   * ⚠️ Billed on the Places "Enterprise + Atmosphere" SKU — the most expensive
+   * band — so it rides along only where the call is already being made, and
+   * otherwise comes from `getPlaceDescription()`.
+   */
+  editorialSummary?: { text?: string; languageCode?: string }
 }
 
 export class PlacesConfigError extends Error {}
@@ -295,8 +302,9 @@ export async function discoverPlaces(
  * Place Details — photos, coordinates, rating, review count, taxonomy and
  * opening hours for one id.
  *
- * `regularOpeningHours` is billed on the Places "Advanced" SKU, so it is worth
- * knowing this call costs more than the plain fields. `primaryType`/`types` and
+ * `regularOpeningHours` is billed on the Places "Advanced" SKU and
+ * `editorialSummary` on "Enterprise + Atmosphere", so it is worth knowing this
+ * call costs more than the plain fields. `primaryType`/`types` and
  * `userRatingCount` ride along on the same request — free relative to the
  * Advanced call already being made, and storing them means re-classifying a
  * venue later never needs another call.
@@ -307,7 +315,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
   return placesFetch<PlaceDetails>(
     `/places/${encodeURIComponent(placeId)}`,
     'id,displayName,location,rating,userRatingCount,primaryType,types,photos,' +
-      'regularOpeningHours,addressComponents,formattedAddress',
+      'regularOpeningHours,addressComponents,formattedAddress,editorialSummary',
     { method: 'GET' },
   )
 }
@@ -342,6 +350,35 @@ export async function getPlaceTaxonomy(placeId: string): Promise<PlaceDetails> {
     'id,displayName,primaryType,types,userRatingCount,rating',
     { method: 'GET' },
   )
+}
+
+/**
+ * Editorial-summary-only Place Details — the narrow call for the description
+ * backfill.
+ *
+ * ⚠️ `editorialSummary` sits on the Places "Enterprise + Atmosphere" SKU, which
+ * is the most expensive band Google sells. Narrowing the field mask does NOT
+ * make the call cheap — one Atmosphere field prices the whole request — so the
+ * mask is narrow only to avoid *also* paying for data we already store. Budget
+ * for a real bill before running this across the catalogue.
+ */
+export async function getPlaceDescription(placeId: string): Promise<PlaceDetails> {
+  return placesFetch<PlaceDetails>(
+    `/places/${encodeURIComponent(placeId)}`,
+    'id,displayName,editorialSummary',
+    { method: 'GET' },
+  )
+}
+
+/**
+ * Google's blurb, trimmed — or null when it has none.
+ *
+ * Whitespace-only text counts as none: an empty string stored in `description`
+ * would make every surface render a blank line instead of hiding the row.
+ */
+export function extractEditorialSummary(details: PlaceDetails): string | null {
+  const text = details.editorialSummary?.text?.trim()
+  return text ? text : null
 }
 
 /**

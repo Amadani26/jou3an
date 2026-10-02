@@ -1144,6 +1144,7 @@ export default function TinderScreen() {
           googleRating={sheetRestaurant.googleRating}
           distanceKm={sheetRestaurant.distanceKm}
           calories={sheetRestaurant.averageCalories}
+          description={sheetRestaurant.description}
           images={photoUrls(sheetRestaurant)}
           onDirections={openDirections}
           onCall={call}

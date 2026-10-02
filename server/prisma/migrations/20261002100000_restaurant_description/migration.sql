@@ -1,0 +1,13 @@
+-- Short "vibe" description per restaurant.
+--
+-- Purely ADDITIVE (one nullable column), hand-written and applied with
+-- `prisma migrate deploy`. That deliberately avoids `migrate dev` and its
+-- shadow database: see the shadow-DB warning in CLAUDE.md — pointing a shadow
+-- at a real URL resets it and drops every table.
+--
+-- Nullable with no default and no backfill: a missing description is a normal
+-- state the UI already hides, and inventing copy in SQL would be worse than
+-- showing nothing. It is filled from Google's editorialSummary by
+-- `npm run sync:descriptions`, and by `npm run generate:descriptions` for the
+-- rows Google has no summary for.
+ALTER TABLE "Restaurant" ADD COLUMN "description" TEXT;

@@ -7,7 +7,13 @@
  */
 import { Prisma, type Restaurant, type VenueType } from '@prisma/client'
 import prisma from '../lib/prisma'
-import { extractPeriods, getPlaceDetails, rankPhotos, searchPlace } from './googlePlaces'
+import {
+  extractEditorialSummary,
+  extractPeriods,
+  getPlaceDetails,
+  rankPhotos,
+  searchPlace,
+} from './googlePlaces'
 import { resolveAreaName } from '../lib/areaName'
 import { classifyVenue } from '../lib/venueType'
 
@@ -31,6 +37,8 @@ export interface SyncOutcome {
   coords: string
   /** Real neighbourhood from Google's address, or null when unresolvable. */
   areaName: string | null
+  /** Google's editorial summary, or null when it has none for this place. */
+  description: string | null
   /** Google's raw primary type, as stored. */
   primaryType: string | null
   /** What `classifyVenue` makes of the taxonomy — RESTAURANT unless Google says cafe. */
@@ -65,6 +73,7 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
         hours: null,
         coords: '—',
         areaName: null,
+        description: null,
         primaryType: null,
         venueType: r.venueType,
         apiCalls,
@@ -100,6 +109,10 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
   // resolved name with null: a transient gap in Google's data should not wipe
   // a neighbourhood we already had.
   const areaName = resolveAreaName(details.addressComponents, details.formattedAddress)
+  // Same rule as areaName: a place Google has no blurb for must not have an
+  // existing description wiped, and that includes one written by
+  // `npm run generate:descriptions`, which is the whole point of that script.
+  const description = extractEditorialSummary(details)
 
   await prisma.restaurant.update({
     where: { id: r.id },
@@ -114,6 +127,7 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
       ...(types.length ? { googleTypes: types } : {}),
       ...(firstEnrichment ? { venueType: classified } : {}),
       ...(areaName ? { areaName } : {}),
+      ...(description ? { description } : {}),
       // Prisma.DbNull (not JS null) is how a Json column is set back to SQL
       // NULL; plain null would be rejected by the generated type.
       openingHours: (periods ?? Prisma.DbNull) as unknown as Prisma.InputJsonValue,
@@ -128,6 +142,7 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
     rating,
     hours: periods?.length ?? null,
     areaName,
+    description,
     primaryType,
     venueType: classified,
     coords: location

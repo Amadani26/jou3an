@@ -110,6 +110,12 @@ export interface Restaurant {
   /** Seeded 0–10 score — ranking only, never displayed. Use googleRating. */
   ratingScore: number
   averageCalories: number | null
+  /**
+   * Two-sentence "vibe" line. Null on rows nothing has written one for, so
+   * always render it conditionally — RestaurantDetailSheet and SelectionReward
+   * are the ONLY two surfaces that show it; cards stay compact.
+   */
+  description?: string | null
   /** Relative /api/photos/... proxy paths from Google Places. Use photoUrls(). */
   photoUrls?: string[]
   /** Km from the user, to 1dp. Present only on located queries. */
@@ -363,6 +369,8 @@ export interface HistoryItem {
   /** Google's 0–5 rating; null until the restaurant has been Places-synced. */
   googleRating?: number | null
   calories: number | null
+  /** Two-sentence "vibe" line; null when nothing has written one. */
+  description?: string | null
   /** Relative /api/photos/... proxy paths — pass through photoUrls(). */
   photoUrls?: string[]
 }

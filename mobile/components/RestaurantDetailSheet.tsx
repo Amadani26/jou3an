@@ -49,6 +49,7 @@ export interface RestaurantDetailSheetProps {
   /** Km from the user, shown next to the area when known. */
   distanceKm?: number
   calories?: number | null
+  /** Two-sentence vibe line, rendered under the meta row. Null hides it. */
   description?: string | null
   /** Photo URLs — when provided, real Images render instead of placeholder slots. */
   images?: string[]
@@ -348,7 +349,9 @@ export default function RestaurantDetailSheet({
                   gap: 8,
                   flexWrap: 'wrap',
                   marginTop: 8,
-                  marginBottom: 18,
+                  // The vibe line sits directly under this row, so it owns the
+                  // gap to whatever follows.
+                  marginBottom: description ? 10 : 18,
                 }}
               >
                 <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: '#8A847E' }}>
@@ -385,6 +388,23 @@ export default function RestaurantDetailSheet({
                   </>
                 ) : null}
               </View>
+
+              {/* The vibe line — two sentences, directly under the meta.
+                  Clamped to 3 lines: it is context, not the content. */}
+              {description ? (
+                <Text
+                  numberOfLines={3}
+                  style={{
+                    fontFamily: 'DMSans_400Regular',
+                    fontSize: 13,
+                    lineHeight: 19,
+                    color: '#8A847E',
+                    marginBottom: 18,
+                  }}
+                >
+                  {description}
+                </Text>
+              ) : null}
 
               {/* Google rating (0–5). Hidden entirely when not synced. */}
               {typeof googleRating === 'number' ? (
@@ -465,20 +485,6 @@ export default function RestaurantDetailSheet({
                     ~{calories} kcal (estimated)
                   </Text>
                 </View>
-              ) : null}
-
-              {/* Description */}
-              {description ? (
-                <Text
-                  style={{
-                    fontFamily: 'DMSans_400Regular',
-                    fontSize: 15,
-                    lineHeight: 22,
-                    color: '#8A847E',
-                  }}
-                >
-                  {description}
-                </Text>
               ) : null}
               </View>
               </ScrollView>

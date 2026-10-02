@@ -307,6 +307,7 @@ export default function HistoryScreen() {
           tags={selected.tags}
           googleRating={selected.googleRating}
           calories={selected.calories}
+          description={selected.description}
           images={photoUrls(selected)}
           onDirections={() => openMaps(selected)}
           onCall={() => openMaps(selected)}
