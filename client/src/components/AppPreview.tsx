@@ -400,7 +400,7 @@ function ResultCard({
           className="absolute inset-0"
           style={{
             background:
-              'linear-gradient(to top, rgba(8,8,8,0.92) 0%, rgba(8,8,8,0.25) 60%, transparent 100%)',
+              'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.25) 60%, transparent 100%)',
           }}
         />
         <span
@@ -564,7 +564,7 @@ export default function AppPreview() {
           The decision engine, in your{' '}
           <em className="font-serif italic font-normal text-red">browser</em>
         </h2>
-        <p className="mt-5 mx-auto max-w-[460px] text-text-secondary leading-relaxed">
+        <p className="mt-5 mx-auto max-w-[460px] text-white font-bold leading-relaxed">
           Four taps — where, what, how, what mood. Sample Dubai restaurants, and
           exactly three at the end. No account, no scrolling.
         </p>

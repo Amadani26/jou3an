@@ -8,7 +8,7 @@ export default function Nav() {
       style={{
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        background: 'rgba(8, 8, 8, 0.72)',
+        background: 'rgba(0, 0, 0, 0.72)',
       }}
     >
       {/* Logo — white wordmark on the nav's dark blurred bar. ONE node: 26px

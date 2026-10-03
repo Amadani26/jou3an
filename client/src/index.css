@@ -13,8 +13,12 @@
   --gold: #FFB547;
   --green: #2DCE89;
 
-  /* Backgrounds */
-  --bg: #080808;
+  /* Backgrounds.
+     --bg is PURE BLACK. The lighter surface tokens below are deliberately
+     unchanged: against #000 a #141414 card reads MORE raised than it did on
+     #080808 (1.14:1 vs 1.09:1), so flattening them too would cost the only
+     separation the cards have. */
+  --bg: #000000;
   --bg-1: #0F0F0F;
   --bg-2: #141414;
   --bg-3: #1A1A1A;
@@ -27,7 +31,12 @@
   /* Text */
   --text-primary: #F2EDE8;
   --text-secondary: #8A847E;
-  --text-muted: #504B47;
+  /* Was #504B47, which measured 2.44:1 on #000 — a WCAG AA failure for the
+     small captions that use it (the hero's "Launching in Dubai", the footer
+     copyright, "No spam...", the waitlist count). #7C766F is the smallest
+     lift that clears the 4.5:1 normal-text bar (4.68:1) while staying a
+     visible step below --text-secondary's 5.68:1. */
+  --text-muted: #7C766F;
 
   /* Radii */
   --radius-sm: 10px;
@@ -52,21 +61,30 @@ body {
 body {
   position: relative;
   min-height: 100vh;
-  background-color: #080808;
+  background-color: #000000;
   color: #F2EDE8;
   font-family: 'DM Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Subtle noise texture overlay */
+/* Subtle noise texture overlay.
+   ⚠️ OPACITY IS THE BACKGROUND COLOUR. `html` sets no background, so body's
+   background-color propagates to the root canvas and body itself paints none —
+   which leaves this z-index:-1 layer sitting ON TOP of the page's black rather
+   than behind it. The fractal-noise rect averages mid-grey, so its opacity sets
+   what the page actually renders as: at the old 0.45 the measured background
+   was rgb(42,42,42) — a mid-dark grey, with the grain swinging 11..78 — and
+   --bg was effectively decorative. At 0.05 the base reads black (~rgb(6,6,6))
+   and the grain survives as grain. Raise this and you are lightening the whole
+   site, not adding texture. */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.45;
+  opacity: 0.05;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
@@ -193,7 +211,8 @@ body::before {
 }
 
 .field::placeholder {
-  color: #504b47;
+  /* Tracks --text-muted — see the token note above. */
+  color: #7c766f;
 }
 
 .field:focus {
@@ -371,10 +390,16 @@ a,
   position: relative;
   padding: 10px;
   border-radius: 56px;
-  background: linear-gradient(150deg, #3a3a3d 0%, #121214 38%, #2c2c2f 72%, #0c0c0e 100%);
+  /* The two dark stops were #121214 and #0c0c0e, which measured 1.12:1 and
+     1.07:1 against a pure-black page — the rail's dark corners dissolved into
+     the background and the device lost its outline. Lifted, and the silhouette
+     is now bounded by a faint LIGHT hairline instead of the old `1px #000`
+     ring, which was invisible once the page went black. One ring guarantees
+     the whole edge reads regardless of which gradient stop sits on it. */
+  background: linear-gradient(150deg, #3a3a3d 0%, #1c1c20 38%, #2c2c2f 72%, #202024 100%);
   box-shadow:
     0 2px 0 rgba(255, 255, 255, 0.10) inset,
-    0 0 0 1px #000,
+    0 0 0 1px rgba(255, 255, 255, 0.09),
     0 50px 90px -40px rgba(0, 0, 0, 0.95),
     0 30px 60px -30px rgba(254, 0, 0, 0.25);
 }

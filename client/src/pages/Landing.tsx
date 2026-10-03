@@ -140,8 +140,9 @@ export default function Landing() {
             </em>
           </h1>
 
+          {/* Section lede — white + bold, the weight below the headline. */}
           <p
-            className="mt-6 max-w-[480px] text-text-secondary fade-up"
+            className="mt-6 max-w-[480px] text-white font-bold fade-up"
             style={{ animationDelay: '0.15s' }}
           >
             Tell us what you&apos;re craving. We&apos;ll give you exactly 3
@@ -222,7 +223,7 @@ export default function Landing() {
             style={{ background: 'var(--red)' }}
           />
 
-          <p className="max-w-[560px] text-text-secondary text-lg leading-relaxed">
+          <p className="max-w-[560px] text-white font-bold text-lg leading-relaxed">
             Most food apps give you 500 choices and call it helpful. We give you
             3. The right 3. Because the best decision engine isn&apos;t one that
             shows you everything — it&apos;s one that knows what to cut.
@@ -254,7 +255,7 @@ export default function Landing() {
             >
               Be first in Dubai.
             </h2>
-            <p className="mt-5 max-w-[460px] text-text-secondary text-lg leading-relaxed">
+            <p className="mt-5 max-w-[460px] text-white font-bold text-lg leading-relaxed">
               We&apos;re launching soon. Drop your email and we&apos;ll let you
               know the moment Jou3an is live.
             </p>
@@ -290,7 +291,7 @@ export default function Landing() {
       {/* ============================================================ */}
       <footer className="relative px-5 md:px-8 pt-16 pb-14 border-t border-border-soft text-center">
         <div className="max-w-[720px] mx-auto flex flex-col items-center gap-3">
-          {/* Footer sits on #080808 — safe for the white wordmark */}
+          {/* Footer sits on pure black — safe for the white wordmark */}
           <Logo height={34} />
           <div className="text-red text-sm" dir="rtl">
             جوعان

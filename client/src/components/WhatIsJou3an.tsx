@@ -49,7 +49,7 @@ export default function WhatIsJou3an() {
 
         <div className="mt-10 grid md:grid-cols-2 gap-x-14 gap-y-8">
           <Reveal delay={80}>
-            <p className="text-text-secondary text-lg leading-relaxed max-w-[460px]">
+            <p className="text-white font-bold text-lg leading-relaxed max-w-[460px]">
               What you don&apos;t know is where to eat. So it starts — one app,
               then another, then the group chat. Ten, fifteen minutes of
               tab-switching in a city with thousands of restaurants, and the
@@ -58,7 +58,8 @@ export default function WhatIsJou3an() {
           </Reveal>
 
           <Reveal delay={160}>
-            <p className="text-text-primary text-lg leading-relaxed max-w-[460px]">
+            {/* Matches the problem column opposite it — the two are one lede. */}
+            <p className="text-white font-bold text-lg leading-relaxed max-w-[460px]">
               Jou3an is the layer that ends it. Tell it your vibe and get{' '}
               <strong className="font-semibold text-red">exactly 3</strong>{' '}
               places, in under 10 seconds. Not a list to browse. A decision to
