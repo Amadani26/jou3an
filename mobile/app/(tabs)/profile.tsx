@@ -331,27 +331,6 @@ export default function ProfileScreen() {
           gap: 16,
         }}
       >
-        <View
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 16,
-            backgroundColor: '#E8272A',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 4,
-          }}
-        >
-          <Text
-            style={{
-              color: '#FFFFFF',
-              fontSize: 28,
-              fontFamily: 'DMSans_800ExtraBold',
-            }}
-          >
-            ج
-          </Text>
-        </View>
         <Text
           style={{
             fontFamily: 'DMSans_700Bold',

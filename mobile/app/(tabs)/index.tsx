@@ -224,7 +224,8 @@ export default function HomeScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero — logo mark + headline, with room to breathe */}
+        {/* Hero — headline, with room to breathe. The logo mark that sat
+            above it was removed pending real brand artwork. */}
         <View
           style={{
             paddingHorizontal: 20,
@@ -232,29 +233,6 @@ export default function HomeScreen() {
             alignItems: 'center',
           }}
         >
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 16,
-              backgroundColor: '#E8272A',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 18,
-            }}
-          >
-            <Text
-              style={{
-                color: '#FFFFFF',
-                fontSize: 28,
-                fontWeight: '800',
-                fontFamily: 'DMSans_800ExtraBold',
-              }}
-            >
-              ج
-            </Text>
-          </View>
-
           <Text
             style={{
               fontFamily: 'DMSans_800ExtraBold',

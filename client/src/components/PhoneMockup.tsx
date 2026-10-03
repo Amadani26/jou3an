@@ -36,9 +36,11 @@ export default function PhoneMockup({
             src={src}
             alt={alt}
             className="phone-shot"
-            // Eager, not lazy: this sits beside the primary CTA, and at 158 kB
-            // it should be on screen the moment the reveal animation plays
-            // rather than popping in afterwards.
+            // Eager, not lazy: this sits beside the primary CTA, so it should
+            // be on screen the moment the reveal animation plays rather than
+            // popping in afterwards. WebP keeps that affordable — the same
+            // capture as a PNG is 280 kB against 89 kB here, at identical
+            // 900px (3x) resolution.
             width={900}
             height={1957}
             decoding="async"

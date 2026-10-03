@@ -109,14 +109,26 @@ export default function Landing() {
 
         <div ref={heroCopy} className="relative flex flex-col items-center w-full">
           <p
-            className="text-red uppercase fade-up"
+            className="text-red uppercase font-bold fade-up"
             style={{
-              fontSize: '11px',
+              // 11 -> 13 with the longer "First" wording, then the whole
+              // clamp scaled +15% (11/3.1/13 x 1.15). The vw term leads so the
+              // line shrinks on phones instead of wrapping: a fixed cap plus
+              // 0.14em tracking would break this 34-char line in two.
+              fontSize: 'clamp(12.65px, 3.57vw, 14.95px)',
               letterSpacing: '0.14em',
+              // REQUIRED, not insurance. This <p> is a flex item under
+              // `items-center`, so it sizes to max-content and would OVERFLOW
+              // — clipped by the hero's overflow-hidden — instead of wrapping.
+              // Measured 346px at the 14.95px cap: one line down to ~340pt,
+              // and at 320pt it needs 293px against 280px, so it WRAPS there.
+              // Without this it would clip instead, which is the bug the h1
+              // above already hit once.
+              maxWidth: '100%',
               marginBottom: 20,
             }}
           >
-            Dubai&apos;s Food Decision Engine
+            Dubai&apos;s First Food Decision Engine
           </p>
 
           <h1
@@ -269,7 +281,7 @@ export default function Landing() {
 
           <Reveal delay={120} className="flex justify-center">
             <PhoneMockup
-              src="/brand/app-screens/home-daily-top-3.png"
+              src="/brand/app-screens/home-daily-top-3.webp"
               alt="The Jou3an app showing today's Daily Top 3 picks in Dubai"
             />
           </Reveal>

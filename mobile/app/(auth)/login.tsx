@@ -73,30 +73,6 @@ export default function LoginScreen() {
         <Ionicons name="close" size={26} color="#8A847E" />
       </Pressable>
 
-      {/* Logo mark */}
-      <View
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 14,
-          backgroundColor: '#E8272A',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: 20,
-        }}
-      >
-        <Text
-          style={{
-            color: '#FFFFFF',
-            fontSize: 24,
-            fontWeight: '800',
-            fontFamily: 'DMSans_800ExtraBold',
-          }}
-        >
-          ج
-        </Text>
-      </View>
-
       <Text
         style={{
           fontFamily: 'DMSans_800ExtraBold',
