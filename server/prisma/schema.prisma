@@ -67,7 +67,16 @@ model User {
   googleId           String?      @unique
   locationArea       LocationArea @default(OTHER)
   cuisinePreferences String[]
-  budgetRange        BudgetRange  @default(MID)
+  /// Usual spend per person, from the taste quiz's budget step. NULL is a real
+  /// answer — "No budget" — and the column is nullable precisely so it can be
+  /// stored rather than smuggled in as a band nobody chose.
+  ///
+  /// ⚠️ SOFT, NOT A FILTER. It is the price-fit term of the engine's context
+  /// score (`priceFit` in src/services/engine/score.ts), so a pricier place
+  /// still wins when it is the better pick. It is deliberately NOT a Stage-1
+  /// constraint: a saved band that silently capped every future decision is
+  /// the behaviour this replaced.
+  budgetRange        BudgetRange?
   dietary            String[]
   /// Cuisines the taste quiz's "anything you avoid?" step collected. Mirrors
   /// `cuisinePreferences` (the loved side); both are translated into

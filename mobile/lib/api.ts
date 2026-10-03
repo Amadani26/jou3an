@@ -56,6 +56,10 @@ api.interceptors.response.use(
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
 
+// Imported rather than redeclared: lib/budget.ts owns the labels and the
+// band<->null mapping, and a second spelling of the same union would drift.
+import type { BudgetChoice } from './budget'
+
 export type LocationArea =
   | 'JLT'
   | 'DIFC'
@@ -64,6 +68,14 @@ export type LocationArea =
   | 'MARINA'
   | 'OTHER'
 
+/**
+ * A saved budget band. NULL on the user means "No budget" — a real answer from
+ * the quiz, not a missing one. See lib/budget.ts for the shared vocabulary and
+ * the labels; `BudgetChoice` there is this type plus the explicit 'ANY'.
+ *
+ * ⚠️ It is a LEAN, not a ceiling: the server scores price fit with it and
+ * filters nothing.
+ */
 export type BudgetRange = 'LOW' | 'MID' | 'HIGH'
 export type AccountTier = 'FREE' | 'PRO'
 
@@ -87,11 +99,16 @@ export interface User {
   phoneNumber: string | null
   googleId: string | null
   locationArea: LocationArea
-  /** Cuisines the quiz's "love" step collected. Capped at 5 server-side. */
+  /**
+   * Cuisines the user says they love. ⚠️ The quiz no longer ASKS this (it is
+   * skip / budget / adventurousness) — it is settable from Profile and still
+   * read by the engine as +2 per cuisine.
+   */
   cuisinePreferences: string[]
-  /** Cuisines the quiz's "avoid" step collected. */
+  /** Cuisines the quiz's "rather skip" step collected — a -2 lean, not a ban. */
   dislikedCuisines: string[]
-  budgetRange: BudgetRange
+  /** Null = "No budget". Never assume a band is present. */
+  budgetRange: BudgetRange | null
   dietary: string[]
   adventurousness: Adventurousness
   /** Null = the quiz was never completed (it is skippable). */
@@ -172,6 +189,12 @@ export interface DecisionFilters {
   cuisines?: string[]
   format?: 'Delivery' | 'Dine In'
   vibe?: 'Casual' | 'Fancy'
+  /**
+   * Budget for THIS query, from the Decide flow's pill. 'ANY' is explicit "no
+   * budget". Outranks the user's saved band server-side, which is what lets a
+   * signed-out user change it at all.
+   */
+  budget?: BudgetChoice
   /** Display label for a picked area; the coords are what actually filter. */
   areaName?: string
   /**
@@ -275,6 +298,7 @@ export async function getDecision(
     ...(filters?.cuisines?.length ? { cuisines: filters.cuisines } : {}),
     ...(filters?.format ? { format: filters.format } : {}),
     ...(filters?.vibe ? { vibe: filters.vibe } : {}),
+    ...(filters?.budget ? { budget: filters.budget } : {}),
     ...(filters?.areaName ? { areaName: filters.areaName } : {}),
     refreshNonce: filters?.refreshNonce ?? 0,
   })
@@ -375,10 +399,14 @@ export async function tinderSuggest(likedIds: string[]): Promise<DecisionRespons
  * is skippable — answering two of four still applies those two.
  */
 export interface TasteQuizAnswers {
+  /** Not asked by the quiz any more; Profile can still set it. */
   lovedCuisines?: string[]
+  /** The quiz's step 1 — cuisines to skip. A soft -2 each, never a filter. */
   dislikedCuisines?: string[]
+  /** Not asked by the quiz any more; edited from Profile → Preferences. */
   dietary?: DietaryNeed[]
-  budgetRange?: BudgetRange
+  /** ⚠️ NULL is a real answer ("No budget"); undefined leaves it unchanged. */
+  budgetRange?: BudgetRange | null
   adventurousness?: Adventurousness
 }
 
@@ -398,6 +426,31 @@ export async function submitTasteQuiz(
   answers: TasteQuizAnswers,
 ): Promise<TasteQuizResponse> {
   const { data } = await api.post<TasteQuizResponse>('/api/users/me/taste-quiz', answers)
+  return data
+}
+
+/**
+ * One or more saved preferences, changed in place.
+ *
+ * Routed server-side through the SAME translation the quiz uses, so editing a
+ * preference from Profile (or the Decide flow's budget pill) re-derives the
+ * engine's inputs exactly as finishing the quiz would. It deliberately does NOT
+ * stamp `tasteQuizCompletedAt` — changing one setting is not taking the quiz.
+ *
+ * Returns the updated user; hand it to `applyUser()` so the cached copy cannot
+ * go stale behind the UI.
+ */
+export interface PreferencesPatch {
+  cuisinePreferences?: string[]
+  dislikedCuisines?: string[]
+  dietary?: DietaryNeed[]
+  /** ⚠️ NULL clears the band ("No budget"); undefined leaves it alone. */
+  budgetRange?: BudgetRange | null
+  adventurousness?: Adventurousness
+}
+
+export async function updatePreferences(patch: PreferencesPatch): Promise<User> {
+  const { data } = await api.patch<User>('/api/users/me/preferences', patch)
   return data
 }
 

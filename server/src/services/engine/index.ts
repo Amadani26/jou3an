@@ -8,11 +8,11 @@
  *
  * Persistence lives in `./log.ts`, deliberately outside the pure core.
  *
- * ⚠️ NOT yet wired into POST /api/decisions/query — the keyword matcher in
- * ../decisionEngine.ts is still the live path. This builds alongside it.
+ * Wired into POST /api/decisions/query behind the `ENGINE_V2` env flag; the
+ * keyword matcher in ../decisionEngine.ts answers when the flag is off.
  *
  * Four stages:
- *   1. filter   — active, open, format, budget, 5->10->city radius ladder
+ *   1. filter   — active, open, format, dietary, 5->10->city radius ladder
  *   2. score    — 0.4 quality + 0.4 taste + 0.2 context
  *   3. select   — diversity constraint, repeat-damping, ε-wildcard
  *   4. reason   — one line per pick, from its dominant component

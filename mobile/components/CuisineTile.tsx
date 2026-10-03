@@ -30,6 +30,19 @@ export interface CuisineTileProps {
   selected: boolean
   onPress: () => void
   /**
+   * What a SELECTED tile means.
+   *
+   * 'include' (default) is the Decide flow: "I want this". 'exclude' is the
+   * taste quiz's step 1: "I'd rather skip this" — the name is struck through
+   * and the corner carries an ✕ instead of a dot.
+   *
+   * ⚠️ This prop exists because the same tick cannot mean both. The quiz's
+   * avoid step used the include styling and the first question anyone asked
+   * was "do I tap what I want, or what I don't?" — a grid of identically
+   * highlighted tiles cannot answer that, so the selected state has to.
+   */
+  tone?: 'include' | 'exclude'
+  /**
    * Dims the tile and blocks the tap — used by the quiz once its 5-pick cap is
    * reached, so the limit is visible before it is hit rather than being a
    * silent no-op.
@@ -43,12 +56,14 @@ export default function CuisineTile({
   icon,
   selected,
   onPress,
+  tone = 'include',
   disabled = false,
 }: CuisineTileProps) {
   const { pressed, pressHandlers } = usePressed()
   const scale = useSharedValue(1)
 
   const accent = accentFor(name)
+  const excluded = selected && tone === 'exclude'
 
   const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
 
@@ -110,7 +125,11 @@ export default function CuisineTile({
             justifyContent: 'center',
           }}
         >
-          <Ionicons name={icon} size={18} color={selected ? '#E63946' : accent} />
+          <Ionicons
+            name={excluded ? 'close' : icon}
+            size={18}
+            color={selected ? '#E63946' : accent}
+          />
         </View>
 
         {/* Breathing room when the row is tall, the first thing to go when it
@@ -124,6 +143,10 @@ export default function CuisineTile({
             fontSize: 16,
             lineHeight: 19,
             color: selected ? '#E63946' : '#F2EDE8',
+            // The one unambiguous way to say "not this one" on a tile that is
+            // also highlighted — see the `tone` prop.
+            textDecorationLine: excluded ? 'line-through' : 'none',
+            textDecorationColor: '#E63946',
           }}
         >
           {name}
@@ -141,19 +164,26 @@ export default function CuisineTile({
           {descriptor}
         </Text>
 
-        {/* Corner dot — the selected state read from the far side of the grid. */}
+        {/* Corner marker — the selected state read from the far side of the
+            grid. A dot for "I want this", an ✕ for "skip this". */}
         {selected ? (
-          <View
-            style={{
-              position: 'absolute',
-              top: 10,
-              right: 10,
-              width: 6,
-              height: 6,
-              borderRadius: 3,
-              backgroundColor: '#E63946',
-            }}
-          />
+          excluded ? (
+            <View style={{ position: 'absolute', top: 7, right: 8 }}>
+              <Ionicons name="close-circle" size={15} color="#E63946" />
+            </View>
+          ) : (
+            <View
+              style={{
+                position: 'absolute',
+                top: 10,
+                right: 10,
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: '#E63946',
+              }}
+            />
+          )
         ) : null}
       </Animated.View>
     </Pressable>

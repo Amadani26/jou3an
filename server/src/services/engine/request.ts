@@ -21,14 +21,20 @@ export const VIBE_MAP: Record<string, Vibe> = {
   Fancy: 'FANCY',
 }
 
-/** The User model's BudgetRange -> the engine's Budget. */
+/**
+ * The User model's BudgetRange -> the engine's Budget.
+ *
+ * `User.budgetRange` is NULLABLE, and null is a real answer: the quiz's "No
+ * budget" card. It maps to 'ANY', which makes the price term neutral rather
+ * than picking a band on the user's behalf.
+ */
 export const BUDGET_MAP: Record<BudgetRange, Budget> = {
   LOW: 'LOW',
   MID: 'MID',
   HIGH: 'HIGH',
 }
 
-/** The Decide flow's budget wire values, for the day a budget step exists. */
+/** The Decide flow's budget pill wire values — including an explicit 'ANY'. */
 export const BUDGET_WIRE: Record<string, Budget> = {
   LOW: 'LOW',
   MID: 'MID',
@@ -47,9 +53,11 @@ export interface RequestFilters {
   /**
    * A budget for THIS query, which outranks the user's saved band.
    *
-   * No client sends it yet (the Decide flow has no budget step), but the
-   * precedence is real and tested rather than implied: the taste quiz's answer
-   * is a DEFAULT, and a default is only a default if something can override it.
+   * Sent by the Decide flow's budget pill (the Vibe step). For a signed-in user
+   * the pill ALSO saves the new band to their profile, so this field and the
+   * stored one agree; for a guest it is the only way the choice can travel, and
+   * it lasts exactly one query. The taste quiz's answer is a DEFAULT, and a
+   * default is only a default if something can override it.
    */
   budget?: string | null
 }
@@ -61,6 +69,7 @@ export interface RequestFilters {
  * the quiz has defaults that reproduce the engine's historical behaviour.
  */
 export interface UserPrefs {
+  /** Null = the quiz's "No budget" (or never answered) — see BUDGET_MAP. */
   budgetRange?: BudgetRange | null
   /** Declared dietary needs — a Stage-1 exclusion. See src/lib/dietary.ts. */
   dietary?: string[] | null
@@ -87,7 +96,8 @@ export function toEngineContext(
   date: Date,
 ): EngineContext {
   // An explicit per-query budget wins; otherwise the saved band from the taste
-  // quiz stands in; otherwise no budget constraint at all.
+  // quiz stands in; otherwise the price term is neutral. Note "constraint" is
+  // the wrong word for all three: budget only ever moves `priceFit`.
   const queryBudget = filters.budget ? BUDGET_WIRE[filters.budget] : undefined
   const savedBudget = prefs?.budgetRange ? BUDGET_MAP[prefs.budgetRange] : undefined
 

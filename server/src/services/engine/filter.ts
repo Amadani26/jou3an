@@ -22,18 +22,24 @@ export const RADIUS_TIERS: { km: number; tier: RadiusTier }[] = [
   { km: 10, tier: 'WIDER' },
 ]
 
-/** AED-per-head bands, matched against a restaurant's price range. */
+/**
+ * AED-per-head bands, as the taste quiz's budget step words them.
+ *
+ * ⚠️ SCORING ONLY. These bands are read by `priceFit` in score.ts and by
+ * NOTHING in this file — budget is not a Stage-1 constraint and must not become
+ * one. A saved band used as a filter capped every future decision for a user
+ * who answered one question once at signup: pick "Under AED 100" and the
+ * engine would never again show you anywhere nicer, with nothing in the app
+ * saying why. As a score term it does what the answer actually meant — a lean,
+ * not a ceiling — so a better restaurant a little over the band can still win.
+ *
+ * 'ANY' (the quiz's "No budget", and the stored NULL it maps from) has no band:
+ * `priceFit` returns NEUTRAL, leaving the price term inert.
+ */
 export const BUDGET_BANDS: Record<Exclude<Budget, 'ANY'>, { min: number; max: number }> = {
-  LOW: { min: 0, max: 60 },
-  MID: { min: 40, max: 120 },
-  HIGH: { min: 90, max: Number.POSITIVE_INFINITY },
-}
-
-export function matchesBudget(r: Candidate, budget: Budget): boolean {
-  if (budget === 'ANY') return true
-  const band = BUDGET_BANDS[budget]
-  // Overlap, not containment: a 40–90 place suits both LOW and MID diners.
-  return r.priceMin <= band.max && r.priceMax >= band.min
+  LOW: { min: 0, max: 100 },
+  MID: { min: 100, max: 200 },
+  HIGH: { min: 200, max: Number.POSITIVE_INFINITY },
 }
 
 export function matchesFormat(r: Candidate, format: FormatFilter): boolean {
@@ -74,11 +80,16 @@ function applyRadiusLadder(
 
 /**
  * Stage 1. Constraints are dropped in this order when the pool is too small:
- *   budget -> format -> opening hours -> dietary.
+ *   format -> opening hours -> dietary.
  *
- * Budget goes first because paying a bit more is the mildest disappointment.
- * Hours comes late because a shut restaurant is a bad thing to hand someone who
- * is hungry now — and DIETARY comes last of all, because handing a vegan a
+ * ⚠️ BUDGET IS NOT ON THIS LADDER, because it is not a constraint at all any
+ * more — it is a score term (see BUDGET_BANDS above). There is nothing to
+ * relax, so 'budget' can never appear in `relaxed[]`.
+ *
+ * Format goes first because eating in when you wanted delivery is the mildest
+ * disappointment. Hours comes late because a shut restaurant is a bad thing to
+ * hand someone who is hungry now — and DIETARY comes last of all, because
+ * handing a vegan a
  * steakhouse is worse still: it is not an inconvenience, it is a result they
  * cannot use at all.
  *
@@ -115,20 +126,14 @@ export function filterCandidates(
   // Successively looser briefs; the first that yields REQUIRED wins.
   const attempts: { pool: Candidate[]; relaxed: string[] }[] = [
     {
-      pool: open
-        .filter((r) => matchesFormat(r, context.formatFilter))
-        .filter((r) => matchesBudget(r, context.budget)),
+      pool: open.filter((r) => matchesFormat(r, context.formatFilter)),
       relaxed: [],
     },
-    {
-      pool: open.filter((r) => matchesFormat(r, context.formatFilter)),
-      relaxed: ['budget'],
-    },
-    { pool: open, relaxed: ['budget', 'format'] },
-    { pool: eligible, relaxed: ['budget', 'format', 'hours'] },
+    { pool: open, relaxed: ['format'] },
+    { pool: eligible, relaxed: ['format', 'hours'] },
     // Last resort. With no dietary needs declared this pool is identical to the
     // rung above, so it is unreachable and the word never appears in relaxed[].
-    { pool: servable, relaxed: ['budget', 'format', 'hours', 'dietary'] },
+    { pool: servable, relaxed: ['format', 'hours', 'dietary'] },
   ]
 
   for (const attempt of attempts) {
@@ -143,6 +148,6 @@ export function filterCandidates(
   const laddered = applyRadiusLadder(servable, origin)
   return {
     ...laddered,
-    relaxed: ['budget', 'format', 'hours', 'dietary'],
+    relaxed: ['format', 'hours', 'dietary'],
   }
 }

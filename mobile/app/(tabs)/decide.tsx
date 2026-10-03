@@ -7,10 +7,13 @@ import * as Haptics from 'expo-haptics'
 import * as Location from 'expo-location'
 import Animated, { FadeIn, SlideInLeft, SlideInRight } from 'react-native-reanimated'
 import RedButton from '../../components/RedButton'
-import { searchAreas, type AreaSuggestion } from '../../lib/api'
+import { searchAreas, updatePreferences, type AreaSuggestion } from '../../lib/api'
 import AreaRow from '../../components/AreaRow'
+import BudgetSheet from '../../components/BudgetSheet'
 import CuisineTile from '../../components/CuisineTile'
 import { CUISINE_ROWS, type Cuisine } from '../../lib/cuisines'
+import { budgetChoiceOf, budgetLabel, budgetRangeOf, type BudgetChoice } from '../../lib/budget'
+import { useAuth } from '../../contexts/AuthContext'
 import { usePressed } from '../../lib/usePressed'
 
 type LocationChoice = 'Nearby' | 'Anywhere in Dubai' | `Near ${string}`
@@ -224,6 +227,8 @@ function StepHeading({
 export default function DecideScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  // The saved budget band is the default the pill on step 4 starts from.
+  const { user, applyUser } = useAuth()
 
   const [step, setStep] = useState(0)
   const [back, setBack] = useState(false)
@@ -299,6 +304,36 @@ export default function DecideScreen() {
   // "Surprise me" is mutually exclusive with any picked cuisine.
 
   const [format, setFormat] = useState<Format | null>(null)
+
+  /* --- Budget, live on the last step -----------------------------
+   *
+   * The saved band is the default and the pill is how it is changed WITHOUT a
+   * trip to Profile — a budget is the one filter that changes meal to meal
+   * ("payday" vs "end of the month"), and burying it in a settings screen is
+   * what made it feel like a cage set once at signup.
+   *
+   * ⚠️ The change is SAVED, not just applied to this query (that is the spec,
+   * and it is the honest reading of a tap: the user is telling us what they
+   * usually spend, not annotating one search). It also travels with the query
+   * as `budget`, which is what makes it work at all for a signed-out user and
+   * what makes it take effect immediately rather than next time.
+   */
+  const [budgetOverride, setBudgetOverride] = useState<BudgetChoice | null>(null)
+  const [budgetSheet, setBudgetSheet] = useState(false)
+  const budget = budgetOverride ?? budgetChoiceOf(user?.budgetRange)
+
+  const chooseBudget = (choice: BudgetChoice) => {
+    setBudgetSheet(false)
+    setBudgetOverride(choice)
+    if (!user) return
+    // Fire-and-forget: the query carries the choice regardless, so a failed
+    // save costs the user nothing right now — it just won't be remembered.
+    updatePreferences({ budgetRange: budgetRangeOf(choice) })
+      .then(applyUser)
+      .catch(() => {
+        /* The per-query budget still applies; Profile can save it later. */
+      })
+  }
 
   const goNext = () => {
     setBack(false)
@@ -418,6 +453,9 @@ export default function DecideScreen() {
         cuisines: JSON.stringify(cuisines),
         format: format ?? 'Dine In',
         vibe,
+        // The band in force when the brief was built — 'ANY' included, so the
+        // server never has to guess whether an absent value means "no budget".
+        budget,
         ...(areaName ? { areaName } : {}),
       },
     })
@@ -681,9 +719,68 @@ export default function DecideScreen() {
                 onPress={() => chooseVibe('Fancy')}
               />
             </View>
+
+            {/* The budget pill — the last thing before the brief is sent, which
+                is exactly where "actually, not tonight" happens. Small and
+                quiet: it is a correction to a saved setting, not a 5th step. */}
+            <View style={{ alignItems: 'center', paddingTop: 22 }}>
+              <BudgetPill label={budgetLabel(budget)} onPress={() => setBudgetSheet(true)} />
+            </View>
           </View>
         )}
       </Animated.View>
+
+      {/* Same selector as Profile → Preferences; selecting saves AND rides along
+          with this query. */}
+      <BudgetSheet
+        visible={budgetSheet}
+        value={budget}
+        onSelect={chooseBudget}
+        onClose={() => setBudgetSheet(false)}
+        note={
+          user
+            ? 'Per person, everyday meals. Applies to this decision and sticks for the next ones.'
+            : 'Per person, everyday meals. Applies to this decision — sign in to have it remembered.'
+        }
+      />
     </View>
+  )
+}
+
+/**
+ * The budget, as a tappable pill on the Vibe step.
+ *
+ * A pill rather than a row: it is showing a value already in force, not asking
+ * a question — the step's two cards are the question.
+ */
+function BudgetPill({ label, onPress }: { label: string; onPress: () => void }) {
+  const { pressed, pressHandlers } = usePressed()
+
+  return (
+    <Pressable onPress={onPress} {...pressHandlers} hitSlop={8}>
+      {/* Unstyled Pressable, styled inner View — see lib/usePressed. */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 7,
+          paddingHorizontal: 14,
+          paddingVertical: 9,
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: '#242424',
+          backgroundColor: '#141414',
+          opacity: pressed ? 0.75 : 1,
+        }}
+      >
+        <Ionicons name="wallet-outline" size={14} color="#8A847E" />
+        <Text
+          style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 13, color: '#F2EDE8' }}
+        >
+          {label}
+        </Text>
+        <Ionicons name="chevron-down" size={13} color="#8A847E" />
+      </View>
+    </Pressable>
   )
 }

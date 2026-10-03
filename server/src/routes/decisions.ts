@@ -56,6 +56,12 @@ const querySchema = z.object({
    * deterministic for the whole Dubai day; any other value re-rolls.
    */
   refreshNonce: z.number().int().min(0).default(0),
+  /**
+   * Budget for THIS query, from the Decide flow's budget pill. Outranks the
+   * user's saved band; 'ANY' is the explicit "no budget" the pill can send.
+   * Omitted by older clients, who get the saved band as before.
+   */
+  budget: z.enum(['LOW', 'MID', 'HIGH', 'ANY']).optional(),
 })
 
 /** Engine v2 is opt-in per environment while it runs alongside the matcher. */
@@ -80,8 +86,18 @@ router.post('/query', optionalAuth, async (req, res) => {
     res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() })
     return
   }
-  const { prompt, moodChips, userId, lat, lng, cuisines, format, vibe, refreshNonce } =
-    parsed.data
+  const {
+    prompt,
+    moodChips,
+    userId,
+    lat,
+    lng,
+    cuisines,
+    format,
+    vibe,
+    refreshNonce,
+    budget,
+  } = parsed.data
 
   // Prefer the authenticated user; fall back to a body userId that exists (FK safety)
   let validUserId: string | null = req.userId ?? null
@@ -141,7 +157,7 @@ router.post('/query', optionalAuth, async (req, res) => {
       candidates: allRestaurants,
       tasteWeights: boostedTasteWeights(profileWeights, cuisines),
       context: toEngineContext(
-        { format, vibe, lat, lng, refreshNonce, cuisines },
+        { format, vibe, lat, lng, refreshNonce, cuisines, budget },
         prefs,
         new Date(),
       ),

@@ -35,6 +35,8 @@ export default function ResultsScreen() {
     format?: string
     vibe?: string
     areaName?: string
+    /** The budget band in force when the brief was built; 'ANY' = no budget. */
+    budget?: string
   }>()
 
   // Present only when the Decide flow captured a "Nearby" position.
@@ -73,6 +75,14 @@ export default function ResultsScreen() {
     params.format === 'Delivery' || params.format === 'Dine In' ? params.format : undefined
   const vibe =
     params.vibe === 'Casual' || params.vibe === 'Fancy' ? params.vibe : undefined
+  /**
+   * Sent as a per-query budget so the Decide flow's pill takes effect on THIS
+   * decision. Anything unrecognised is dropped rather than guessed at, which
+   * leaves the server reading the user's saved band — the old behaviour.
+   */
+  const budget = (['LOW', 'MID', 'HIGH', 'ANY'] as const).find(
+    (b) => b === params.budget,
+  )
 
   const effectivePrompt = prompt || chips.join(' ') || 'surprise me'
   const displayQuery =
@@ -164,6 +174,7 @@ export default function ResultsScreen() {
             cuisines,
             format,
             vibe,
+            budget,
             areaName: params.areaName,
             refreshNonce: nonce,
           })

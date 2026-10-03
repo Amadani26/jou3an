@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View, Text, Pressable, ScrollView, Switch, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -6,27 +6,48 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import RedButton from '../../components/RedButton'
 import GhostButton from '../../components/GhostButton'
+import BudgetSheet from '../../components/BudgetSheet'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   getDecisionHistory,
   prettyTag,
+  updatePreferences,
   type Adventurousness,
-  type BudgetRange,
+  type DietaryNeed,
   type User,
 } from '../../lib/api'
+import {
+  budgetChoiceOf,
+  budgetLabel,
+  budgetRangeOf,
+  type BudgetChoice,
+} from '../../lib/budget'
 import { usePressed } from '../../lib/usePressed'
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-const BUDGET_LABELS: Record<BudgetRange, string> = {
-  LOW: 'Budget',
-  MID: 'Mid-range',
-  HIGH: 'Premium',
-}
+/**
+ * The dietary needs offered here.
+ *
+ * ⚠️ Profile is now the ONLY place these are set — the taste quiz is three
+ * questions (skip / budget / adventurousness) and no longer asks. They are a
+ * real Stage-1 exclusion, so losing the UI would have quietly lost the feature.
+ *
+ * ⚠️ `no-pork` is deliberately NOT offered. The server stores it and enforces
+ * nothing (nothing in the catalogue marks pork, and excluding whole cuisines by
+ * stereotype is the only way to "implement" it), so offering a toggle that does
+ * nothing is worse than not offering it. The slug stays supported for anyone
+ * who already saved it — see server/src/lib/dietary.ts.
+ */
+const DIETARY_OPTIONS: { value: DietaryNeed; label: string }[] = [
+  { value: 'vegetarian', label: 'Vegetarian' },
+  { value: 'vegan', label: 'Vegan' },
+  { value: 'gluten-free', label: 'Gluten-free' },
+]
 
-/** The taste quiz's step 4, as a one-word summary. */
+/** The taste quiz's last step, as a one-word summary. */
 const ADVENTUROUSNESS_LABELS: Record<Adventurousness, string> = {
   SAFE: 'My favorites',
   BALANCED: 'Mix it up',
@@ -213,8 +234,51 @@ function Row({
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { isAuthenticated, user, logout } = useAuth()
+  const { isAuthenticated, user, logout, applyUser } = useAuth()
   const [notifications, setNotifications] = useState(true)
+
+  /* --- Live preference editing -----------------------------------
+   *
+   * Budget and dietary are edited HERE rather than by routing to the quiz: the
+   * quiz no longer asks about either, and a setting you change in one tap
+   * should not cost a three-screen wizard.
+   *
+   * ⚠️ Optimistic, then reconciled. The row shows the new value immediately and
+   * the PATCH follows; the server's reply replaces the cached user (applyUser)
+   * so nothing can drift, and a failure reverts the row and says so. The engine
+   * reads the SAVED value on the next decision, which is why a silent failure
+   * here would be a lie about what the app will do.
+   */
+  const [budgetSheet, setBudgetSheet] = useState(false)
+  const [budgetDraft, setBudgetDraft] = useState<BudgetChoice | null>(null)
+  const [dietaryOpen, setDietaryOpen] = useState(false)
+  const [dietaryDraft, setDietaryDraft] = useState<DietaryNeed[] | null>(null)
+  const [savingPref, setSavingPref] = useState(false)
+
+  // A fresh user (a quiz save, a re-login) invalidates any local draft.
+  useEffect(() => {
+    setBudgetDraft(null)
+    setDietaryDraft(null)
+  }, [user?.updatedAt])
+
+  const savePref = async (
+    patch: Parameters<typeof updatePreferences>[0],
+    revert: () => void,
+  ) => {
+    if (savingPref) return
+    setSavingPref(true)
+    try {
+      applyUser(await updatePreferences(patch))
+    } catch {
+      revert()
+      Alert.alert(
+        'Could not save',
+        'That change did not reach us. Check your connection and try again.',
+      )
+    } finally {
+      setSavingPref(false)
+    }
+  }
 
   // Stats are derived from the signed-in user's decision history.
   const { data: history } = useQuery({
@@ -321,16 +385,32 @@ export default function ProfileScreen() {
   }
 
   /* ---------- Logged in ---------- */
-  const cuisineValue =
-    user.cuisinePreferences.length > 0
-      ? user.cuisinePreferences.map(prettyTag).join(', ')
-      : 'Not set'
-  const dietaryValue =
-    user.dietary.length > 0 ? user.dietary.map(prettyTag).join(', ') : 'None'
-  const avoidValue =
+  // The draft wins while a save is in flight, so the row shows what the user
+  // just tapped rather than snapping back for a moment.
+  const budgetChoice = budgetDraft ?? budgetChoiceOf(user.budgetRange)
+  const dietary = dietaryDraft ?? (user.dietary as DietaryNeed[])
+  const dietaryValue = dietary.length > 0 ? dietary.map(prettyTag).join(', ') : 'None'
+  const skipValue =
     user.dislikedCuisines.length > 0
       ? user.dislikedCuisines.map(prettyTag).join(', ')
       : 'None'
+
+  const chooseBudget = (choice: BudgetChoice) => {
+    const previous = budgetChoiceOf(user.budgetRange)
+    setBudgetSheet(false)
+    if (choice === previous) return
+    setBudgetDraft(choice)
+    void savePref({ budgetRange: budgetRangeOf(choice) }, () => setBudgetDraft(null))
+  }
+
+  const toggleDietary = (need: DietaryNeed) => {
+    const previous = dietary
+    const next = previous.includes(need)
+      ? previous.filter((d) => d !== need)
+      : [...previous, need]
+    setDietaryDraft(next)
+    void savePref({ dietary: next }, () => setDietaryDraft(previous))
+  }
 
   return (
     <ScrollView
@@ -376,28 +456,57 @@ export default function ProfileScreen() {
         <StatTile value={favouriteCuisine} label="Favourite Cuisine" />
       </View>
 
-      {/* Preferences */}
+      {/* Preferences
+          Budget and dietary are edited in place (one tap, saved immediately);
+          the two the quiz owns route into it. */}
       <SectionCard title="Preferences">
         <Row
-          label="Cuisine preferences"
-          value={cuisineValue}
+          label="Usual spend"
+          value={budgetLabel(budgetChoice)}
+          onPress={() => setBudgetSheet(true)}
+        />
+        <Row
+          label="Cuisines to skip"
+          value={skipValue}
           onPress={() => router.push('/onboarding')}
         />
         <Row
-          label="Budget range"
-          value={BUDGET_LABELS[user.budgetRange]}
-          onPress={() => router.push('/onboarding')}
-        />
-        <Row
-          label="Dietary"
+          label="Dietary needs"
           value={dietaryValue}
-          onPress={() => router.push('/onboarding')}
+          onPress={() => setDietaryOpen((o) => !o)}
+          right={
+            <Ionicons
+              name={dietaryOpen ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color="#504B47"
+            />
+          }
         />
-        <Row
-          label="Avoid"
-          value={avoidValue}
-          onPress={() => router.push('/onboarding')}
-        />
+        {/* Expands in place rather than opening a screen: three toggles do not
+            justify a destination, and seeing them next to the saved value is
+            what makes it obvious they ARE the saved value. */}
+        {dietaryOpen ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 8,
+              paddingHorizontal: 16,
+              paddingBottom: 14,
+              borderBottomWidth: 1,
+              borderBottomColor: '#1A1A1A',
+            }}
+          >
+            {DIETARY_OPTIONS.map((o) => (
+              <DietaryChip
+                key={o.value}
+                label={o.label}
+                selected={dietary.includes(o.value)}
+                onPress={() => toggleDietary(o.value)}
+              />
+            ))}
+          </View>
+        ) : null}
         <Row
           label="How we pick"
           value={ADVENTUROUSNESS_LABELS[user.adventurousness]}
@@ -407,7 +516,7 @@ export default function ProfileScreen() {
             it — and the same screens handle an edit, so there is one route. */}
         <Row
           label={user.tasteQuizCompletedAt ? 'Retake taste quiz' : 'Take the taste quiz'}
-          value={user.tasteQuizCompletedAt ? undefined : '30 seconds'}
+          value={user.tasteQuizCompletedAt ? undefined : '20 seconds'}
           onPress={() => router.push('/onboarding')}
           last
         />
@@ -445,6 +554,62 @@ export default function ProfileScreen() {
         <Row label="Log out" danger onPress={() => logout()} />
         <Row label="Delete account" danger muted onPress={confirmDelete} last />
       </SectionCard>
+
+      {/* The same selector the Decide flow's budget pill opens. */}
+      <BudgetSheet
+        visible={budgetSheet}
+        value={budgetChoice}
+        onSelect={chooseBudget}
+        onClose={() => setBudgetSheet(false)}
+        note="Per person, everyday meals. Applies from your next decision — it nudges our picks, it never caps them."
+      />
     </ScrollView>
+  )
+}
+
+/**
+ * One dietary need. Its own component because it holds press state, and hooks
+ * cannot run inside a `.map()`.
+ */
+function DietaryChip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string
+  selected: boolean
+  onPress: () => void
+}) {
+  const { pressed, pressHandlers } = usePressed()
+
+  return (
+    <Pressable onPress={onPress} {...pressHandlers}>
+      {/* Unstyled Pressable, styled inner View — see lib/usePressed. */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          paddingHorizontal: 13,
+          paddingVertical: 8,
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: selected ? '#E63946' : '#242424',
+          backgroundColor: selected ? '#1a0d0d' : '#141414',
+          opacity: pressed ? 0.75 : 1,
+        }}
+      >
+        {selected ? <Ionicons name="checkmark" size={13} color="#E63946" /> : null}
+        <Text
+          style={{
+            fontFamily: selected ? 'DMSans_700Bold' : 'DMSans_500Medium',
+            fontSize: 13,
+            color: selected ? '#E63946' : '#8A847E',
+          }}
+        >
+          {label}
+        </Text>
+      </View>
+    </Pressable>
   )
 }

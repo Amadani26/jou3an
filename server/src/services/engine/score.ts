@@ -102,7 +102,17 @@ export function vibeFit(r: Candidate, vibe: Vibe): number {
   return vibe === 'FANCY' ? normalised : 1 - normalised
 }
 
-/** How squarely the restaurant's price range sits inside the budget band. */
+/**
+ * How squarely the restaurant's price range sits inside the budget band.
+ *
+ * ⚠️ This is the ONLY place the user's saved budget acts, and it is one half of
+ * the context term — so a band is worth at most 0.1 of base score. That is the
+ * whole point: the quiz asks what you usually spend, not what you will never
+ * exceed, so the answer leans the ranking instead of capping it.
+ *
+ * 'ANY' ("No budget") returns NEUTRAL, which makes the term inert rather than
+ * punishing every price equally.
+ */
 export function priceFit(r: Candidate, budget: Budget): number {
   if (budget === 'ANY') return NEUTRAL
   const band = BUDGET_BANDS[budget]
@@ -111,7 +121,9 @@ export function priceFit(r: Candidate, budget: Budget): number {
   if (mid >= band.min && mid <= band.max) return 1
 
   // Outside the band: decay with distance, a full band-width out scoring 0.
-  const width = Number.isFinite(band.max) ? band.max - band.min : 60
+  // HIGH is open-ended, so it borrows the width of the band below it rather
+  // than dividing by Infinity (which would make everything cheap score 1).
+  const width = Number.isFinite(band.max) ? band.max - band.min : 100
   const over = mid > band.max ? mid - band.max : band.min - mid
   return clamp01(1 - over / Math.max(width, 1))
 }

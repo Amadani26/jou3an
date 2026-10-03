@@ -9,8 +9,8 @@ import {
   dampingFor,
   explorationFor,
 } from './select'
-import { filterCandidates } from './filter'
-import { NEUTRAL, tasteScore } from './score'
+import { BUDGET_BANDS, filterCandidates } from './filter'
+import { NEUTRAL, priceFit, tasteScore } from './score'
 import { conflictsWithDietary } from '../../lib/dietary'
 import { effectiveTasteWeights, quizWeightsFrom } from '../tasteProfile'
 import {
@@ -715,5 +715,159 @@ describe('quiz-seeded taste weights', () => {
       }),
     )
     expect(d.picks).toHaveLength(3)
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* Budget — a lean, not a ceiling                                      */
+/* ------------------------------------------------------------------ */
+
+describe('budget is a score term, never a filter', () => {
+  /**
+   * The behaviour this replaced: the saved band was a Stage-1 constraint, so a
+   * user who answered "under AED 100" once at signup could never again be shown
+   * anywhere nicer — permanently, silently, from one tap in an onboarding quiz.
+   * Budget now only moves `priceFit`, which is half of a 0.2-weighted term.
+   */
+  it('keeps out-of-band restaurants in the pool', () => {
+    resetIds()
+    const expensive = [
+      restaurant({ name: 'Pricey 1', priceMin: 300, priceMax: 500 }),
+      restaurant({ name: 'Pricey 2', priceMin: 300, priceMax: 500 }),
+      restaurant({ name: 'Pricey 3', priceMin: 300, priceMax: 500 }),
+    ]
+    const { pool } = filterCandidates(expensive, context({ budget: 'LOW' }))
+    expect(pool).toHaveLength(3)
+  })
+
+  it('never reports budget as relaxed — there is nothing to relax', () => {
+    resetIds()
+    const expensive = [
+      restaurant({ priceMin: 300, priceMax: 500 }),
+      restaurant({ priceMin: 300, priceMax: 500 }),
+      restaurant({ priceMin: 300, priceMax: 500 }),
+    ]
+    for (const budget of ['LOW', 'MID', 'HIGH', 'ANY'] as const) {
+      const { relaxed } = filterCandidates(expensive, context({ budget }))
+      expect(relaxed).not.toContain('budget')
+    }
+  })
+
+  it('still returns exactly 3 for a band nothing in the catalogue matches', () => {
+    const d = decide(input({ candidates: catalogue(), context: context({ budget: 'HIGH' }) }))
+    expect(d.picks).toHaveLength(3)
+    expect(d.relaxed).not.toContain('budget')
+  })
+
+  it('can still serve a restaurant well outside the band, on quality', () => {
+    resetIds()
+    // A LOW-band user, and the best place in town is an expensive one.
+    const candidates = [
+      restaurant({ name: 'Splurge', cuisineType: 'Japanese', priceMin: 400, priceMax: 600, googleRating: 4.9 }),
+      restaurant({ name: 'Cheap 1', cuisineType: 'Pakistani', priceMin: 20, priceMax: 40, googleRating: 3.4 }),
+      restaurant({ name: 'Cheap 2', cuisineType: 'Pizza', priceMin: 20, priceMax: 40, googleRating: 3.4 }),
+      restaurant({ name: 'Cheap 3', cuisineType: 'Lebanese', priceMin: 20, priceMax: 40, googleRating: 3.3 }),
+    ]
+    const d = decide(input({ candidates, context: context({ budget: 'LOW' }) }))
+    expect(d.picks.map((p) => p.restaurant.name)).toContain('Splurge')
+  })
+
+  it('does lean the ranking when quality and taste are level', () => {
+    resetIds()
+    // Identical in every way except price — the band is the only differentiator.
+    const candidates = [
+      restaurant({ name: 'In band', cuisineType: 'Japanese', priceMin: 30, priceMax: 60 }),
+      restaurant({ name: 'Out of band', cuisineType: 'Pakistani', priceMin: 400, priceMax: 600 }),
+    ]
+    const { breakdown } = decide(
+      input({
+        candidates: [...candidates, restaurant({ cuisineType: 'Pizza' }), restaurant({ cuisineType: 'Lebanese' })],
+        context: context({ budget: 'LOW' }),
+      }),
+    )
+    const inBand = breakdown.find((b) => b.name === 'In band')!
+    const outOfBand = breakdown.find((b) => b.name === 'Out of band')!
+    expect(inBand.context).toBeGreaterThan(outOfBand.context)
+  })
+})
+
+describe('priceFit — the bands the quiz offers', () => {
+  const at = (mid: number) => restaurant({ priceMin: mid, priceMax: mid })
+
+  it('matches the quiz copy: under 100 / 100-200 / 200+', () => {
+    expect(BUDGET_BANDS.LOW).toEqual({ min: 0, max: 100 })
+    expect(BUDGET_BANDS.MID).toEqual({ min: 100, max: 200 })
+    expect(BUDGET_BANDS.HIGH.min).toBe(200)
+    expect(BUDGET_BANDS.HIGH.max).toBe(Number.POSITIVE_INFINITY)
+  })
+
+  it('scores a restaurant inside the band at 1', () => {
+    expect(priceFit(at(60), 'LOW')).toBe(1)
+    expect(priceFit(at(150), 'MID')).toBe(1)
+    expect(priceFit(at(400), 'HIGH')).toBe(1)
+  })
+
+  it('decays with distance outside the band rather than cutting off', () => {
+    const near = priceFit(at(130), 'LOW')
+    const far = priceFit(at(260), 'LOW')
+    expect(near).toBeGreaterThan(0)
+    expect(near).toBeLessThan(1)
+    expect(far).toBeLessThan(near)
+  })
+
+  it('is NEUTRAL for "No budget", not zero', () => {
+    // A user with no band must not have every price punished equally — the term
+    // goes inert. (Stored as NULL on User.budgetRange; mapped to ANY.)
+    for (const mid of [30, 120, 500]) expect(priceFit(at(mid), 'ANY')).toBe(NEUTRAL)
+  })
+
+  it('does not reward cheap places for HIGH just because the band is open-ended', () => {
+    // HIGH has no upper bound, so the decay width is borrowed rather than
+    // dividing by Infinity — which would score everything cheap a perfect 1.
+    expect(priceFit(at(30), 'HIGH')).toBeLessThan(1)
+  })
+})
+
+describe('skipped cuisines are soft', () => {
+  it('rarely appears, but CAN — a -2 is beatable by quality', () => {
+    resetIds()
+    // Japanese is skipped, and is also the only outstanding restaurant here.
+    const candidates = [
+      restaurant({ name: 'Sushi', cuisineType: 'Japanese', googleRating: 5 }),
+      restaurant({ name: 'Curry', cuisineType: 'Pakistani', googleRating: 3.2 }),
+      restaurant({ name: 'Pizza', cuisineType: 'Pizza', googleRating: 3.2 }),
+      restaurant({ name: 'Grill', cuisineType: 'Lebanese', googleRating: 3.1 }),
+    ]
+    const d = decide(
+      input({
+        candidates,
+        tasteWeights: effectiveTasteWeights({}, quizWeightsFrom([], ['Japanese'])),
+      }),
+    )
+    expect(d.picks.map((p) => p.restaurant.name)).toContain('Sushi')
+  })
+
+  it('is never excluded from the pool, so the wildcard can still reach it', () => {
+    resetIds()
+    const candidates = [
+      restaurant({ cuisineType: 'Japanese' }),
+      restaurant({ cuisineType: 'Pakistani' }),
+      restaurant({ cuisineType: 'Pizza' }),
+      restaurant({ cuisineType: 'Lebanese' }),
+    ]
+    const { pool } = filterCandidates(candidates, context())
+    expect(pool.map((r) => r.cuisineType)).toContain('Japanese')
+  })
+
+  it('re-deriving the quiz contribution never stacks it, or touches learning', () => {
+    // The idempotency property at the point the engine reads it: the quiz's own
+    // map is recomputed from the stored answers, so N saves look like one.
+    const learned = { japanese: 3, pakistani: 1 }
+    const once = effectiveTasteWeights(learned, quizWeightsFrom([], ['Japanese']))
+    const again = effectiveTasteWeights(learned, quizWeightsFrom([], ['Japanese']))
+    expect(again).toEqual(once)
+    expect(once.japanese).toBe(1)
+    // Learning is untouched by the derivation — only the sum moved.
+    expect(learned).toEqual({ japanese: 3, pakistani: 1 })
   })
 })

@@ -1,16 +1,24 @@
 /**
  * The onboarding taste quiz — answers in, engine inputs out.
  *
- * The quiz is four questions, and each one lands somewhere different in the
+ * The quiz is three questions, and each one lands somewhere different in the
  * engine. Keeping that translation in one place is the point of this file: the
  * route stays about HTTP, and the two endpoints that can change these answers
  * (`POST /me/taste-quiz` and `PATCH /me/preferences`) cannot drift apart.
  *
- *   loved cuisines     -> UserTasteProfile.quizWeights  +2 each
- *   disliked cuisines  -> UserTasteProfile.quizWeights  -2 each
- *   dietary needs      -> User.dietary, a Stage-1 EXCLUSION (src/lib/dietary.ts)
- *   budget band        -> User.budgetRange, the DEFAULT budget context
+ *   cuisines to skip   -> UserTasteProfile.quizWeights  -2 each (SOFT)
+ *   budget band        -> User.budgetRange, the default price-fit context
  *   adventurousness    -> User.adventurousness, the per-user base wildcard ε
+ *
+ * Two fields the quiz no longer ASKS about are still handled here, because
+ * `PATCH /me/preferences` can set them and stored answers must keep working:
+ *   loved cuisines     -> UserTasteProfile.quizWeights  +2 each
+ *   dietary needs      -> User.dietary, a Stage-1 EXCLUSION (src/lib/dietary.ts)
+ *
+ * ⚠️ NOTHING here is a hard filter except dietary. A skipped cuisine is a -2
+ * taste weight, so a skipped-cuisine restaurant with an outstanding rating can
+ * still win a slot — and the ε-wildcard ignores taste entirely by design. "I'd
+ * rather skip Japanese" is a lean, not a ban, and the quiz copy says so.
  *
  * ⚠️ IDEMPOTENT BY CONSTRUCTION. Nothing here applies a delta to anything. The
  * answers are stored, and `quizWeights` is RECOMPUTED from them, so taking the
@@ -36,7 +44,8 @@ export interface TasteQuizAnswers {
   lovedCuisines?: string[]
   dislikedCuisines?: string[]
   dietary?: string[]
-  budgetRange?: BudgetRange
+  /** NULL is a real answer — the "No budget" card. See NormalizedAnswers. */
+  budgetRange?: BudgetRange | null
   adventurousness?: Adventurousness
 }
 
@@ -60,7 +69,12 @@ export interface NormalizedAnswers {
   lovedCuisines?: string[]
   dislikedCuisines?: string[]
   dietary?: string[]
-  budgetRange?: BudgetRange
+  /**
+   * ⚠️ THREE states, all meaningful: absent leaves the stored band alone, a
+   * band sets it, and explicit NULL clears it — which is how "No budget" is
+   * stored, and the only way a user can un-say a band they once chose.
+   */
+  budgetRange?: BudgetRange | null
   adventurousness?: Adventurousness
 }
 
@@ -86,7 +100,7 @@ export function normalizeAnswers(answers: TasteQuizAnswers): NormalizedAnswers {
     // reads and what Profile displays can never disagree.
     out.dietary = knownNeeds(answers.dietary)
   }
-  if (answers.budgetRange !== undefined) out.budgetRange = answers.budgetRange
+  if (answers.budgetRange !== undefined) out.budgetRange = answers.budgetRange ?? null
   if (answers.adventurousness !== undefined) {
     out.adventurousness = answers.adventurousness
   }

@@ -40,7 +40,8 @@ const dietaryNeed = z.enum(DIETARY_NEEDS)
 const preferencesSchema = z.object({
   cuisinePreferences: z.array(cuisineName).max(MAX_LOVED_CUISINES).optional(),
   dislikedCuisines: z.array(cuisineName).max(40).optional(),
-  budgetRange: z.nativeEnum(BudgetRange).optional(),
+  // Nullable: null is the "No budget" answer, and the only way to clear a band.
+  budgetRange: z.nativeEnum(BudgetRange).nullable().optional(),
   dietary: z.array(dietaryNeed).optional(),
   adventurousness: z.nativeEnum(Adventurousness).optional(),
   locationArea: z.nativeEnum(LocationArea).optional(),
@@ -81,10 +82,17 @@ router.patch('/me/preferences', requireAuth, async (req, res) => {
 })
 
 const tasteQuizSchema = z.object({
+  /**
+   * ⚠️ `lovedCuisines` and `dietary` are no longer ASKED by the quiz (it is
+   * three questions: skip / budget / adventurousness). They stay accepted
+   * because Profile → Preferences edits them through the same translation, and
+   * because an older app build still sends them.
+   */
   lovedCuisines: z.array(cuisineName).max(MAX_LOVED_CUISINES).optional(),
   dislikedCuisines: z.array(cuisineName).max(40).optional(),
   dietary: z.array(dietaryNeed).optional(),
-  budgetRange: z.nativeEnum(BudgetRange).optional(),
+  // null = "No budget": stored, and it makes the engine's price term neutral.
+  budgetRange: z.nativeEnum(BudgetRange).nullable().optional(),
   adventurousness: z.nativeEnum(Adventurousness).optional(),
 })
 
@@ -92,7 +100,7 @@ const tasteQuizSchema = z.object({
  * POST /api/users/me/taste-quiz — submit the onboarding taste quiz.
  *
  * Every field is optional because the quiz is SKIPPABLE at every step: a user
- * who answers two of four questions still gets those two applied. Submitting it
+ * who answers one of three questions still gets that one applied. Submitting it
  * stamps `tasteQuizCompletedAt`, which is how the app knows not to ask again.
  *
  * The response carries `dietaryEnforcement` so the client is told the truth
