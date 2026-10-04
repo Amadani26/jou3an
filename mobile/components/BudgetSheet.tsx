@@ -8,14 +8,17 @@
  * Shaped like RestaurantDetailSheet — RN Modal, dark backdrop, spring slide-up,
  * drag handle, backdrop-tap to dismiss. Deliberately NOT a full screen: this is
  * a four-option setting, not a destination.
+ *
+ * The rows are an `OptionSelector`, so the selection SLIDES from the old band
+ * to the new one instead of two rows repainting at once — and so the taste
+ * quiz, which asks the same question, animates identically.
  */
 import { Modal, Pressable, Text, View } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated'
+import OptionSelector from './OptionSelector'
 import { BUDGET_OPTIONS, type BudgetChoice } from '../lib/budget'
-import { usePressed } from '../lib/usePressed'
 
 export interface BudgetSheetProps {
   visible: boolean
@@ -99,83 +102,20 @@ export default function BudgetSheet({
             </Text>
           </View>
 
-          <View style={{ gap: 8 }}>
-            {BUDGET_OPTIONS.map((o) => (
-              <BudgetRow
-                key={o.value}
-                label={o.label}
-                sub={o.sub}
-                selected={value === o.value}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                  onSelect(o.value)
-                }}
-              />
-            ))}
-          </View>
+          <OptionSelector
+            options={BUDGET_OPTIONS.map((o) => ({
+              value: o.value,
+              title: o.label,
+              sub: o.sub,
+            }))}
+            value={value}
+            onSelect={(choice) => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              onSelect(choice)
+            }}
+          />
         </Animated.View>
       </Animated.View>
     </Modal>
-  )
-}
-
-/** One band. Its own component because it holds press state (hooks in a map). */
-function BudgetRow({
-  label,
-  sub,
-  selected,
-  onPress,
-}: {
-  label: string
-  sub: string
-  selected: boolean
-  onPress: () => void
-}) {
-  const { pressed, pressHandlers } = usePressed()
-
-  return (
-    <Pressable onPress={onPress} {...pressHandlers} style={{ alignSelf: 'stretch' }}>
-      {/* Unstyled Pressable, styled inner View — see lib/usePressed. */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
-          paddingHorizontal: 16,
-          paddingVertical: 14,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: selected ? '#E63946' : '#242424',
-          backgroundColor: selected ? '#1a0d0d' : '#141414',
-          opacity: pressed ? 0.75 : 1,
-        }}
-      >
-        <View style={{ flex: 1 }}>
-          <Text
-            style={{
-              fontFamily: 'DMSans_700Bold',
-              fontSize: 15,
-              color: selected ? '#E63946' : '#F2EDE8',
-            }}
-          >
-            {label}
-          </Text>
-          <Text
-            style={{
-              fontFamily: 'DMSans_400Regular',
-              fontSize: 12,
-              color: '#8A847E',
-              marginTop: 2,
-            }}
-          >
-            {sub}
-          </Text>
-        </View>
-
-        {selected ? (
-          <Ionicons name="checkmark-circle" size={20} color="#E63946" />
-        ) : null}
-      </View>
-    </Pressable>
   )
 }

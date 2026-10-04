@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Dimensions,
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -20,12 +21,16 @@ import Animated, {
 } from 'react-native-reanimated'
 import AreaRow from './AreaRow'
 import { searchAreas, type AreaSuggestion } from '../lib/api'
+import { useKeyboardHeight } from '../lib/useKeyboardHeight'
 
 const { height: SCREEN_H } = Dimensions.get('window')
 const SPRING = { damping: 20, stiffness: 200, mass: 0.6 }
 
 /** Long enough that typing doesn't bill a Text Search on every keystroke. */
 const DEBOUNCE_MS = 350
+
+/** Backdrop left visible above the sheet, so the way out stays obvious. */
+const TOP_GAP = 72
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 
@@ -45,6 +50,17 @@ interface Props {
  */
 export default function AreaSearchSheet({ visible, onClose, onPick }: Props) {
   const insets = useSafeAreaInsets()
+  /**
+   * ⚠️ THE KEYBOARD USED TO SIT ON TOP OF THIS SHEET. The input is autofocused,
+   * so the keyboard is up before the user has typed anything — and a sheet
+   * pinned to the bottom of the screen is exactly where the keyboard goes. The
+   * search field and every result were behind it.
+   *
+   * The sheet is lifted by the keyboard's height and its cap is recomputed
+   * against what is left, so the input stays put and the results keep whatever
+   * room remains instead of being pushed off the top.
+   */
+  const keyboard = useKeyboardHeight()
   const [query, setQuery] = useState('')
   const [suggestions, setSuggestions] = useState<AreaSuggestion[]>([])
   const [searching, setSearching] = useState(false)
@@ -99,6 +115,9 @@ export default function AreaSearchSheet({ visible, onClose, onPick }: Props) {
   }, [query])
 
   const dismiss = () => {
+    // Put the keyboard away first — it outlives the Modal otherwise and the
+    // screen underneath is left with a keyboard over it.
+    Keyboard.dismiss()
     translateY.value = withTiming(SCREEN_H, { duration: 200 })
     onClose()
   }
@@ -108,6 +127,11 @@ export default function AreaSearchSheet({ visible, onClose, onPick }: Props) {
   }))
 
   const trimmed = query.trim()
+
+  // Never taller than the space the keyboard leaves, and never more than 70%
+  // of the screen when it is down. TOP_GAP keeps the backdrop visible so it is
+  // still obvious there is something to tap past.
+  const sheetMaxHeight = Math.min(SCREEN_H * 0.7, SCREEN_H - keyboard - TOP_GAP)
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={dismiss}>
@@ -125,8 +149,11 @@ export default function AreaSearchSheet({ visible, onClose, onPick }: Props) {
               borderTopRightRadius: 28,
               borderTopWidth: 1,
               borderColor: '#242424',
-              paddingBottom: insets.bottom + 16,
-              maxHeight: SCREEN_H * 0.7,
+              // The keyboard already covers the home indicator, so adding the
+              // safe-area inset on top of it would double-pad the sheet.
+              paddingBottom: keyboard > 0 ? 16 : insets.bottom + 16,
+              marginBottom: keyboard,
+              maxHeight: sheetMaxHeight,
             },
             sheetStyle,
           ]}

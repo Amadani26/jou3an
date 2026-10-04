@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter, Link } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import RedButton from '../../components/RedButton'
+import Wordmark from '../../components/Wordmark'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePressed } from '../../lib/usePressed'
 import { API_BASE_URL } from '../../lib/api'
@@ -73,8 +74,13 @@ export default function LoginScreen() {
         <Ionicons name="close" size={26} color="#8A847E" />
       </Pressable>
 
+      {/* Text wordmark — the `ج` mark is gone and a new one is being drawn;
+          type is the honest placeholder. See components/Wordmark. */}
+      <Wordmark size={26} />
+
       <Text
         style={{
+          marginTop: 14,
           fontFamily: 'DMSans_800ExtraBold',
           fontSize: 28,
           fontWeight: '800',

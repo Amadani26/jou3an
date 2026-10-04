@@ -2,6 +2,7 @@ import { Router } from 'express'
 import type { RequestHandler } from 'express'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import type { User } from '@prisma/client'
 import prisma from '../lib/prisma'
 import passport, { googleEnabled } from '../lib/passport'
@@ -28,10 +29,29 @@ const signupSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 })
 
+/**
+ * Machine-readable reasons a signup can be refused.
+ *
+ * ⚠️ The CODE is the contract, not the message. The app shows a different thing
+ * for each — a duplicate email offers a link to Sign In, a validation failure
+ * points at the field — and matching on prose would break the moment the
+ * wording is edited. Every refusal below carries one.
+ */
+export const SIGNUP_ERRORS = {
+  INVALID: 'INVALID_INPUT',
+  EMAIL_TAKEN: 'EMAIL_TAKEN',
+} as const
+
 router.post('/signup', async (req, res) => {
   const parsed = signupSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() })
+    res.status(400).json({
+      code: SIGNUP_ERRORS.INVALID,
+      // The first field message, so the client has something specific to show
+      // without having to understand zod's shape.
+      error: parsed.error.issues[0]?.message ?? 'Invalid request',
+      details: parsed.error.flatten(),
+    })
     return
   }
   const { name, email, phoneNumber, password } = parsed.data
@@ -39,21 +59,44 @@ router.post('/signup', async (req, res) => {
 
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
   if (existing) {
-    res.status(409).json({ error: 'An account with this email already exists' })
+    res.status(409).json({
+      code: SIGNUP_ERRORS.EMAIL_TAKEN,
+      error: 'An account with this email already exists',
+    })
     return
   }
 
   const passwordHash = await bcrypt.hash(password, 12)
-  const user = await prisma.user.create({
-    data: {
-      name,
-      email: normalizedEmail,
-      phoneNumber: phoneNumber ?? null,
-      passwordHash,
-      cuisinePreferences: [],
-      dietary: [],
-    },
-  })
+
+  let user: User
+  try {
+    user = await prisma.user.create({
+      data: {
+        name,
+        email: normalizedEmail,
+        phoneNumber: phoneNumber ?? null,
+        passwordHash,
+        cuisinePreferences: [],
+        dietary: [],
+      },
+    })
+  } catch (err) {
+    // The check above loses a race between two signups with the same email —
+    // the unique index is what actually decides it. Report the SAME code, so
+    // the loser of the race sees "already registered" rather than a 500 that
+    // tells them nothing and sends them back to try again.
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === 'P2002'
+    ) {
+      res.status(409).json({
+        code: SIGNUP_ERRORS.EMAIL_TAKEN,
+        error: 'An account with this email already exists',
+      })
+      return
+    }
+    throw err
+  }
 
   const token = signToken(user.id)
   res.status(201).json({ token, user: sanitize(user) })

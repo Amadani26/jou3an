@@ -329,12 +329,21 @@ export default function ResultsScreen() {
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {/* ⚠️ A CLOSE, not a back arrow — and it goes Home, not back one
+              screen. Arriving here from the Decide wizard, `back()` returned to
+              the Vibe step, and from Food Tinder to the deck; neither is a way
+              OUT, so the screen had no exit that did not involve making a
+              decision first. This one always lands on the tabs. The wizard is
+              still reachable by the OS swipe-back gesture for anyone who wants
+              to tweak the brief. */}
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => router.replace('/(tabs)')}
             hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
             style={{ minHeight: 40, minWidth: 40, justifyContent: 'center' }}
           >
-            <Ionicons name="arrow-back" size={20} color="#504B47" />
+            <Ionicons name="close" size={22} color="#504B47" />
           </Pressable>
           <Text
             style={{

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated'
 import RedButton from '../../components/RedButton'
 import GhostButton from '../../components/GhostButton'
 import BudgetSheet from '../../components/BudgetSheet'
@@ -13,7 +14,6 @@ import {
   prettyTag,
   updatePreferences,
   type Adventurousness,
-  type DietaryNeed,
   type User,
 } from '../../lib/api'
 import {
@@ -24,28 +24,12 @@ import {
 } from '../../lib/budget'
 import { usePressed } from '../../lib/usePressed'
 
+/** Time the budget sheet stays open after a tap, so its highlight can land. */
+const BUDGET_SETTLE_MS = 260
+
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
-
-/**
- * The dietary needs offered here.
- *
- * ⚠️ Profile is now the ONLY place these are set — the taste quiz is three
- * questions (skip / budget / adventurousness) and no longer asks. They are a
- * real Stage-1 exclusion, so losing the UI would have quietly lost the feature.
- *
- * ⚠️ `no-pork` is deliberately NOT offered. The server stores it and enforces
- * nothing (nothing in the catalogue marks pork, and excluding whole cuisines by
- * stereotype is the only way to "implement" it), so offering a toggle that does
- * nothing is worse than not offering it. The slug stays supported for anyone
- * who already saved it — see server/src/lib/dietary.ts.
- */
-const DIETARY_OPTIONS: { value: DietaryNeed; label: string }[] = [
-  { value: 'vegetarian', label: 'Vegetarian' },
-  { value: 'vegan', label: 'Vegan' },
-  { value: 'gluten-free', label: 'Gluten-free' },
-]
 
 /** The taste quiz's last step, as a one-word summary. */
 const ADVENTUROUSNESS_LABELS: Record<Adventurousness, string> = {
@@ -206,7 +190,14 @@ function Row({
       </Text>
       <View style={{ flex: 1 }} />
       {value ? (
-        <Text
+        // Keyed on the value, so saving a new band mounts a new node and the
+        // old one leaves: the row reads as having CHANGED rather than as
+        // having always said this. The budget row is the one that moves most,
+        // and it moves the instant the sheet closes — before the PATCH lands.
+        <Animated.Text
+          key={value}
+          entering={FadeInDown.duration(180)}
+          exiting={FadeOutUp.duration(140)}
           style={{
             fontFamily: 'DMSans_400Regular',
             fontSize: 14,
@@ -217,7 +208,7 @@ function Row({
           numberOfLines={1}
         >
           {value}
-        </Text>
+        </Animated.Text>
       ) : null}
       {right}
       {onPress && !right ? (
@@ -239,9 +230,15 @@ export default function ProfileScreen() {
 
   /* --- Live preference editing -----------------------------------
    *
-   * Budget and dietary are edited HERE rather than by routing to the quiz: the
-   * quiz no longer asks about either, and a setting you change in one tap
-   * should not cost a three-screen wizard.
+   * The budget band is edited HERE rather than by routing to the quiz: a
+   * setting you change in one tap should not cost a three-screen wizard.
+   *
+   * ⚠️ DIETARY NEEDS ARE NOT EDITED ANYWHERE any more. The quiz stopped asking
+   * and this card stopped offering — the only enforceable need was an exclusion
+   * nothing in the catalogue has the data to apply well, so the UI was
+   * promising a filter the engine could not honour. `User.dietary` and the
+   * server's `knownNeeds()` are untouched: anything already stored still
+   * applies, and bringing the UI back is a product decision, not a rebuild.
    *
    * ⚠️ Optimistic, then reconciled. The row shows the new value immediately and
    * the PATCH follows; the server's reply replaces the cached user (applyUser)
@@ -251,14 +248,11 @@ export default function ProfileScreen() {
    */
   const [budgetSheet, setBudgetSheet] = useState(false)
   const [budgetDraft, setBudgetDraft] = useState<BudgetChoice | null>(null)
-  const [dietaryOpen, setDietaryOpen] = useState(false)
-  const [dietaryDraft, setDietaryDraft] = useState<DietaryNeed[] | null>(null)
   const [savingPref, setSavingPref] = useState(false)
 
   // A fresh user (a quiz save, a re-login) invalidates any local draft.
   useEffect(() => {
     setBudgetDraft(null)
-    setDietaryDraft(null)
   }, [user?.updatedAt])
 
   const savePref = async (
@@ -367,8 +361,6 @@ export default function ProfileScreen() {
   // The draft wins while a save is in flight, so the row shows what the user
   // just tapped rather than snapping back for a moment.
   const budgetChoice = budgetDraft ?? budgetChoiceOf(user.budgetRange)
-  const dietary = dietaryDraft ?? (user.dietary as DietaryNeed[])
-  const dietaryValue = dietary.length > 0 ? dietary.map(prettyTag).join(', ') : 'None'
   const skipValue =
     user.dislikedCuisines.length > 0
       ? user.dislikedCuisines.map(prettyTag).join(', ')
@@ -376,19 +368,12 @@ export default function ProfileScreen() {
 
   const chooseBudget = (choice: BudgetChoice) => {
     const previous = budgetChoiceOf(user.budgetRange)
-    setBudgetSheet(false)
+    // ⚠️ Close AFTER the highlight has travelled — see BUDGET_SETTLE_MS. The
+    // save still starts immediately; only the dismissal waits.
+    setTimeout(() => setBudgetSheet(false), BUDGET_SETTLE_MS)
     if (choice === previous) return
     setBudgetDraft(choice)
     void savePref({ budgetRange: budgetRangeOf(choice) }, () => setBudgetDraft(null))
-  }
-
-  const toggleDietary = (need: DietaryNeed) => {
-    const previous = dietary
-    const next = previous.includes(need)
-      ? previous.filter((d) => d !== need)
-      : [...previous, need]
-    setDietaryDraft(next)
-    void savePref({ dietary: next }, () => setDietaryDraft(previous))
   }
 
   return (
@@ -436,8 +421,8 @@ export default function ProfileScreen() {
       </View>
 
       {/* Preferences
-          Budget and dietary are edited in place (one tap, saved immediately);
-          the two the quiz owns route into it. */}
+          The budget band is edited in place (one tap, saved immediately); the
+          two the quiz owns route into it. */}
       <SectionCard title="Preferences">
         <Row
           label="Usual spend"
@@ -449,43 +434,6 @@ export default function ProfileScreen() {
           value={skipValue}
           onPress={() => router.push('/onboarding')}
         />
-        <Row
-          label="Dietary needs"
-          value={dietaryValue}
-          onPress={() => setDietaryOpen((o) => !o)}
-          right={
-            <Ionicons
-              name={dietaryOpen ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color="#504B47"
-            />
-          }
-        />
-        {/* Expands in place rather than opening a screen: three toggles do not
-            justify a destination, and seeing them next to the saved value is
-            what makes it obvious they ARE the saved value. */}
-        {dietaryOpen ? (
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 8,
-              paddingHorizontal: 16,
-              paddingBottom: 14,
-              borderBottomWidth: 1,
-              borderBottomColor: '#1A1A1A',
-            }}
-          >
-            {DIETARY_OPTIONS.map((o) => (
-              <DietaryChip
-                key={o.value}
-                label={o.label}
-                selected={dietary.includes(o.value)}
-                onPress={() => toggleDietary(o.value)}
-              />
-            ))}
-          </View>
-        ) : null}
         <Row
           label="How we pick"
           value={ADVENTUROUSNESS_LABELS[user.adventurousness]}
@@ -546,49 +494,3 @@ export default function ProfileScreen() {
   )
 }
 
-/**
- * One dietary need. Its own component because it holds press state, and hooks
- * cannot run inside a `.map()`.
- */
-function DietaryChip({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string
-  selected: boolean
-  onPress: () => void
-}) {
-  const { pressed, pressHandlers } = usePressed()
-
-  return (
-    <Pressable onPress={onPress} {...pressHandlers}>
-      {/* Unstyled Pressable, styled inner View — see lib/usePressed. */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-          paddingHorizontal: 13,
-          paddingVertical: 8,
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: selected ? '#E63946' : '#242424',
-          backgroundColor: selected ? '#1a0d0d' : '#141414',
-          opacity: pressed ? 0.75 : 1,
-        }}
-      >
-        {selected ? <Ionicons name="checkmark" size={13} color="#E63946" /> : null}
-        <Text
-          style={{
-            fontFamily: selected ? 'DMSans_700Bold' : 'DMSans_500Medium',
-            fontSize: 13,
-            color: selected ? '#E63946' : '#8A847E',
-          }}
-        >
-          {label}
-        </Text>
-      </View>
-    </Pressable>
-  )
-}

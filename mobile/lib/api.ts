@@ -248,6 +248,62 @@ export async function authSignup(body: {
   return data
 }
 
+/** Why a signup was refused — what the screen branches on. */
+export type SignupFailure =
+  /** This email already has an account; offer Sign In. */
+  | { kind: 'duplicate'; message: string }
+  /** The server rejected a field; `message` is its own wording. */
+  | { kind: 'validation'; message: string }
+  /** The request never arrived — no response at all. */
+  | { kind: 'network'; message: string }
+  | { kind: 'unknown'; message: string }
+
+/**
+ * Turns a thrown signup error into something the screen can actually say.
+ *
+ * ⚠️ Branches on the server's `code`, never on its prose — the message is
+ * display copy and may be reworded at any time, while `SIGNUP_ERRORS` in
+ * server/src/routes/auth.ts is the contract. The status is the fallback for an
+ * older server that predates the codes.
+ *
+ * ⚠️ "No response" is a genuinely different failure from "rejected", and the
+ * old screen collapsed both into "Unable to create your account. Please try
+ * again." — which told someone with an existing account to keep retrying
+ * something that could never work.
+ */
+export function signupFailureOf(err: unknown): SignupFailure {
+  if (!axios.isAxiosError(err)) {
+    return { kind: 'unknown', message: 'Something went wrong. Please try again.' }
+  }
+
+  if (!err.response) {
+    return {
+      kind: 'network',
+      message: "Couldn't reach Jou3an. Check your connection and try again.",
+    }
+  }
+
+  const { status, data } = err.response
+  const body = (data ?? {}) as { code?: string; error?: string }
+
+  if (body.code === 'EMAIL_TAKEN' || status === 409) {
+    return { kind: 'duplicate', message: 'This email is already registered.' }
+  }
+
+  if (body.code === 'INVALID_INPUT' || status === 400) {
+    return {
+      kind: 'validation',
+      // The server names the offending field; that beats anything generic.
+      message: body.error ?? 'Please check your details and try again.',
+    }
+  }
+
+  return {
+    kind: 'unknown',
+    message: body.error ?? 'Unable to create your account. Please try again.',
+  }
+}
+
 export async function authLogin(body: {
   email: string
   password: string

@@ -1,16 +1,22 @@
 /**
- * Official Jou3an wordmark (`public/brand/jou3an-logo.png`, intrinsic 973×186).
+ * The brand name as TEXT — "Jou3an", with the 3 in the brand red.
  *
- * ⚠️ The letters are WHITE — this must only ever sit on a dark surface.
- * Rendered at a fraction of its intrinsic size so it stays crisp on retina:
- * even the largest use here (34px tall) is ~18% of the source width.
+ * ⚠️ This used to render `public/brand/jou3an-logo.png`. It no longer renders
+ * ANY image: the old mark is being replaced and a wordmark that is about to
+ * change is not worth shipping at three sizes. The PNG is still on disk (and
+ * still the `og:image` source, which is a social-card asset, not a page
+ * element) — nothing was deleted, this just stopped pointing at it.
  *
- * Render ONE of these per location — two nodes means the alt text is announced
- * twice, and any responsive show/hide between them is a duplication waiting to
- * happen.
+ * Type instead of an image buys two things beyond the swap: it is crisp at
+ * every size with no intrinsic-ratio arithmetic, and it inherits the page's
+ * own font, so the nav and the hero headline are finally set in the same face.
+ *
+ * `height` stays the prop so every existing call site keeps working. It is the
+ * cap height the caller wants; font-size is derived from it.
  */
-const INTRINSIC_W = 973
-const INTRINSIC_H = 186
+
+/** Rendered glyphs are ~72% of the font size, so a 26px-tall mark needs ~36px. */
+const FONT_RATIO = 1 / 0.72
 
 export default function Logo({
   height = 26,
@@ -19,20 +25,16 @@ export default function Logo({
   height?: number
   className?: string
 }) {
-  const width = Math.round((height * INTRINSIC_W) / INTRINSIC_H)
+  const fontSize = Math.round(height * FONT_RATIO)
 
   return (
-    <img
-      src="/brand/jou3an-logo.png"
-      alt="Jou3an"
-      width={width}
-      height={height}
-      draggable={false}
-      // Explicit box so the fixed nav doesn't reflow while the PNG loads.
-      // NOTE: no `display` here — an inline style beats any utility class, so
-      // setting it would silently defeat `hidden` / `md:block` on the caller.
-      style={{ width, height }}
-      className={`select-none ${className}`}
-    />
+    <span
+      aria-label="Jou3an"
+      role="img"
+      className={`inline-block select-none font-display font-extrabold leading-none text-text-primary ${className}`}
+      style={{ fontSize, letterSpacing: '-0.03em' }}
+    >
+      Jou<span className="text-red">3</span>an
+    </span>
   )
 }

@@ -1,6 +1,6 @@
 import '../global.css'
-import { useEffect } from 'react'
-import { Stack } from 'expo-router'
+import { useEffect, useState } from 'react'
+import { Stack, useRootNavigationState, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -14,11 +14,63 @@ import {
   DMSans_700Bold,
   DMSans_800ExtraBold,
 } from '@expo-google-fonts/dm-sans'
-import { AuthProvider } from '../contexts/AuthContext'
+import { AuthProvider, useAuth } from '../contexts/AuthContext'
 
 SplashScreen.preventAutoHideAsync()
 
 const queryClient = new QueryClient()
+
+const WELCOME_ROUTE = '/welcome'
+
+/**
+ * Whether this LAUNCH has already shown the welcome screen.
+ *
+ * ⚠️ Module-level, deliberately not persisted. The rule is "a guest sees it
+ * again on the next launch, never twice in one session", and module scope says
+ * exactly that: it survives every navigation and dies with the process. Writing
+ * it to storage would turn "not signed in" into "dismissed once, forever", and
+ * the screen would stop being the thing that offers an account at all.
+ */
+let welcomeShownThisLaunch = false
+
+/**
+ * Sends a logged-out launch to the welcome screen, once.
+ *
+ * ⚠️ Renders nothing and navigates from an effect, because expo-router has no
+ * way to pick an initial route from async state: the token lives in SecureStore
+ * and `(tabs)` is already mounting by the time we know whether there is one.
+ * Redirecting is the only honest option, so the SPLASH IS HELD until this has
+ * decided — otherwise the tabs paint for a frame and the welcome screen looks
+ * like an interruption rather than the first screen.
+ *
+ * `useRootNavigationState()` is the guard for "the navigator exists yet";
+ * calling router.replace before it does is a no-op that silently loses the
+ * redirect.
+ */
+function LaunchGate({ fontsLoaded }: { fontsLoaded: boolean }) {
+  const { isLoading, isAuthenticated } = useAuth()
+  const router = useRouter()
+  const navState = useRootNavigationState()
+  const [decided, setDecided] = useState(false)
+
+  useEffect(() => {
+    if (decided || isLoading || !fontsLoaded || !navState?.key) return
+
+    // A valid token goes straight to the app — the welcome screen has nothing
+    // to offer someone who already has an account.
+    if (!isAuthenticated && !welcomeShownThisLaunch) {
+      welcomeShownThisLaunch = true
+      router.replace(WELCOME_ROUTE)
+    }
+    setDecided(true)
+  }, [decided, isLoading, isAuthenticated, fontsLoaded, navState?.key, router])
+
+  useEffect(() => {
+    if (decided) SplashScreen.hideAsync()
+  }, [decided])
+
+  return null
+}
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -29,12 +81,9 @@ export default function RootLayout() {
     DMSans_800ExtraBold,
   })
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync()
-    }
-  }, [loaded])
-
+  // ⚠️ The splash is NOT hidden here any more — LaunchGate hides it once it
+  // knows whether this is a guest launch. Hiding on fonts alone showed the
+  // tabs before the welcome redirect had run.
   if (!loaded) return null
 
   return (
@@ -43,6 +92,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <StatusBar style="light" />
+            <LaunchGate fontsLoaded={loaded} />
             <Stack
               screenOptions={{
                 headerShown: false,

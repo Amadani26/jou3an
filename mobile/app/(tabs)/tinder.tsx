@@ -22,7 +22,8 @@ import Animated, {
   Extrapolation,
   FadeIn,
   FadeOut,
-  SlideInRight,
+  LinearTransition,
+  ZoomIn,
   cancelAnimation,
   interpolate,
   runOnJS,
@@ -68,6 +69,9 @@ const EXCLUDE_CAP = 300
 
 /** Height of the always-present "Liked" tray. Reserved so the deck never jumps. */
 const TRAY_H = 86
+/** One liked thumbnail, and how far each tucks under the one before it. */
+const THUMB = 46
+const THUMB_OVERLAP = 12
 
 type LocationMode = 'nearby' | 'anywhere' | 'area'
 
@@ -391,17 +395,29 @@ function LocationPill({
   )
 }
 
-/** One thumbnail in the "Liked" tray. Its own component so it can hold press state. */
+/**
+ * One thumbnail in the "Liked" tray. Its own component so it can hold press
+ * state (hooks cannot run in a `.map()`).
+ *
+ * ⚠️ No caption. The tray used to print a 9px name under every circle, which at
+ * that size was a row of grey smudges that still truncated — and it made each
+ * item a different visual weight depending on the name. The photo is the
+ * recognisable thing; tapping opens the sheet, which has the name at a size
+ * somebody can read.
+ */
 function LikedThumb({
   name,
   imageIndex,
   imageUrl,
+  overlap,
   onPress,
 }: {
   name: string
   imageIndex: number
   /** Google Places photo; falls back to the placeholder when absent. */
   imageUrl?: string
+  /** Every tile but the first tucks under the one before it. */
+  overlap: boolean
   onPress: () => void
 }) {
   const { pressed, pressHandlers } = usePressed()
@@ -410,26 +426,27 @@ function LikedThumb({
     <Pressable
       onPress={onPress}
       {...pressHandlers}
+      accessibilityRole="button"
+      accessibilityLabel={name}
       // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
-      style={{ width: 52, alignItems: 'center', opacity: pressed ? 0.7 : 1 }}
+      style={{
+        marginLeft: overlap ? -THUMB_OVERLAP : 0,
+        opacity: pressed ? 0.7 : 1,
+      }}
     >
       <Image
         source={{ uri: imageUrl ?? getPlaceholderImage(imageIndex) }}
-        style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#141414' }}
-      />
-      <Text
-        numberOfLines={1}
         style={{
-          fontFamily: 'DMSans_400Regular',
-          fontSize: 9,
-          color: '#666',
-          marginTop: 4,
-          textAlign: 'center',
-          maxWidth: 52,
+          width: THUMB,
+          height: THUMB,
+          borderRadius: 14,
+          backgroundColor: '#141414',
+          // A ring in the PAGE colour, not a border: it is what separates two
+          // overlapping photos, and it has to read as the gap between them.
+          borderWidth: 2,
+          borderColor: '#080808',
         }}
-      >
-        {name}
-      </Text>
+      />
     </Pressable>
   )
 }
@@ -1122,30 +1139,78 @@ export default function TinderScreen() {
           like, which shoved the whole deck upward mid-swipe. Reserving the slot
           costs one band of empty space and buys a layout that never moves. */}
       <View style={{ height: TRAY_H, paddingTop: 4 }}>
-        <Text
+        {/* Label + count. The chip is the only thing in the tray that changes
+            size, and it is pinned to the right so the thumbnails below never
+            shift when it does. */}
+        <View
           style={{
-            fontFamily: 'DMSans_700Bold',
-            fontSize: 11,
-            color: '#555',
-            letterSpacing: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
             paddingHorizontal: 20,
             marginBottom: 8,
           }}
         >
-          LIKED
-        </Text>
+          <Text
+            style={{
+              fontFamily: 'DMSans_700Bold',
+              fontSize: 11,
+              color: '#555',
+              letterSpacing: 1,
+            }}
+          >
+            LIKED
+          </Text>
+          <View style={{ flex: 1 }} />
+          {likedRestaurants.length > 0 ? (
+            <Animated.View
+              // Keyed on the count so each new like mounts a fresh chip and the
+              // number is seen to tick up rather than silently re-render.
+              key={likedRestaurants.length}
+              entering={FadeIn.duration(220)}
+              style={{
+                paddingHorizontal: 9,
+                paddingVertical: 3,
+                borderRadius: 999,
+                backgroundColor: '#1a0d0d',
+                borderWidth: 1,
+                borderColor: '#E6394644',
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: 'DMSans_700Bold',
+                  fontSize: 10,
+                  letterSpacing: 0.3,
+                  color: '#E63946',
+                }}
+              >
+                {likedRestaurants.length} liked
+              </Text>
+            </Animated.View>
+          ) : null}
+        </View>
+
         {likedRestaurants.length > 0 ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
+            // No `gap` — the tiles set their own negative margin to overlap.
+            contentContainerStyle={{ paddingHorizontal: 20, alignItems: 'center' }}
           >
             {likedRestaurants.map((r, i) => (
-              <Animated.View key={r.id} entering={SlideInRight.springify().damping(14)}>
+              <Animated.View
+                key={r.id}
+                // A new like lands by dropping into the stack rather than
+                // sliding the whole row across.
+                entering={ZoomIn.springify().damping(14).stiffness(200)}
+                // The tile that was last stays put while the new one arrives.
+                layout={LinearTransition.springify().damping(18).stiffness(200)}
+              >
                 <LikedThumb
                   name={r.name}
                   imageIndex={i}
                   imageUrl={photoUrls(r)[0]}
+                  overlap={i > 0}
                   onPress={() => openSheetFor(r)}
                 />
               </Animated.View>

@@ -5,9 +5,11 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter, Link } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import RedButton from '../../components/RedButton'
+import Wordmark from '../../components/Wordmark'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePressed } from '../../lib/usePressed'
-import { API_BASE_URL } from '../../lib/api'
+import Animated, { FadeInDown } from 'react-native-reanimated'
+import { API_BASE_URL, signupFailureOf, type SignupFailure } from '../../lib/api'
 
 
 const fieldStyle = {
@@ -56,7 +58,9 @@ export default function SignupScreen() {
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  // The failure KIND, not just a string: a duplicate email earns a link to
+  // Sign In, and nothing else does.
+  const [failure, setFailure] = useState<SignupFailure | null>(null)
   const [showErrors, setShowErrors] = useState(false)
   const [loading, setLoading] = useState(false)
   const googlePress = usePressed()
@@ -69,23 +73,25 @@ export default function SignupScreen() {
   const emptyConfirm = showErrors && !confirm
 
   const onSubmit = async () => {
-    setError(null)
+    setFailure(null)
     // All fields are mandatory.
     if (!name.trim() || !email.trim() || !phone.trim() || !password || !confirm) {
       setShowErrors(true)
-      setError('Please fill in all fields.')
+      setFailure({ kind: 'validation', message: 'Please fill in all fields.' })
       return
     }
     if (password !== confirm) {
-      setError('Passwords do not match.')
+      setFailure({ kind: 'validation', message: 'Passwords do not match.' })
       return
     }
     setLoading(true)
     try {
       await signup(name.trim(), email.trim(), phone.trim(), password)
       router.replace('/onboarding')
-    } catch {
-      setError('Unable to create your account. Please try again.')
+    } catch (err) {
+      // The server says WHY; repeating "please try again" at someone whose
+      // email is already registered sends them round a loop that cannot end.
+      setFailure(signupFailureOf(err))
     } finally {
       setLoading(false)
     }
@@ -93,7 +99,10 @@ export default function SignupScreen() {
 
   const onGoogle = () => {
     Linking.openURL(`${API_BASE_URL}/api/auth/google`).catch(() => {
-      setError('Google sign-in is unavailable right now.')
+      setFailure({
+        kind: 'unknown',
+        message: 'Google sign-in is unavailable right now.',
+      })
     })
   }
 
@@ -132,8 +141,13 @@ export default function SignupScreen() {
         <Ionicons name="close" size={26} color="#8A847E" />
       </Pressable>
 
+      {/* Text wordmark — the `ج` mark is gone and a new one is being drawn;
+          type is the honest placeholder. See components/Wordmark. */}
+      <Wordmark size={26} />
+
       <Text
         style={{
+          marginTop: 14,
           fontFamily: 'DMSans_800ExtraBold',
           fontSize: 28,
           fontWeight: '800',
@@ -214,18 +228,41 @@ export default function SignupScreen() {
         disabled={loading}
         style={{ marginTop: 16 }}
       />
-      {error ? (
-        <Text
-          style={{
-            fontFamily: 'DMSans_400Regular',
-            fontSize: 13,
-            color: '#E8272A',
-            marginTop: 12,
-            textAlign: 'center',
-          }}
+      {failure ? (
+        <Animated.View
+          entering={FadeInDown.duration(220)}
+          style={{ marginTop: 12, alignItems: 'center', gap: 6 }}
         >
-          {error}
-        </Text>
+          <Text
+            style={{
+              fontFamily: 'DMSans_500Medium',
+              fontSize: 13,
+              color: failure.kind === 'network' ? '#8A847E' : '#E8272A',
+              textAlign: 'center',
+            }}
+          >
+            {failure.message}
+          </Text>
+
+          {/* The only actionable failure: the account exists, so offer the
+              door it is behind rather than making them find it. */}
+          {failure.kind === 'duplicate' ? (
+            <Link href="/(auth)/login" replace asChild>
+              <Pressable hitSlop={10} accessibilityRole="link">
+                <Text
+                  style={{
+                    fontFamily: 'DMSans_700Bold',
+                    fontSize: 13,
+                    color: '#F2EDE8',
+                    textDecorationLine: 'underline',
+                  }}
+                >
+                  Sign in instead
+                </Text>
+              </Pressable>
+            </Link>
+          ) : null}
+        </Animated.View>
       ) : null}
 
       {/* Divider */}

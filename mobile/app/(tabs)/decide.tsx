@@ -1,11 +1,25 @@
 import { useEffect, useState } from 'react'
-import { View, Text, Pressable, TextInput, ActivityIndicator } from 'react-native'
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  TextInput,
+  ActivityIndicator,
+} from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import * as Location from 'expo-location'
-import Animated, { FadeIn, SlideInLeft, SlideInRight } from 'react-native-reanimated'
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeOutUp,
+  LinearTransition,
+  SlideInLeft,
+  SlideInRight,
+} from 'react-native-reanimated'
 import RedButton from '../../components/RedButton'
 import { searchAreas, updatePreferences, type AreaSuggestion } from '../../lib/api'
 import AreaRow from '../../components/AreaRow'
@@ -15,6 +29,16 @@ import { CUISINE_ROWS, type Cuisine } from '../../lib/cuisines'
 import { budgetChoiceOf, budgetLabel, budgetRangeOf, type BudgetChoice } from '../../lib/budget'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePressed } from '../../lib/usePressed'
+import { useKeyboardHeight } from '../../lib/useKeyboardHeight'
+
+/**
+ * How long the budget sheet stays open after a band is tapped.
+ *
+ * Just enough for OptionSelector's highlight to reach the new row. Closing on
+ * the same frame as the tap is what made the choice feel like it had been
+ * swallowed rather than made.
+ */
+const BUDGET_SETTLE_MS = 260
 
 type LocationChoice = 'Nearby' | 'Anywhere in Dubai' | `Near ${string}`
 type Format = 'Delivery' | 'Dine In'
@@ -229,6 +253,8 @@ export default function DecideScreen() {
   const insets = useSafeAreaInsets()
   // The saved budget band is the default the pill on step 4 starts from.
   const { user, applyUser } = useAuth()
+  // Pads the area-search results so the rows the keyboard covers stay reachable.
+  const keyboard = useKeyboardHeight()
 
   const [step, setStep] = useState(0)
   const [back, setBack] = useState(false)
@@ -323,8 +349,11 @@ export default function DecideScreen() {
   const budget = budgetOverride ?? budgetChoiceOf(user?.budgetRange)
 
   const chooseBudget = (choice: BudgetChoice) => {
-    setBudgetSheet(false)
     setBudgetOverride(choice)
+    // ⚠️ Close AFTER the highlight has travelled. Dismissing in the same frame
+    // as the tap threw the sheet away before the new band was ever seen to be
+    // chosen — the animation existed and nobody could watch it.
+    setTimeout(() => setBudgetSheet(false), BUDGET_SETTLE_MS)
     if (!user) return
     // Fire-and-forget: the query carries the choice regardless, so a failed
     // save costs the user nothing right now — it just won't be remembered.
@@ -559,7 +588,17 @@ export default function DecideScreen() {
                   {searching ? <ActivityIndicator size="small" color="#504B47" /> : null}
                 </View>
 
-                <View style={{ flex: 1, marginTop: 8 }}>
+                {/* ⚠️ SCROLLABLE, and padded by the keyboard's height. The
+                    input sits high enough that the keyboard never covered it,
+                    but the five results below it did not fit: rows 4 and 5 were
+                    behind the keyboard in a plain View with nothing to scroll,
+                    so two of the matches simply could not be tapped. */}
+                <ScrollView
+                  style={{ flex: 1, marginTop: 8 }}
+                  contentContainerStyle={{ paddingBottom: keyboard }}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
                   {suggestions.length > 0 ? (
                     <Animated.View entering={FadeIn.duration(180)}>
                       {suggestions.map((s) => (
@@ -577,7 +616,7 @@ export default function DecideScreen() {
                   ) : query.trim().length >= 2 && !searching ? (
                     <Text style={emptyStateStyle}>No places found in Dubai.</Text>
                   ) : null}
-                </View>
+                </ScrollView>
               </Animated.View>
             ) : (
               <View style={{ gap: 12 }}>
@@ -759,7 +798,11 @@ function BudgetPill({ label, onPress }: { label: string; onPress: () => void }) 
   return (
     <Pressable onPress={onPress} {...pressHandlers} hitSlop={8}>
       {/* Unstyled Pressable, styled inner View — see lib/usePressed. */}
-      <View
+      <Animated.View
+        // The pill is as wide as its label, so a band change resizes it. Laying
+        // out the width change makes the pill grow into the new word instead of
+        // jumping, which matches the sheet's travelling highlight.
+        layout={LinearTransition.springify().damping(18).stiffness(200)}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -774,13 +817,19 @@ function BudgetPill({ label, onPress }: { label: string; onPress: () => void }) 
         }}
       >
         <Ionicons name="wallet-outline" size={14} color="#8A847E" />
-        <Text
+        {/* Keyed on the label so a new band mounts a new node: the old value
+            fades up and out, the new one rises in. Re-rendering one Text would
+            swap the characters with nothing in between. */}
+        <Animated.Text
+          key={label}
+          entering={FadeInDown.duration(180)}
+          exiting={FadeOutUp.duration(140)}
           style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 13, color: '#F2EDE8' }}
         >
           {label}
-        </Text>
+        </Animated.Text>
         <Ionicons name="chevron-down" size={13} color="#8A847E" />
-      </View>
+      </Animated.View>
     </Pressable>
   )
 }

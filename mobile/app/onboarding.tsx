@@ -36,6 +36,7 @@ import CuisineTile from '../components/CuisineTile'
 import { CUISINE_ROWS } from '../lib/cuisines'
 import { BUDGET_OPTIONS, budgetChoiceOf, budgetRangeOf, type BudgetChoice } from '../lib/budget'
 import { usePressed } from '../lib/usePressed'
+import OptionSelector from '../components/OptionSelector'
 import { useAuth } from '../contexts/AuthContext'
 import {
   submitTasteQuiz,
@@ -47,6 +48,16 @@ const STEPS = ['SKIP', 'BUDGET', 'ADVENTURE'] as const
 const STEP_COUNT = STEPS.length
 
 const tap = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+
+/**
+ * How long a tapped answer is left on screen before the step moves on.
+ *
+ * Long enough for OptionSelector's highlight to reach the row, short enough
+ * that nobody waits for it. A step that advances in the same frame as the tap
+ * never shows the answer landing — it just cuts.
+ */
+const SETTLE_MS = 230
+const settleThen = (go: () => void) => setTimeout(go, SETTLE_MS)
 
 interface AdventureOption {
   value: Adventurousness
@@ -145,96 +156,6 @@ function StepHeading({
   )
 }
 
-/** A full-width option row — used for budget and adventurousness. */
-function OptionRow({
-  title,
-  sub,
-  icon,
-  selected,
-  onPress,
-}: {
-  title: string
-  sub?: string
-  icon?: keyof typeof Ionicons.glyphMap
-  selected: boolean
-  onPress: () => void
-}) {
-  const { pressed, pressHandlers } = usePressed()
-
-  return (
-    <Pressable
-      onPress={() => {
-        tap()
-        onPress()
-      }}
-      {...pressHandlers}
-      // The Pressable stays UNSTYLED and the inner View carries the
-      // fill/border/radius/padding, matching CuisineTile. Pressable drops
-      // backgroundColor on some RN versions in this project (see the note in
-      // components/CuisineTile.tsx), so visual styling belongs on a child.
-      style={{ alignSelf: 'stretch' }}
-    >
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 14,
-          paddingHorizontal: 16,
-          paddingVertical: 15,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: selected ? '#E63946' : '#242424',
-          backgroundColor: selected ? '#1a0d0d' : '#141414',
-          opacity: pressed ? 0.75 : 1,
-        }}
-      >
-        {icon ? (
-          <View
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 10,
-              backgroundColor: selected ? '#E6394622' : '#1F1F1F',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Ionicons name={icon} size={18} color={selected ? '#E63946' : '#8A847E'} />
-          </View>
-        ) : null}
-
-        <View style={{ flex: 1 }}>
-          <Text
-            style={{
-              fontFamily: 'DMSans_700Bold',
-              fontSize: 15,
-              color: selected ? '#E63946' : '#F2EDE8',
-            }}
-          >
-            {title}
-          </Text>
-          {sub ? (
-            <Text
-              style={{
-                fontFamily: 'DMSans_400Regular',
-                fontSize: 12,
-                color: '#8A847E',
-                marginTop: 2,
-              }}
-            >
-              {sub}
-            </Text>
-          ) : null}
-        </View>
-
-        {selected ? (
-          <Ionicons name="checkmark-circle" size={20} color="#E63946" />
-        ) : null}
-      </View>
-    </Pressable>
-  )
-}
-
 /**
  * A slim utility pill — the "None — I eat everything" answer on step 1.
  *
@@ -314,7 +235,7 @@ function SkipLink({ onPress, label = 'Skip for now' }: { onPress: () => void; la
       onPress={onPress}
       {...pressHandlers}
       hitSlop={10}
-      // Unstyled Pressable, styled inner View — see the note on OptionRow.
+      // Unstyled Pressable, styled inner View — see components/CuisineTile.
       style={{ alignSelf: 'center' }}
     >
       <View
@@ -626,20 +547,23 @@ export default function OnboardingScreen() {
               sub="Per person, everyday meals. It nudges our picks — it doesn't cap them, and you can change it any time."
             />
 
-            <View style={{ gap: 10 }}>
-              {BUDGET_OPTIONS.map((b) => (
-                <OptionRow
-                  key={b.value}
-                  title={b.label}
-                  sub={b.sub}
-                  selected={budget === b.value}
-                  onPress={() => {
-                    setBudget(b.value)
-                    goNext()
-                  }}
-                />
-              ))}
-            </View>
+            <OptionSelector
+              options={BUDGET_OPTIONS.map((b) => ({
+                value: b.value,
+                title: b.label,
+                sub: b.sub,
+              }))}
+              value={budget}
+              onSelect={(choice) => {
+                tap()
+                setBudget(choice)
+                // Let the highlight finish travelling to the tapped row before
+                // the step slides away. Advancing in the same frame means the
+                // answer is never actually seen to land — the screen just
+                // changes, which is the thing that read as abrupt.
+                settleThen(goNext)
+              }}
+            />
 
             <View style={{ flex: 1 }} />
             <View style={{ paddingBottom: 10 }}>
@@ -657,24 +581,24 @@ export default function OnboardingScreen() {
               sub="This sets how often we slip in something you would not have chosen."
             />
 
-            <View style={{ gap: 10 }}>
-              {ADVENTURE.map((a) => (
-                <OptionRow
-                  key={a.value}
-                  title={a.label}
-                  sub={a.sub}
-                  icon={a.icon}
-                  selected={adventure === a.value}
-                  onPress={() => {
-                    setAdventure(a.value)
-                    // Last question — save and show the closing screen. The
-                    // value goes in explicitly: `adventure` is still null in
-                    // this closure. See saveAndFinish.
-                    void saveAndFinish(true, { adventure: a.value })
-                  }}
-                />
-              ))}
-            </View>
+            <OptionSelector
+              options={ADVENTURE.map((a) => ({
+                value: a.value,
+                title: a.label,
+                sub: a.sub,
+                icon: a.icon,
+              }))}
+              value={adventure}
+              onSelect={(choice) => {
+                tap()
+                setAdventure(choice)
+                // Last question — save and show the closing screen. ⚠️ The
+                // value goes in EXPLICITLY: `adventure` is still null in this
+                // closure, and reading the state it just set is the bug that
+                // once dropped this answer entirely. See saveAndFinish.
+                settleThen(() => void saveAndFinish(true, { adventure: choice }))
+              }}
+            />
 
             <View style={{ flex: 1 }} />
             <View style={{ paddingBottom: 10 }}>

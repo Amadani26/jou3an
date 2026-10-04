@@ -5,13 +5,16 @@
  * `activate` deletes every cache whose key !== CACHE_NAME, so bumping is what
  * evicts a previous deploy's entries from existing visitors.
  *
+ * v4: the PNG wordmark left APP_SHELL — the nav, footer and boot splash render
+ * text now, so pre-caching it bought nothing.
+ *
  * v3: navigations are NETWORK-FIRST. v2 served them cache-first, which meant a
  * returning visitor got the *cached* index.html — pointing at hashed bundles
  * that no longer exist after a deploy — i.e. a permanent white screen that no
  * amount of reloading could fix, because the reload was answered from the same
  * cache. The bump also purges the stale HTML v2 left behind.
  */
-const CACHE_NAME = 'jou3an-v3'
+const CACHE_NAME = 'jou3an-v4'
 
 // Core app shell. Only ever used as an OFFLINE fallback for navigations now;
 // hashed JS/CSS bundles are cached at runtime (their names are not known ahead
@@ -20,7 +23,11 @@ const APP_SHELL = [
   '/',
   '/index.html',
   '/site.webmanifest',
-  '/brand/jou3an-logo.png',
+  // The icons stay: they are the favicon / apple-touch-icon / manifest icons.
+  // ⚠️ `jou3an-logo.png` was dropped from this list in v4 — nothing renders it
+  // any more (the wordmark is text now, see src/components/Logo.tsx), so
+  // pre-caching it was downloading an unused image on every first visit. The
+  // file is still served; it is just no longer part of the shell.
   '/brand/jou3an-icon-180.png',
   '/brand/jou3an-icon-512.png',
 ]
