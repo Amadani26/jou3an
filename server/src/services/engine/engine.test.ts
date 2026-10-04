@@ -9,7 +9,7 @@ import {
   dampingFor,
   explorationFor,
 } from './select'
-import { BUDGET_BANDS, filterCandidates } from './filter'
+import { BUDGET_BANDS, filterCandidates, matchesCuisines } from './filter'
 import { NEUTRAL, priceFit, tasteScore } from './score'
 import { conflictsWithDietary } from '../../lib/dietary'
 import { effectiveTasteWeights, quizWeightsFrom } from '../tasteProfile'
@@ -321,8 +321,10 @@ describe('decide — parked cafes never reach a result', () => {
       input({
         candidates,
         // A profile that adores coffee, and a query explicitly asking for it.
+        // The cuisine filter cannot field three Coffee rows, so it is given up
+        // (reported in relaxed[]) — and even then the parked cafe stays out.
         tasteWeights: { coffee: 10 },
-        context: context({ requestedCuisines: ['Coffee'] }),
+        context: context({ cuisines: ['Coffee'] }),
       }),
     )
     expect(d.picks.map((p) => p.restaurant.name)).not.toContain('Beloved Coffee')
@@ -869,5 +871,284 @@ describe('skipped cuisines are soft', () => {
     expect(once.japanese).toBe(1)
     // Learning is untouched by the derivation — only the sum moved.
     expect(learned).toEqual({ japanese: 3, pakistani: 1 })
+  })
+})
+
+describe('explicit cuisines are a HARD Stage-1 filter (union)', () => {
+  /** n restaurants of one cuisine, all at `at`, with sane distinct ids. */
+  function many(n: number, cuisineType: string, at = MARINA, over = {}) {
+    return Array.from({ length: n }, () =>
+      restaurant({ cuisineType, lat: at.lat, lng: at.lng, ...over }),
+    )
+  }
+
+  it('returns only the picked cuisines, never an unpicked one', () => {
+    resetIds()
+    const candidates = [...many(3, 'Japanese'), ...many(3, 'Pizza'), ...many(3, 'Lebanese')]
+    const d = decide(input({ candidates, context: context({ cuisines: ['Japanese'] }) }))
+    expect(CUISINES(d)).toEqual(new Set(['japanese']))
+  })
+
+  it('unions several picks rather than intersecting them', () => {
+    resetIds()
+    const candidates = [...many(3, 'Japanese'), ...many(3, 'Pizza'), ...many(3, 'Lebanese')]
+    const d = decide(
+      input({ candidates, context: context({ cuisines: ['Japanese', 'Pizza'] }) }),
+    )
+    // Both picked cuisines are admissible; the unpicked one is not.
+    expect(CUISINES(d).has('lebanese')).toBe(false)
+    for (const c of CUISINES(d)) expect(['japanese', 'pizza']).toContain(c)
+  })
+
+  it('spreads the three across the picked cuisines when it can', () => {
+    resetIds()
+    const candidates = [...many(3, 'Japanese'), ...many(3, 'Pizza'), ...many(3, 'Lebanese')]
+    const d = decide(
+      input({ candidates, context: context({ cuisines: ['Japanese', 'Pizza'] }) }),
+    )
+    // The diversity constraint is unchanged — it now spreads across the SELECTED
+    // cuisines because that is all the pool holds.
+    expect(CUISINES(d).size).toBe(2)
+  })
+
+  it('returns 3 of one cuisine when that is what was asked for', () => {
+    resetIds()
+    const candidates = [...many(4, 'Japanese'), ...many(4, 'Pizza')]
+    const d = decide(input({ candidates, context: context({ cuisines: ['Japanese'] }) }))
+    expect(d.picks).toHaveLength(3)
+    expect(CUISINES(d)).toEqual(new Set(['japanese']))
+  })
+
+  it('leaves the full pool and full diversity when nothing was picked', () => {
+    resetIds()
+    const d = decide(input({ candidates: catalogue(), context: context({ cuisines: [] }) }))
+    expect(CUISINES(d).size).toBe(3)
+  })
+
+  it('matches a tile name against a longer catalogue cuisine', () => {
+    // "American" (the tile) must find "American Burgers" (the importer's value)
+    // or an American brief would silently exclude every burger joint.
+    expect(matchesCuisines(restaurant({ cuisineType: 'American Burgers' }), ['American']))
+      .toBe(true)
+    expect(matchesCuisines(restaurant({ cuisineType: 'Pizza' }), ['American'])).toBe(false)
+    expect(matchesCuisines(restaurant({ cuisineType: 'Japanese' }), [])).toBe(true)
+    expect(matchesCuisines(restaurant({ cuisineType: 'Japanese' }), undefined)).toBe(true)
+  })
+
+  /* ---------------- interaction with the relaxation ladder ---------------- */
+
+  it('widens the radius to WIDER rather than serving an unpicked cuisine', () => {
+    resetIds()
+    // ~7.5 km from Marina: outside the NEARBY tier, inside WIDER. (DIFC is ~19
+    // km from Marina, which would skip straight to CITY and prove less.)
+    const MID = { lat: MARINA.lat + 0.05, lng: MARINA.lng + 0.05 }
+    // Nothing Japanese within 5 km, three of them a drive away, and three
+    // pizzerias on the doorstep. The pizzerias must NOT win.
+    const candidates = [...many(3, 'Japanese', MID), ...many(3, 'Pizza', MARINA)]
+    const d = decide(
+      input({ candidates, context: context({ cuisines: ['Japanese'], ...MARINA }) }),
+    )
+    expect(d.radiusTier).toBe('WIDER')
+    expect(CUISINES(d)).toEqual(new Set(['japanese']))
+    expect(d.relaxed).toEqual([])
+  })
+
+  it('goes CITY-wide rather than serving an unpicked cuisine', () => {
+    resetIds()
+    // The only Japanese in the catalogue is 100 km away; every radius tier is
+    // given up before the cuisine filter is even considered.
+    const candidates = [...many(3, 'Japanese', FAR), ...many(3, 'Pizza', MARINA)]
+    const d = decide(
+      input({ candidates, context: context({ cuisines: ['Japanese'], ...MARINA }) }),
+    )
+    expect(d.radiusTier).toBe('CITY')
+    expect(CUISINES(d)).toEqual(new Set(['japanese']))
+    expect(d.relaxed).toEqual([])
+  })
+
+  it('relaxes format before cuisine — the picks stay on-brief', () => {
+    resetIds()
+    const candidates = [
+      ...many(3, 'Japanese'), // no delivery links
+      ...many(3, 'Pizza', MARINA, { talabatUrl: 'https://talabat.example/x' }),
+    ]
+    const d = decide(
+      input({
+        candidates,
+        context: context({ cuisines: ['Japanese'], formatFilter: 'DELIVERY' }),
+      }),
+    )
+    expect(d.relaxed).toEqual(['format'])
+    expect(CUISINES(d)).toEqual(new Set(['japanese']))
+  })
+
+  it('gives up the cuisine only when it cannot field 3 anywhere, and says so', () => {
+    resetIds()
+    // Two Japanese rows in all of Dubai. "Always exactly 3" is the one rule
+    // above the cuisine filter, so it breaks — and reports itself in relaxed[].
+    const candidates = [...many(2, 'Japanese'), ...many(3, 'Pizza')]
+    const d = decide(input({ candidates, context: context({ cuisines: ['Japanese'] }) }))
+    expect(d.picks).toHaveLength(3)
+    expect(d.relaxed).toContain('cuisine')
+  })
+
+  it("never reports 'cuisine' as relaxed when nothing was picked", () => {
+    resetIds()
+    const { relaxed } = filterCandidates(catalogue(), context({ cuisines: [] }))
+    expect(relaxed).not.toContain('cuisine')
+  })
+
+  it('still honours the parked-cafe gate inside a cuisine brief', () => {
+    resetIds()
+    const candidates = [
+      ...many(3, 'Coffee'),
+      cafe({ cuisineType: 'Coffee', googleRating: 5, name: 'Parked Cafe' }),
+    ]
+    const d = decide(input({ candidates, context: context({ cuisines: ['Coffee'] }) }))
+    expect(d.picks.map((p) => p.restaurant.name)).not.toContain('Parked Cafe')
+  })
+})
+
+describe('Refresh exclusions', () => {
+  function pool(n: number) {
+    resetIds()
+    return Array.from({ length: n }, (_, i) =>
+      restaurant({ cuisineType: `Cuisine ${i}`, googleRating: 4 + (i % 5) / 10 }),
+    )
+  }
+
+  it('never returns an excluded restaurant', () => {
+    const candidates = pool(12)
+    const first = decide(input({ candidates }))
+    const shown = first.picks.map((p) => p.restaurant.id)
+
+    const second = decide(
+      input({ candidates, context: context({ excludeIds: shown, refreshNonce: 1 }) }),
+    )
+    for (const p of second.picks) expect(shown).not.toContain(p.restaurant.id)
+    expect(second.cycled).toBe(false)
+  })
+
+  it('accumulates across several Refreshes without ever repeating', () => {
+    const candidates = pool(12)
+    const seen: string[] = []
+    for (let n = 0; n < 4; n++) {
+      const d = decide(
+        input({ candidates, context: context({ excludeIds: [...seen], refreshNonce: n }) }),
+      )
+      expect(d.cycled).toBe(false)
+      for (const p of d.picks) expect(seen).not.toContain(p.restaurant.id)
+      seen.push(...d.picks.map((p) => p.restaurant.id))
+    }
+    // 4 refreshes x 3 picks, all distinct — the pool held exactly 12.
+    expect(new Set(seen).size).toBe(12)
+  })
+
+  it('cycles rather than returning fewer than 3 once the brief is spent', () => {
+    const candidates = pool(5)
+    const everything = candidates.map((r) => r.id)
+    const d = decide(input({ candidates, context: context({ excludeIds: everything }) }))
+
+    expect(d.picks).toHaveLength(3)
+    expect(d.cycled).toBe(true)
+  })
+
+  it('cycles when exclusions would leave only 2 — not a partial honouring', () => {
+    const candidates = pool(5)
+    // Three excluded, two left: honouring them would serve the leftovers.
+    const d = decide(
+      input({ candidates, context: context({ excludeIds: candidates.slice(0, 3).map((r) => r.id) }) }),
+    )
+    expect(d.cycled).toBe(true)
+    // The whole set was dropped, so the excluded rows are admissible again.
+    const ids = d.picks.map((p) => p.restaurant.id)
+    expect(ids.some((id) => candidates.slice(0, 3).some((r) => r.id === id))).toBe(true)
+  })
+
+  it('is not cycled when nothing was excluded', () => {
+    expect(decide(input({ candidates: catalogue() })).cycled).toBe(false)
+  })
+
+  it('does NOT loosen the brief — exclusions never add to relaxed[]', () => {
+    const candidates = pool(5)
+    const d = decide(
+      input({ candidates, context: context({ excludeIds: candidates.map((r) => r.id) }) }),
+    )
+    // relaxed[] is read as evidence the CATALOGUE was thin for this brief; a
+    // user on their fourth Refresh must not pollute that signal.
+    expect(d.relaxed).toEqual([])
+  })
+
+  it('applies after the radius ladder, leaving the tier the brief chose', () => {
+    resetIds()
+    const near = Array.from({ length: 6 }, (_, i) =>
+      restaurant({ cuisineType: `Cuisine ${i}`, lat: MARINA.lat, lng: MARINA.lng }),
+    )
+    const d = decide(
+      input({
+        candidates: near,
+        context: context({ ...MARINA, excludeIds: near.slice(0, 3).map((r) => r.id) }),
+      }),
+    )
+    expect(d.radiusTier).toBe('NEARBY')
+    expect(d.cycled).toBe(false)
+  })
+
+  it('an unknown id is simply inert', () => {
+    const candidates = pool(12)
+    const a = decide(input({ candidates }))
+    const b = decide(input({ candidates, context: context({ excludeIds: ['no-such-id'] }) }))
+    expect(b.picks.map((p) => p.restaurant.id)).toEqual(a.picks.map((p) => p.restaurant.id))
+    expect(b.cycled).toBe(false)
+  })
+})
+
+describe('a cuisine too thin to field 3 still leads the answer', () => {
+  /** One Emirati row in a catalogue full of other things. */
+  function thinCatalogue() {
+    resetIds()
+    return [
+      restaurant({ name: 'The Only Emirati Place', cuisineType: 'Emirati', googleRating: 3.6 }),
+      restaurant({ name: 'Great Pizza', cuisineType: 'Pizza', googleRating: 4.9 }),
+      restaurant({ name: 'Great Sushi', cuisineType: 'Japanese', googleRating: 4.9 }),
+      restaurant({ name: 'Great Curry', cuisineType: 'Indian', googleRating: 4.8 }),
+      restaurant({ name: 'Great Grills', cuisineType: 'Lebanese', googleRating: 4.8 }),
+    ]
+  }
+
+  it('surfaces the one matching row even though it is outscored', () => {
+    // The regression this guards: dropping the cuisine filter outright returned
+    // three well-rated restaurants with no Emirati among them — a worse answer
+    // than the single Emirati place the catalogue actually holds.
+    const d = decide(
+      input({ candidates: thinCatalogue(), context: context({ cuisines: ['Emirati'] }) }),
+    )
+    expect(d.picks.map((p) => p.restaurant.name)).toContain('The Only Emirati Place')
+    expect(d.picks).toHaveLength(3)
+    expect(d.relaxed).toContain('cuisine')
+  })
+
+  it('tops up from the full pool rather than returning one result', () => {
+    const d = decide(
+      input({ candidates: thinCatalogue(), context: context({ cuisines: ['Emirati'] }) }),
+    )
+    expect(CUISINES(d).size).toBe(3)
+  })
+
+  it('pins nothing while the cuisine filter holds', () => {
+    resetIds()
+    const candidates = [
+      ...Array.from({ length: 4 }, () => restaurant({ cuisineType: 'Pizza' })),
+      restaurant({ cuisineType: 'Japanese' }),
+    ]
+    const { pinned, relaxed } = filterCandidates(candidates, context({ cuisines: ['Pizza'] }))
+    expect(relaxed).not.toContain('cuisine')
+    expect(pinned.size).toBe(0)
+  })
+
+  it('pins nothing when no cuisine was picked', () => {
+    resetIds()
+    const { pinned } = filterCandidates(catalogue(), context({ cuisines: [] }))
+    expect(pinned.size).toBe(0)
   })
 })

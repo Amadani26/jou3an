@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { boostedTasteWeights, epsilonFor, toEngineContext } from './request'
+import { epsilonFor, toEngineContext } from './request'
 import { EPSILON } from './select'
-import { WEIGHT_MAX } from '../tasteProfile'
 import { decide } from './index'
 import { catalogue, context, input } from './fixtures'
 
@@ -113,51 +112,33 @@ describe('toEngineContext', () => {
   })
 })
 
-describe('boostedTasteWeights', () => {
-  it('returns the profile untouched when nothing was requested', () => {
-    const profile = { japanese: 2 }
-    expect(boostedTasteWeights(profile, [])).toBe(profile)
+describe('explicit cuisines reach the context as a filter, not a weight', () => {
+  const date = new Date('2026-09-21T12:00:00Z')
+
+  it('passes the picked cuisines through verbatim', () => {
+    const c = toEngineContext({ cuisines: ['Japanese', 'Pizza'] }, null, date)
+    expect(c.cuisines).toEqual(['Japanese', 'Pizza'])
   })
 
-  it('pins a requested cuisine to the ceiling', () => {
-    expect(boostedTasteWeights({}, ['Japanese']).japanese).toBe(WEIGHT_MAX)
+  it('defaults to an empty list — no picks means no cuisine constraint', () => {
+    expect(toEngineContext({}, null, date).cuisines).toEqual([])
   })
 
-  it('normalises the requested cuisine key', () => {
-    expect(Object.keys(boostedTasteWeights({}, ['  JaPaNeSe ']))).toEqual(['japanese'])
+  it('leaves the taste weights alone — the route passes the profile untouched', () => {
+    // The deleted `boostedTasteWeights` used to pin a requested cuisine to the
+    // ceiling here. Nothing in the request mapping touches taste any more, so a
+    // learned dislike stays a learned dislike even when that cuisine is asked
+    // for; the filter is what honours the request.
+    const c = toEngineContext({ cuisines: ['Japanese'] }, null, date)
+    expect(c).not.toHaveProperty('tasteWeights')
   })
 
-  it('overrides a learned dislike for this query only', () => {
-    const profile = { japanese: -4 }
-    const boosted = boostedTasteWeights(profile, ['Japanese'])
-    expect(boosted.japanese).toBe(WEIGHT_MAX)
-    // The caller's profile object must not be mutated — the boost is per-query
-    // and is never persisted.
-    expect(profile.japanese).toBe(-4)
-  })
-
-  it('keeps unrelated learned weights', () => {
-    const boosted = boostedTasteWeights({ lebanese: 3 }, ['Japanese'])
-    expect(boosted.lebanese).toBe(3)
-    expect(boosted.japanese).toBe(WEIGHT_MAX)
-  })
-
-  it('makes the requested cuisine lead the ranking', () => {
-    // A mediocre Japanese place should still outscore better-rated others on
-    // taste once the user explicitly asks for Japanese.
-    const candidates = catalogue()
-    const japanese = candidates.find((r) => r.cuisineType === 'Japanese')!
-
-    const plain = decide(input({ candidates, tasteWeights: {} }))
-    const asked = decide(
-      input({ candidates, tasteWeights: boostedTasteWeights({}, ['Japanese']) }),
-    )
-
-    const tasteOf = (d: ReturnType<typeof decide>) =>
-      d.breakdown.find((b) => b.restaurantId === japanese.id)!.taste
-
-    expect(tasteOf(asked)).toBeGreaterThan(tasteOf(plain))
-    expect(tasteOf(asked)).toBe(1)
+  it('passes the Refresh exclusions through, defaulting to empty', () => {
+    expect(toEngineContext({ excludeIds: ['a', 'b'] }, null, date).excludeIds).toEqual([
+      'a',
+      'b',
+    ])
+    expect(toEngineContext({}, null, date).excludeIds).toEqual([])
   })
 })
 
@@ -242,47 +223,35 @@ describe('seed rolls to the next Dubai day', () => {
   })
 })
 
-describe('reason wording — requested vs learned', () => {
+describe('reason wording — a learned habit is the only kind there is', () => {
   /**
-   * The taste term is reached the same way either route; only the copy differs.
    * The catalogue holds two Japanese restaurants and the diversity constraint
    * admits just one, so this matches on CUISINE rather than a pinned id.
    */
-  function reasonForJapanese(over: Parameters<typeof context>[0]) {
+  function japanesePick(weights: Record<string, number>, over: Parameters<typeof context>[0] = {}) {
+    const d = decide(
+      input({ candidates: catalogue(), tasteWeights: weights, context: context(over) }),
+    )
+    return d.picks.find((p) => p.restaurant.cuisineType === 'Japanese')
+  }
+
+  it('says "you keep going back" when the weight is genuinely learned', () => {
+    const pick = japanesePick({ japanese: 8 })
+    expect(pick, 'a strongly-liked cuisine should land a pick').toBeDefined()
+    expect(pick!.reason).toMatch(/keep going back/i)
+  })
+
+  it('never claims a habit on a first-ever anonymous request for a cuisine', () => {
+    // The regression this guards: while a requested cuisine was folded into the
+    // taste weights, asking for Japanese produced "You keep going back to
+    // Japanese" for a user with no history at all. The cuisine is a filter now
+    // and moves no score, so taste cannot dominate on an empty profile.
     const d = decide(
       input({
         candidates: catalogue(),
-        tasteWeights: boostedTasteWeights({}, ['Japanese']),
-        context: context(over),
-      }),
-    )
-    const pick = d.picks.find((p) => p.restaurant.cuisineType === 'Japanese')
-    // A boosted cuisine should always land a pick; fail loudly if not.
-    expect(pick, 'expected a Japanese pick when Japanese is boosted').toBeDefined()
-    return pick!.reason
-  }
-
-  it('says "you asked for" when the cuisine was explicitly requested', () => {
-    const reason = reasonForJapanese({ requestedCuisines: ['Japanese'] })
-    expect(reason).toMatch(/you asked for/i)
-    expect(reason).not.toMatch(/keep going back/i)
-  })
-
-  it('says "you keep going back" when the weight is learned, not requested', () => {
-    // Same high weight, but nothing was requested this query — so it can only
-    // have come from the user's history.
-    const reason = reasonForJapanese({ requestedCuisines: [] })
-    if (reason) expect(reason).not.toMatch(/you asked for/i)
-  })
-
-  it('never claims a habit on a first-ever anonymous request', () => {
-    const candidates = catalogue()
-    const d = decide(
-      input({
-        candidates,
         userId: null,
-        tasteWeights: boostedTasteWeights({}, ['Japanese']),
-        context: context({ requestedCuisines: ['Japanese'] }),
+        tasteWeights: {},
+        context: context({ cuisines: ['Japanese'] }),
       }),
     )
     for (const p of d.picks) expect(p.reason).not.toMatch(/keep going back/i)

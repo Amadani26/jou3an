@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScrollView, View, Text, Pressable, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -17,7 +17,11 @@ import {
   deliveryUrl,
   photoUrls,
   type Restaurant,
+  type Swipe,
 } from '../lib/api'
+
+/** The server's own cap on the accumulated list — kept in step by hand. */
+const MAX_EXCLUDE_IDS = 300
 
 export default function ResultsScreen() {
   const router = useRouter()
@@ -27,6 +31,8 @@ export default function ResultsScreen() {
     chips?: string
     mode?: string
     likedIds?: string
+    /** The full swipe log (JSON) — right AND left, so passes train the profile. */
+    swipes?: string
     title?: string
     lat?: string
     lng?: string
@@ -60,6 +66,14 @@ export default function ResultsScreen() {
     likedIds = params.likedIds ? (JSON.parse(params.likedIds) as string[]) : []
   } catch {
     likedIds = []
+  }
+  // Right AND left, in order. Malformed degrades to "no log", which is exactly
+  // how an older build behaved — the likes alone still pick the three.
+  let swipes: Swipe[] = []
+  try {
+    swipes = params.swipes ? (JSON.parse(params.swipes) as Swipe[]) : []
+  } catch {
+    swipes = []
   }
 
   // Structured filters. Router params are strings, so the array arrives
@@ -108,6 +122,24 @@ export default function ResultsScreen() {
    * forces a genuine re-roll rather than a re-render of the same answer.
    */
   const [refreshNonce, setRefreshNonce] = useState(0)
+  /**
+   * Every restaurant this screen has shown for this brief.
+   *
+   * ⚠️ Scoped to the SCREEN, which is what resets it: a new brief pushes a new
+   * results screen with an empty set, and leaving pops this one. There is
+   * deliberately nothing to clear by hand — a set that outlived the brief it
+   * belongs to would start excluding restaurants from a question nobody asked.
+   *
+   * Capped at the server's own ceiling, newest kept, so a long refresh session
+   * cannot grow a request body until it is rejected.
+   */
+  const shownIds = useRef<string[]>([])
+  /**
+   * Set once, when the brief first runs out of restaurants the user has not
+   * seen. A quiet line is honest; repeating it every lap would be nagging.
+   */
+  const [cycled, setCycled] = useState(false)
+  const cycleAnnounced = useRef(false)
 
   /**
    * PATCHes the session, retrying ONCE after a short pause.
@@ -166,10 +198,12 @@ export default function ResultsScreen() {
     setError(false)
     setChosen(null)
     setRewardVisible(false)
+    // The notice belongs to one result set, not to the screen.
+    setCycled(false)
     const started = Date.now()
     try {
       const res = isTinder
-        ? await tinderSuggest(likedIds)
+        ? await tinderSuggest(likedIds, swipes)
         : await getDecision(effectivePrompt, chips, coords, {
             cuisines,
             format,
@@ -177,6 +211,8 @@ export default function ResultsScreen() {
             budget,
             areaName: params.areaName,
             refreshNonce: nonce,
+            // What has already been seen. Empty on first load.
+            excludeIds: shownIds.current,
           })
       const elapsed = Date.now() - started
       if (elapsed < 1200) {
@@ -184,6 +220,21 @@ export default function ResultsScreen() {
       }
       setResults(res.results)
       setSessionId(res.sessionId)
+
+      // The brief is spent: the server dropped the exclusions to field three.
+      // Start the set over from these three, or every future Refresh would hand
+      // back the same cycled trio forever.
+      if (res.cycled) {
+        shownIds.current = res.results.map((r) => r.id)
+        if (!cycleAnnounced.current) {
+          cycleAnnounced.current = true
+          setCycled(true)
+        }
+      } else {
+        shownIds.current = [...shownIds.current, ...res.results.map((r) => r.id)].slice(
+          -MAX_EXCLUDE_IDS,
+        )
+      }
     } catch {
       const elapsed = Date.now() - started
       if (elapsed < 1200) {
@@ -354,6 +405,32 @@ export default function ResultsScreen() {
         </View>
       ) : (
         <>
+          {/* The brief is exhausted and these are the top three again. Quiet,
+              and said once: the user can see they are repeats, and a screen
+              that pretends otherwise is the thing that loses their trust. */}
+          {cycled ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 20,
+                marginBottom: 12,
+              }}
+            >
+              <Ionicons name="refresh-outline" size={13} color="#504B47" />
+              <Text
+                style={{
+                  fontFamily: 'DMSans_400Regular',
+                  fontSize: 12,
+                  color: '#504B47',
+                }}
+              >
+                Back to our top picks
+              </Text>
+            </View>
+          ) : null}
+
           {results.map((r, i) => (
             <Animated.View
               key={r.id}

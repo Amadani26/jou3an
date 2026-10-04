@@ -178,6 +178,13 @@ export interface DecisionResponse {
   radiusTier?: 'NEARBY' | 'WIDER' | 'CITY'
   /** Which backend engine answered. Present while v2 sits behind ENGINE_V2. */
   engine?: 'v1' | 'v2'
+  /**
+   * True when the brief ran out of restaurants the user had not already been
+   * shown, so `excludeIds` was dropped and these are the top picks again. The
+   * UI says so quietly, once — pretending they are new would be a lie the user
+   * can see through. Absent on the v1 path, which tracks nothing.
+   */
+  cycled?: boolean
 }
 
 /**
@@ -202,6 +209,14 @@ export interface DecisionFilters {
    * each Refresh tap to force a genuine re-roll.
    */
   refreshNonce?: number
+  /**
+   * Every restaurant already shown for THIS brief. The server removes them from
+   * the pool before selection, so Refresh means "cards I haven't seen" rather
+   * than "roll again, maybe the same". Reset when the brief changes; when the
+   * brief is exhausted the server answers `cycled: true` instead of serving
+   * fewer than 3.
+   */
+  excludeIds?: string[]
 }
 
 export interface DecisionSession {
@@ -275,6 +290,7 @@ export async function postDecisionQuery(body: {
   vibe?: 'Casual' | 'Fancy'
   areaName?: string
   refreshNonce?: number
+  excludeIds?: string[]
 }): Promise<DecisionResponse> {
   const { data } = await api.post<DecisionResponse>('/api/decisions/query', body)
   return data
@@ -300,6 +316,7 @@ export async function getDecision(
     ...(filters?.vibe ? { vibe: filters.vibe } : {}),
     ...(filters?.budget ? { budget: filters.budget } : {}),
     ...(filters?.areaName ? { areaName: filters.areaName } : {}),
+    ...(filters?.excludeIds?.length ? { excludeIds: filters.excludeIds } : {}),
     refreshNonce: filters?.refreshNonce ?? 0,
   })
 }
@@ -338,6 +355,15 @@ export interface NearbyOptions {
    * guarantee — `offset` is what actually paginates.
    */
   exclude?: string[]
+  /**
+   * Deals the pool in a deterministic shuffled order instead of id-ascending /
+   * nearest-first.
+   *
+   * ⚠️ Must be the SAME value for every page of one session, or `offset` pages
+   * through a pack that is re-dealt between requests — the same restaurant
+   * twice, others never. One seed per app launch is the contract.
+   */
+  seed?: number
 }
 
 /**
@@ -350,13 +376,14 @@ export async function getNearbyRestaurants(
   coords?: { lat: number; lng: number } | null,
   options: NearbyOptions = {},
 ): Promise<Restaurant[]> {
-  const { radiusKm = 5, limit, offset, exclude } = options
+  const { radiusKm = 5, limit, offset, exclude, seed } = options
   const { data } = await api.get<Restaurant[]>('/api/restaurants/nearby', {
     params: {
       ...(coords ? { lat: coords.lat, lng: coords.lng, radius: radiusKm } : {}),
       ...(limit !== undefined ? { limit } : {}),
       ...(offset ? { offset } : {}),
       ...(exclude?.length ? { exclude: exclude.join(',') } : {}),
+      ...(seed !== undefined ? { seed } : {}),
     },
   })
   return data
@@ -382,10 +409,31 @@ export async function searchAreas(q: string): Promise<AreaSuggestion[]> {
   return data.results ?? []
 }
 
-/** Send the right-swiped restaurant IDs, get back 3 recommendations + a sessionId. */
-export async function tinderSuggest(likedIds: string[]): Promise<DecisionResponse> {
+/** One card judged, in the order it was judged. */
+export interface Swipe {
+  restaurantId: string
+  direction: 'LEFT' | 'RIGHT'
+}
+
+/**
+ * Send the swipe log, get back 3 recommendations + a sessionId.
+ *
+ * ⚠️ `swipes` is what makes a LEFT swipe mean anything. The likes alone say what
+ * someone wants; the passes say what they keep refusing, which the profile has
+ * no other way to learn (-0.25 per pass, server-side). `likedIds` is still sent
+ * because it is what picks the three results, and because the endpoint has to
+ * keep answering older builds that send only that.
+ *
+ * The server de-duplicates repeats — the deck loops, so a long session genuinely
+ * re-shows cards — keeping the most recent judgement of each.
+ */
+export async function tinderSuggest(
+  likedIds: string[],
+  swipes: Swipe[] = [],
+): Promise<DecisionResponse> {
   const { data } = await api.post<DecisionResponse>('/api/decisions/tinder-suggest', {
     likedIds,
+    ...(swipes.length ? { swipes } : {}),
   })
   return data
 }

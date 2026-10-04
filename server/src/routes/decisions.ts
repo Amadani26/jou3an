@@ -13,7 +13,7 @@ import {
 } from '../services/tasteProfile'
 import { decide, type Decision3, type EngineInput } from '../services/engine'
 import { getPickRates, getRecentSelections, logDecision } from '../services/engine/log'
-import { boostedTasteWeights, toEngineContext } from '../services/engine/request'
+import { toEngineContext } from '../services/engine/request'
 import {
   distanceKm as kmBetween,
   hasCoords,
@@ -32,6 +32,15 @@ function shuffle<T>(arr: T[]): T[] {
   }
   return a
 }
+
+/**
+ * Ceiling on the accumulated "already shown" list.
+ *
+ * Three per Refresh, so this is ~100 taps on one brief — far past the point
+ * where the engine starts cycling. It exists to bound the request body, not to
+ * shape behaviour.
+ */
+const MAX_EXCLUDE_IDS = 300
 
 const querySchema = z.object({
   // Still required, but now for DISPLAY and history only — the engine reads the
@@ -62,6 +71,16 @@ const querySchema = z.object({
    * Omitted by older clients, who get the saved band as before.
    */
   budget: z.enum(['LOW', 'MID', 'HIGH', 'ANY']).optional(),
+  /**
+   * Restaurants already shown for THIS brief, accumulated by the Refresh
+   * button. The engine removes them from the pool before selection, so Refresh
+   * means "something I haven't seen" rather than "roll again and maybe repeat".
+   *
+   * Capped: a client that keeps refreshing forever must not grow its request
+   * without bound, and past the cap the brief is exhausted anyway — the engine
+   * answers that case by cycling. Ignored by the v1 matcher.
+   */
+  excludeIds: z.array(z.string()).max(MAX_EXCLUDE_IDS).default([]),
 })
 
 /** Engine v2 is opt-in per environment while it runs alongside the matcher. */
@@ -97,6 +116,7 @@ router.post('/query', optionalAuth, async (req, res) => {
     vibe,
     refreshNonce,
     budget,
+    excludeIds,
   } = parsed.data
 
   // Prefer the authenticated user; fall back to a body userId that exists (FK safety)
@@ -125,6 +145,10 @@ router.post('/query', optionalAuth, async (req, res) => {
   let radiusKm: number | null = null
   let radiusTier: RadiusTier = 'CITY'
   let engineUsed: 'v1' | 'v2' = 'v1'
+  // True when the Refresh exclusions had to be abandoned to field three picks:
+  // the brief is spent and these are the top picks again. v1 never cycles —
+  // it has no notion of what the user has already been shown.
+  let cycled = false
   // Captured on the v2 path so the audit row can be written once the session
   // exists (DecisionLog.sessionId is the join back to what the user saw).
   let auditInput: EngineInput | null = null
@@ -155,9 +179,12 @@ router.post('/query', optionalAuth, async (req, res) => {
       // so handing it the whole catalogue is safe — and keeps the one
       // definition of "servable" in ../lib/venueType.ts.
       candidates: allRestaurants,
-      tasteWeights: boostedTasteWeights(profileWeights, cuisines),
+      // The profile as it stands. ⚠️ Requested cuisines are NOT folded in here
+      // any more (`boostedTasteWeights`, deleted): they are a hard Stage-1
+      // filter, so taste now ranks only WITHIN what the user asked for.
+      tasteWeights: profileWeights,
       context: toEngineContext(
-        { format, vibe, lat, lng, refreshNonce, cuisines, budget },
+        { format, vibe, lat, lng, refreshNonce, cuisines, budget, excludeIds },
         prefs,
         new Date(),
       ),
@@ -170,6 +197,7 @@ router.post('/query', optionalAuth, async (req, res) => {
 
     radiusKm = decision.radiusKm
     radiusTier = decision.radiusTier
+    cycled = decision.cycled
     results = decision.picks.map((p) => ({
       ...p.restaurant,
       ...(p.distanceKm !== null ? { distanceKm: p.distanceKm } : {}),
@@ -235,6 +263,8 @@ router.post('/query', optionalAuth, async (req, res) => {
     // Which engine answered — lets the client (and a curl) tell the paths
     // apart while v2 is behind a flag.
     engine: engineUsed,
+    // The brief ran out of unseen restaurants and came back to the top.
+    cycled,
   })
 })
 
@@ -246,6 +276,11 @@ router.post('/query', optionalAuth, async (req, res) => {
  * builds send only that, and they must keep working. When `swipes` is present
  * its right-swipes are merged into the liked set, so a client can send either
  * shape (or both) and get the same behaviour.
+ *
+ * The current app sends the FULL log, so a LEFT swipe is now a real training
+ * signal (-0.25) and not merely an absence. That is the half the profile was
+ * missing: "not this" is information, and a user who passes on twelve burger
+ * places has said something a list of their likes cannot express.
  */
 const swipeSchema = z.object({
   restaurantId: z.string().min(1),
@@ -268,11 +303,24 @@ router.post('/tinder-suggest', optionalAuth, async (req, res) => {
   }
   const { likedIds, swipes } = parsed.data
 
+  /**
+   * One entry per restaurant, keeping the LAST swipe on it.
+   *
+   * The deck loops once the pool is spent, so a long session genuinely re-shows
+   * cards and the client sends every swipe including the repeats — it has to,
+   * because that log is also what orders the next lap. Here they would be a
+   * problem: five passes on the same place would stack to -1.25 on its cuisine
+   * and bury it, and a pass followed later by a like would net out as neither.
+   * The most recent swipe is the user's current opinion, so that is the one that
+   * trains the profile; the earlier ones are superseded, not additional.
+   */
+  const dedupedSwipes = [...new Map(swipes.map((s) => [s.restaurantId, s])).values()]
+
   // Right-swipes from the log count as likes too, so a client that sends only
   // `swipes` behaves identically to one that sends only `likedIds`.
   const likedSet = new Set([
     ...likedIds,
-    ...swipes.filter((s) => s.direction === 'RIGHT').map((s) => s.restaurantId),
+    ...dedupedSwipes.filter((s) => s.direction === 'RIGHT').map((s) => s.restaurantId),
   ])
   const effectiveLikedIds = [...likedSet]
 
@@ -298,8 +346,8 @@ router.post('/tinder-suggest', optionalAuth, async (req, res) => {
   // list from an older build teaches nothing about what was rejected, so it is
   // recorded as right-swipes only.
   if (req.userId) {
-    const swipedIds = swipes.length
-      ? swipes.map((s) => s.restaurantId)
+    const swipedIds = dedupedSwipes.length
+      ? dedupedSwipes.map((s) => s.restaurantId)
       : effectiveLikedIds
     const cuisineById = new Map(
       (swipedIds.length
@@ -312,8 +360,8 @@ router.post('/tinder-suggest', optionalAuth, async (req, res) => {
     )
 
     const events = (
-      swipes.length
-        ? swipes.map((s) => ({
+      dedupedSwipes.length
+        ? dedupedSwipes.map((s) => ({
             cuisine: cuisineById.get(s.restaurantId) ?? '',
             event: (s.direction === 'RIGHT' ? 'SWIPE_RIGHT' : 'SWIPE_LEFT') as TasteEvent,
           }))

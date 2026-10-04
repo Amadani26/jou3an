@@ -19,21 +19,22 @@ function titleCase(s: string): string {
 export function buildReason(
   restaurant: Candidate,
   breakdown: ScoreBreakdown,
-  opts: { vibe: string; wildcard: boolean; requestedCuisines?: string[] },
+  opts: { vibe: string; wildcard: boolean },
 ): string {
   const cuisine = titleCase(restaurant.cuisineType)
 
   if (opts.wildcard) return `Something different — ${cuisine}`
 
   switch (breakdown.topComponent) {
-    case 'taste': {
-      // An explicitly requested cuisine reaches the taste term at full weight,
-      // so "you keep going back to X" would be a lie on a first-ever query.
-      const asked = (opts.requestedCuisines ?? []).some((c) =>
-        restaurant.cuisineType.toLowerCase().includes(c.trim().toLowerCase()),
-      )
-      return asked ? `The ${cuisine} you asked for` : `You keep going back to ${cuisine}`
-    }
+    case 'taste':
+      // ⚠️ Safe to state as a habit now, and it was not always. While an
+      // explicitly requested cuisine was folded into the taste weights at full
+      // strength (the deleted `boostedTasteWeights`), this line fired on a
+      // first-ever anonymous query and claimed a history that did not exist —
+      // which is why the engine used to carry `requestedCuisines` purely to
+      // word around it. A requested cuisine is a Stage-1 FILTER now and touches
+      // no score, so a dominant taste term can only have been learned.
+      return `You keep going back to ${cuisine}`
 
     case 'quality': {
       if (typeof restaurant.googleRating === 'number' && restaurant.googleRating > 0) {

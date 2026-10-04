@@ -30,12 +30,29 @@ export interface EngineContext {
   lat?: number | null
   lng?: number | null
   /**
-   * Cuisines the user explicitly picked this query. Used ONLY for wording the
-   * reason line: a requested cuisine is folded into the taste weights (see
-   * boostedTasteWeights), so without this the engine cannot tell "you asked
-   * for burgers" apart from "you keep choosing burgers".
+   * Cuisines the user explicitly picked this query — a HARD Stage-1 filter,
+   * applied as a UNION (pick Japanese and Pizza and you get only Japanese and
+   * Pizza). Empty or omitted means no cuisine preference: the full pool.
+   *
+   * ⚠️ This used to be a taste BOOST rather than a filter (the deleted
+   * `boostedTasteWeights`), on the theory that filtering would trip the
+   * relaxation ladder. It does not, and the boost was the wrong answer anyway:
+   * a user who taps "Japanese" and is handed two non-Japanese cards has had
+   * their one explicit instruction overruled by a scoring weight they cannot
+   * see. Asking for a cuisine is the clearest signal the app ever receives, so
+   * it is honoured literally — see filterCandidates for where the radius ladder
+   * widens (5 -> 10 -> city) rather than letting this filter break.
    */
-  requestedCuisines?: string[]
+  cuisines?: string[]
+  /**
+   * Restaurants already shown for THIS brief, which Refresh accumulates. Hard
+   * and per-call: they are removed from the pool before selection, so a tap on
+   * Refresh is a promise of genuinely new cards rather than a re-roll that may
+   * return the same place. When honouring them would leave fewer than three
+   * candidates the set is dropped wholesale and `cycled` is set — see
+   * filterCandidates.
+   */
+  excludeIds?: string[]
   /**
    * Dietary needs declared by the user (the onboarding quiz's "avoid" step).
    * Applied as a Stage-1 EXCLUSION — see src/lib/dietary.ts, which documents
@@ -116,4 +133,10 @@ export type Decision3 = {
   seed: number
   /** True when slot 3 was the ε-wildcard rather than the next-best pick. */
   wildcardUsed: boolean
+  /**
+   * True when `context.excludeIds` had to be abandoned to field three picks:
+   * the user has seen everything this brief can offer and we are back at the
+   * top. The client says so quietly once rather than pretending these are new.
+   */
+  cycled: boolean
 }

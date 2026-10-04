@@ -39,6 +39,13 @@ export async function logDecision(
           scoredCount: decision.breakdown.length,
           relaxed: decision.relaxed,
           wildcardUsed: decision.wildcardUsed,
+          cuisines: input.context.cuisines ?? [],
+          // How much Refresh had already ruled out, and whether the brief ran
+          // dry and came back round. A log row with a large count and
+          // cycled:true is a user who exhausted everything we had for them —
+          // the catalogue signal, read from the other end.
+          excludeCount: (input.context.excludeIds ?? []).length,
+          cycled: decision.cycled,
         } as Prisma.InputJsonValue,
         breakdown: decision.breakdown as unknown as Prisma.InputJsonValue,
         chosenIds: decision.picks.map((p) => p.restaurant.id),

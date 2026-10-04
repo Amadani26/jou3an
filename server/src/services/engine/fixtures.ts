@@ -8,7 +8,7 @@ import type { Candidate, EngineContext, EngineInput } from './types'
 
 /** Dubai Marina, roughly. */
 export const MARINA = { lat: 25.0805, lng: 55.1403 }
-/** DIFC, ~9 km from Marina — lands in the WIDER tier, not NEARBY. */
+/** DIFC — ~19.6 km from Marina, i.e. outside EVERY radius tier from there. */
 export const DIFC = { lat: 25.2084, lng: 55.2739 }
 /** Hatta, ~100 km out — always outside every radius tier. */
 export const FAR = { lat: 24.7997, lng: 56.1216 }

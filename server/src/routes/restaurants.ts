@@ -3,6 +3,7 @@ import prisma from '../lib/prisma'
 import { withPhotoUrls, withPhotoUrlsAll } from '../lib/photos'
 import { withinRadius } from '../lib/geo'
 import { SERVEABLE_WHERE } from '../lib/venueType'
+import { seededShuffle } from '../services/engine/rng'
 
 const router = Router()
 
@@ -44,6 +45,23 @@ function parseExclude(raw: unknown): Set<string> {
  *   `offset`  rows to skip, applied AFTER the radius filter and the exclusions
  *   `exclude` comma-separated ids to omit (e.g. what this session already
  *             swiped), capped at MAX_EXCLUDE
+ *   `seed`    deal the pool in a deterministic shuffled order instead of
+ *             id-ascending / nearest-first — see below
+ *
+ * ⚠️ `seed` exists because the deck's default order is a tour of the catalogue
+ * rather than a deck of cards. Ordered by id, "Anywhere" descended through
+ * Dubai area by area: twenty cards from one neighbourhood, then twenty from the
+ * next, which reads as a list someone forgot to shuffle. A seeded shuffle fixes
+ * it WITHOUT breaking `offset`, which is the whole difficulty — the order has to
+ * be identical across every page of one session, so it cannot come from
+ * `Math.random()` per request. One seed per app session gives a shuffled deck
+ * that pages correctly and is dealt differently next launch.
+ *
+ * ⚠️ With coordinates the shuffle REPLACES nearest-first, on purpose. Food
+ * Tinder is for discovery, not for finding the closest dinner — the radius has
+ * already said "near enough", and within it the nearest-first ordering only
+ * meant the user swiped their own street before seeing anywhere else. Each card
+ * still shows its own distance.
  *
  * The response stays a BARE ARRAY. Food Tinder infers "that's everything" from
  * a short page, which keeps every existing client working — wrapping it in
@@ -73,6 +91,14 @@ router.get('/nearby', async (req, res) => {
       Number.isFinite(parsedRadius) && parsedRadius > 0 ? parsedRadius : DEFAULT_RADIUS_KM
     // Annotates distanceKm and sorts nearest-first — itself a stable order.
     pool = withinRadius(restaurants, { lat, lng }, radiusKm)
+  }
+
+  // Shuffled BEFORE the exclusions and the offset, so removing cards never
+  // reorders what is left: the remaining deck stays a subsequence of the same
+  // deal, which is what keeps paging consistent within a session.
+  const parsedSeed = Number(req.query.seed)
+  if (Number.isFinite(parsedSeed)) {
+    pool = seededShuffle(pool, Math.abs(Math.floor(parsedSeed)) >>> 0)
   }
 
   const exclude = parseExclude(req.query.exclude)

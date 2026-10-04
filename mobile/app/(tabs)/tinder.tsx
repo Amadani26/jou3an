@@ -91,6 +91,29 @@ const ANYWHERE: DeckLocation = { mode: 'anywhere', coords: null, areaLabel: null
  */
 let sessionLocation: DeckLocation = ANYWHERE
 
+/**
+ * The seed that deals this session's deck.
+ *
+ * ⚠️ Computed ONCE at module load, which is once per app launch, and that is the
+ * whole contract. The server pages the deck with `offset`, so the shuffle has to
+ * be identical across every page of a session — a fresh seed per request would
+ * re-deal the pack between pages and show the same restaurant twice while
+ * skipping others. A new launch gets a new seed, so the deck is not the same
+ * tour of Dubai every day.
+ *
+ * Why it exists at all: without it the pool comes back in id order, which on
+ * "Anywhere" marched through the catalogue area by area — twenty cards from one
+ * neighbourhood, then twenty from the next. Discovery is the entire point of
+ * this screen, and an unshuffled list is the opposite of it.
+ */
+const sessionSeed = Math.floor(Math.random() * 2_147_483_647)
+
+/** One judged card, in the order it was judged. Left swipes count too. */
+interface SwipeRecord {
+  restaurantId: string
+  direction: 'LEFT' | 'RIGHT'
+}
+
 /* ---------------- Card photo slideshow ---------------- */
 
 const CARD_W = W - 40
@@ -449,10 +472,15 @@ export default function TinderScreen() {
     radiusKm: RADIUS_LADDER[0],
   })
   /**
-   * Every swipe this session, in order, repeats included. It is what orders the
-   * loop (least-recently-swiped first) and what a filter change excludes.
+   * Every swipe this session, in order, repeats included — and now WITH its
+   * direction.
+   *
+   * Three readers, which is why it carries more than ids: it orders the loop
+   * (least-recently-swiped first), it is what a filter change excludes, and it
+   * is the log sent to `tinder-suggest` so a pass trains the taste profile
+   * instead of being merely an absence of a like.
    */
-  const swipeLog = useRef<string[]>([])
+  const swipeLog = useRef<SwipeRecord[]>([])
   /** Snapshot taken per filter load, so paging stays consistent within it. */
   const excludeSnapshot = useRef<string[]>([])
   /**
@@ -475,6 +503,8 @@ export default function TinderScreen() {
       limit: PAGE_SIZE,
       offset,
       exclude: excludeSnapshot.current,
+      // Same seed for every page of this session — see sessionSeed.
+      seed: sessionSeed,
     })
 
   /**
@@ -496,7 +526,9 @@ export default function TinderScreen() {
     loopAnnounced.current = false
     // Switching filters should feel like fresh cards, not a re-run of what was
     // just swiped. Capped — past the cap `offset` carries the paging anyway.
-    excludeSnapshot.current = [...new Set(swipeLog.current)].slice(-EXCLUDE_CAP)
+    excludeSnapshot.current = [
+      ...new Set(swipeLog.current.map((sw) => sw.restaurantId)),
+    ].slice(-EXCLUDE_CAP)
 
     try {
       let rows: Restaurant[] = []
@@ -584,7 +616,7 @@ export default function TinderScreen() {
     if (index < restaurants.length) return
 
     const lastSwipedAt = new Map<string, number>()
-    swipeLog.current.forEach((id, i) => lastSwipedAt.set(id, i))
+    swipeLog.current.forEach((sw, i) => lastSwipedAt.set(sw.restaurantId, i))
     const looped = [...restaurants].sort(
       (a, b) => (lastSwipedAt.get(a.id) ?? -1) - (lastSwipedAt.get(b.id) ?? -1),
     )
@@ -672,9 +704,16 @@ export default function TinderScreen() {
         ? Haptics.ImpactFeedbackStyle.Medium
         : Haptics.ImpactFeedbackStyle.Light,
     )
-    // Every swipe is logged, re-swipes on looped cards included: they order the
-    // next lap, and a card seen twice is a card the user has now judged twice.
-    if (r) swipeLog.current.push(r.id)
+    // Every swipe is logged WITH its direction, re-swipes on looped cards
+    // included: they order the next lap, and a card seen twice is a card the
+    // user has now judged twice. The server keeps only the latest judgement of
+    // each, so a repeat refines the profile rather than stacking on it.
+    if (r) {
+      swipeLog.current.push({
+        restaurantId: r.id,
+        direction: dir === 'right' ? 'RIGHT' : 'LEFT',
+      })
+    }
     // The liked SET is what Suggest 3 sends, so a second right-swipe on the
     // same restaurant is not a second entry (the server de-duplicates it too).
     if (dir === 'right' && r) {
@@ -783,6 +822,11 @@ export default function TinderScreen() {
       params: {
         mode: 'tinder',
         likedIds: JSON.stringify(likedIds),
+        // The FULL log, passes included — this is what teaches the profile what
+        // the user keeps refusing. Trimmed to the most recent EXCLUDE_CAP so one
+        // very long session cannot bloat a navigation param; the server
+        // de-duplicates repeats on arrival.
+        swipes: JSON.stringify(swipeLog.current.slice(-EXCLUDE_CAP)),
         title: swipeCount >= 10 ? 'Picked for your taste' : 'Your 3 picks',
       },
     })

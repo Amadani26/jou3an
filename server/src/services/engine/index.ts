@@ -12,7 +12,8 @@
  * keyword matcher in ../decisionEngine.ts answers when the flag is off.
  *
  * Four stages:
- *   1. filter   — active, open, format, dietary, 5->10->city radius ladder
+ *   1. filter   — active, open, format, cuisine, dietary, 5->10->city ladder,
+ *                 then the Refresh exclusions
  *   2. score    — 0.4 quality + 0.4 taste + 0.2 context
  *   3. select   — diversity constraint, repeat-damping, ε-wildcard
  *   4. reason   — one line per pick, from its dominant component
@@ -26,7 +27,7 @@ import { scoreCandidate } from './score'
 import type { Candidate, Decision3, EngineInput, Pick, ScoreBreakdown } from './types'
 
 export * from './types'
-export { filterCandidates, RADIUS_TIERS, REQUIRED } from './filter'
+export { filterCandidates, matchesCuisines, RADIUS_TIERS, REQUIRED } from './filter'
 export { hashSeed, seededRandom, dubaiDateString } from './rng'
 export {
   DAMPING_DAYS,
@@ -69,7 +70,10 @@ export function decide(input: EngineInput): Decision3 {
       : null
 
   // --- Stage 1 -------------------------------------------------------
-  const { pool, radiusKm, radiusTier, relaxed } = filterCandidates(candidates, context)
+  const { pool, radiusKm, radiusTier, relaxed, cycled, pinned } = filterCandidates(
+    candidates,
+    context,
+  )
 
   const seed = seedFor(input)
   const random = seededRandom(seed)
@@ -111,7 +115,18 @@ export function decide(input: EngineInput): Decision3 {
   const ranked = [...breakdown].sort((a, b) => b.total - a.total)
 
   // --- Stage 3 -------------------------------------------------------
-  const { chosen, wildcardUsed } = selectThree(ranked, random, epsilon)
+  // When the cuisine filter had to break (a cuisine with fewer than three rows
+  // in the whole catalogue), what DOES match it still leads: one Emirati place
+  // plus two others beats three restaurants with no Emirati among them. `pinned`
+  // is empty on every other path, so ranking is otherwise untouched.
+  const prioritised = pinned.size
+    ? [
+        ...ranked.filter((b) => pinned.has(b.restaurantId)),
+        ...ranked.filter((b) => !pinned.has(b.restaurantId)),
+      ]
+    : ranked
+
+  const { chosen, wildcardUsed } = selectThree(prioritised, random, epsilon)
 
   // The product rule is absolute. If the catalogue genuinely cannot field three
   // distinct restaurants we would rather fail loudly here than return two and
@@ -138,11 +153,7 @@ export function decide(input: EngineInput): Decision3 {
       restaurant,
       rank: i + 1,
       reason: withDistance(
-        buildReason(restaurant, b, {
-          vibe: context.vibe,
-          wildcard: isWildcard,
-          requestedCuisines: context.requestedCuisines,
-        }),
+        buildReason(restaurant, b, { vibe: context.vibe, wildcard: isWildcard }),
         b.distanceKm,
       ),
       breakdown: b,
@@ -158,5 +169,6 @@ export function decide(input: EngineInput): Decision3 {
     breakdown,
     seed,
     wildcardUsed,
+    cycled,
   }
 }

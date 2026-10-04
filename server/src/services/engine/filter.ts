@@ -8,6 +8,7 @@
  * so the caller (and the DecisionLog) can see it.
  */
 import { isOpenNow } from '../../lib/hours'
+import { normalizeCuisine } from '../tasteProfile'
 import { withinRadius, type Coords } from '../../lib/geo'
 import { isServeable } from '../../lib/venueType'
 import { conflictsWithDietary } from '../../lib/dietary'
@@ -53,12 +54,51 @@ export function matchesFormat(r: Candidate, format: FormatFilter): boolean {
   return true
 }
 
+/**
+ * Does this restaurant's cuisine satisfy the user's explicit picks (a UNION)?
+ *
+ * Matching is substring-tolerant in BOTH directions, because the app's eight
+ * cuisine tiles and the catalogue's free-text `cuisineType` are not the same
+ * vocabulary: the tile says "American" while the importer writes both
+ * "American" and "American Burgers". An exact compare would silently drop every
+ * burger joint from an American brief — the worst possible failure for a filter
+ * whose whole job is to honour what the user tapped.
+ */
+export function matchesCuisines(r: Candidate, cuisines: string[] | undefined): boolean {
+  if (!cuisines?.length) return true
+  const row = normalizeCuisine(r.cuisineType)
+  if (!row) return false
+  return cuisines.some((raw) => {
+    const want = normalizeCuisine(raw)
+    if (!want) return false
+    return row.includes(want) || want.includes(row)
+  })
+}
+
 export interface FilterResult {
   pool: Candidate[]
   radiusKm: number | null
   radiusTier: RadiusTier
   /** Constraint names dropped to reach REQUIRED, in the order they were dropped. */
   relaxed: string[]
+  /**
+   * True when `context.excludeIds` was abandoned to field three candidates —
+   * the brief is exhausted and the pool has come back round to the top.
+   */
+  cycled: boolean
+  /**
+   * Rows that DO match the picked cuisines, populated only when the cuisine
+   * filter had to break (i.e. 'cuisine' is in `relaxed`). Empty otherwise.
+   *
+   * ⚠️ This is what stops a thin cuisine from disappearing completely. Two of
+   * the eight cuisines the app offers have fewer than three servable rows
+   * (Emirati, Pakistani), so tapping one of those tiles reaches the cuisine
+   * rung — and dropping the filter outright handed back three restaurants with
+   * no Emirati among them at all, which is a worse answer than the one
+   * restaurant we actually have. Stage 3 ranks these first, so the user gets
+   * what exists of what they asked for, topped up to three.
+   */
+  pinned: Set<string>
 }
 
 /** Applies the radius ladder to an already-constrained pool. */
@@ -80,7 +120,7 @@ function applyRadiusLadder(
 
 /**
  * Stage 1. Constraints are dropped in this order when the pool is too small:
- *   format -> opening hours -> dietary.
+ *   format -> opening hours -> cuisine -> dietary.
  *
  * ⚠️ BUDGET IS NOT ON THIS LADDER, because it is not a constraint at all any
  * more — it is a score term (see BUDGET_BANDS above). There is nothing to
@@ -92,6 +132,16 @@ function applyRadiusLadder(
  * handing a vegan a
  * steakhouse is worse still: it is not an inconvenience, it is a result they
  * cannot use at all.
+ *
+ * ⚠️ THE CUISINE FILTER OUTLIVES THE RADIUS LADDER, which is the whole point of
+ * it. Each rung above runs the full 5 km -> 10 km -> city widening before the
+ * next rung is considered, so a Japanese brief in a quiet neighbourhood reaches
+ * across Dubai for Japanese rather than handing back the nearest pizza. Cuisine
+ * is given up only on the second-to-last rung — when the picked cuisines cannot
+ * field three rows ANYWHERE in the city even with hours ignored — and when it is
+ * given up, 'cuisine' is reported in `relaxed[]` so the DecisionLog says so out
+ * loud. It sits above dietary because a cuisine you did not ask for is a
+ * disappointment, while a dietary conflict is a result you cannot eat.
  *
  * ⚠️ The dietary rung is reached only when every looser brief has already
  * failed, which in practice means a catalogue of under ~10 servable rows. The
@@ -121,7 +171,10 @@ export function filterCandidates(
   // Dietary sits just inside the hard gate: every rung below operates on the
   // already-excluded pool, and only the very last rung gives it up.
   const eligible = servable.filter((r) => !conflictsWithDietary(r, context.dietary))
-  const open = eligible.filter((r) => isOpenNow(r, context.date))
+  // The explicit cuisine picks, applied on top of dietary — every rung except
+  // the last two is a cuisine the user actually asked for.
+  const wanted = eligible.filter((r) => matchesCuisines(r, context.cuisines))
+  const open = wanted.filter((r) => isOpenNow(r, context.date))
 
   // Successively looser briefs; the first that yields REQUIRED wins.
   const attempts: { pool: Candidate[]; relaxed: string[] }[] = [
@@ -130,24 +183,80 @@ export function filterCandidates(
       relaxed: [],
     },
     { pool: open, relaxed: ['format'] },
-    { pool: eligible, relaxed: ['format', 'hours'] },
+    { pool: wanted, relaxed: ['format', 'hours'] },
+    // The picked cuisines cannot field three rows city-wide. With no cuisines
+    // picked this pool is identical to the rung above, so it is unreachable and
+    // 'cuisine' never appears in relaxed[].
+    { pool: eligible, relaxed: ['format', 'hours', 'cuisine'] },
     // Last resort. With no dietary needs declared this pool is identical to the
     // rung above, so it is unreachable and the word never appears in relaxed[].
-    { pool: servable, relaxed: ['format', 'hours', 'dietary'] },
+    { pool: servable, relaxed: ['format', 'hours', 'cuisine', 'dietary'] },
   ]
 
   for (const attempt of attempts) {
     if (attempt.pool.length < REQUIRED) continue
     const laddered = applyRadiusLadder(attempt.pool, origin)
-    if (laddered.pool.length >= REQUIRED) return { ...laddered, relaxed: attempt.relaxed }
+    if (laddered.pool.length >= REQUIRED) {
+      return withExclusions(
+        { ...laddered, relaxed: attempt.relaxed, pinned: pinnedFor(laddered.pool, attempt.relaxed, context) },
+        context,
+      )
+    }
   }
 
   // Everything was tried and the catalogue still cannot field three servable
   // rows. Hand back the widest LEGITIMATE pool; `select` will surface the
   // shortfall rather than this layer reaching for a parked or de-listed row.
+  const relaxed = ['format', 'hours', 'cuisine', 'dietary']
   const laddered = applyRadiusLadder(servable, origin)
-  return {
-    ...laddered,
-    relaxed: ['format', 'hours', 'dietary'],
-  }
+  return withExclusions(
+    { ...laddered, relaxed, pinned: pinnedFor(laddered.pool, relaxed, context) },
+    context,
+  )
+}
+
+/**
+ * The rows that still match the picked cuisines, but only once the cuisine
+ * filter has been given up.
+ *
+ * While the filter holds, EVERY row in the pool matches, so pinning would mean
+ * nothing — the empty set keeps Stage 3's ranking untouched on the normal path.
+ */
+function pinnedFor(
+  pool: Candidate[],
+  relaxed: string[],
+  context: EngineContext,
+): Set<string> {
+  if (!relaxed.includes('cuisine') || !context.cuisines?.length) return new Set()
+  return new Set(
+    pool.filter((r) => matchesCuisines(r, context.cuisines)).map((r) => r.id),
+  )
+}
+
+/**
+ * Removes what the user has already been shown for this brief — the ids Refresh
+ * accumulates — from a pool the ladder has already settled on.
+ *
+ * ⚠️ Applied AFTER the ladder, deliberately. Exclusions must not be able to
+ * loosen the brief: `relaxed[]` is read as evidence that the CATALOGUE was too
+ * thin for what was asked, and a user on their fourth Refresh dropping 'hours'
+ * into that signal would be noise. So the rung and the radius are decided by
+ * the brief alone, and the exclusions are then taken off the top.
+ *
+ * When too few survive, the whole set is dropped rather than partially honoured
+ * and `cycled` is set: the user has seen everything this brief holds, and
+ * showing them the three best again (with the UI saying so, once) is the honest
+ * answer. Honouring some ids and not others would silently serve the leftovers.
+ */
+function withExclusions(
+  result: Omit<FilterResult, 'cycled'>,
+  context: EngineContext,
+): FilterResult {
+  const excluded = new Set(context.excludeIds ?? [])
+  if (!excluded.size) return { ...result, cycled: false }
+
+  const trimmed = result.pool.filter((r) => !excluded.has(r.id))
+  if (trimmed.length >= REQUIRED) return { ...result, pool: trimmed, cycled: false }
+
+  return { ...result, cycled: true }
 }
