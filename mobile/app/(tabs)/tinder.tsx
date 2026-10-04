@@ -69,9 +69,31 @@ const EXCLUDE_CAP = 300
 
 /** Height of the always-present "Liked" tray. Reserved so the deck never jumps. */
 const TRAY_H = 86
-/** One liked thumbnail, and how far each tucks under the one before it. */
-const THUMB = 46
-const THUMB_OVERLAP = 12
+/**
+ * One chip in the "Liked" tray: a photo and the restaurant's NAME.
+ *
+ * ⚠️ The tray used to be a stack of overlapping photos with no text at all.
+ * It looked tidy and told you nothing — a row of 46px food photos is a row of
+ * food photos, and the whole point of the tray is to answer "what have I said
+ * yes to?" without opening anything. The name is the recognisable part; the
+ * photo is what makes it scannable.
+ *
+ * CHIP_H is derived (thumb + padding top and bottom) rather than typed, so the
+ * chip cannot drift out of the reserved slot when the thumb size is tuned.
+ */
+const CHIP_THUMB = 38
+const CHIP_THUMB_RADIUS = 8
+const CHIP_PAD = 4
+const CHIP_H = CHIP_THUMB + CHIP_PAD * 2
+/**
+ * ⚠️ CONCENTRIC WITH THE PHOTO: its radius plus the inset, NOT half the chip's
+ * height. A fully-round pill (radius 23 here) curves away faster than the
+ * photo's own corners do, so the square-ish thumbnail pokes out through the
+ * rounded end — the Pressable does not clip, so it just looks broken.
+ */
+const CHIP_RADIUS = CHIP_THUMB_RADIUS + CHIP_PAD
+/** Enough for ~15 characters before the ellipsis — a recognisable prefix. */
+const CHIP_NAME_MAX = 110
 
 type LocationMode = 'nearby' | 'anywhere' | 'area'
 
@@ -396,57 +418,80 @@ function LocationPill({
 }
 
 /**
- * One thumbnail in the "Liked" tray. Its own component so it can hold press
- * state (hooks cannot run in a `.map()`).
+ * One liked restaurant in the tray: photo + name, as a compact pill.
  *
- * ⚠️ No caption. The tray used to print a 9px name under every circle, which at
- * that size was a row of grey smudges that still truncated — and it made each
- * item a different visual weight depending on the name. The photo is the
- * recognisable thing; tapping opens the sheet, which has the name at a size
- * somebody can read.
+ * Its own component because it holds press state, and hooks cannot run inside
+ * a `.map()`.
+ *
+ * ⚠️ The name is capped at CHIP_NAME_MAX and ellipsised rather than wrapped.
+ * Dubai is full of restaurants called "Ronin | Ultimate Japanese Restaurant in
+ * Dubai | FIVE LUXE JBR"; a chip that grew to fit one would push every other
+ * like off the screen, and two lines would break the fixed tray height. The
+ * first ~15 characters are what someone recognises anyway, and the sheet a tap
+ * opens has the full name at a readable size.
  */
-function LikedThumb({
+function LikedChip({
   name,
   imageIndex,
   imageUrl,
-  overlap,
   onPress,
+  onRemove,
 }: {
   name: string
+  /** Position in LIKE order (not display order) so the placeholder is stable. */
   imageIndex: number
   /** Google Places photo; falls back to the placeholder when absent. */
   imageUrl?: string
-  /** Every tile but the first tucks under the one before it. */
-  overlap: boolean
   onPress: () => void
+  /** Long-press to un-like. See `unlike()` for why that is safe to offer. */
+  onRemove: () => void
 }) {
   const { pressed, pressHandlers } = usePressed()
 
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onRemove}
+      delayLongPress={400}
       {...pressHandlers}
       accessibilityRole="button"
       accessibilityLabel={name}
+      accessibilityHint="Opens details. Long press to remove from your likes."
       // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
       style={{
-        marginLeft: overlap ? -THUMB_OVERLAP : 0,
-        opacity: pressed ? 0.7 : 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        height: CHIP_H,
+        paddingLeft: CHIP_PAD,
+        paddingRight: 12,
+        borderRadius: CHIP_RADIUS,
+        backgroundColor: '#141414',
+        borderWidth: 1,
+        borderColor: '#242424',
+        opacity: pressed ? 0.75 : 1,
       }}
     >
       <Image
         source={{ uri: imageUrl ?? getPlaceholderImage(imageIndex) }}
         style={{
-          width: THUMB,
-          height: THUMB,
-          borderRadius: 14,
-          backgroundColor: '#141414',
-          // A ring in the PAGE colour, not a border: it is what separates two
-          // overlapping photos, and it has to read as the gap between them.
-          borderWidth: 2,
-          borderColor: '#080808',
+          width: CHIP_THUMB,
+          height: CHIP_THUMB,
+          borderRadius: CHIP_THUMB_RADIUS,
+          backgroundColor: '#1F1F1F',
         }}
       />
+      <Text
+        numberOfLines={1}
+        style={{
+          fontFamily: 'DMSans_600SemiBold',
+          fontSize: 12,
+          color: '#F2EDE8',
+          maxWidth: CHIP_NAME_MAX,
+        }}
+      >
+        {name}
+      </Text>
     </Pressable>
   )
 }
@@ -822,11 +867,37 @@ export default function TinderScreen() {
     if (sheetRestaurant) void openOrderFor(sheetRestaurant)
   }
 
-  // Restaurants swiped right on this session — newest last — for the "Liked"
-  // tray. Resolved from the session map, so a filter change never loses them.
+  // Restaurants swiped right on this session, in LIKE order (newest last).
+  // Resolved from the session map, so a filter change never loses them.
   const likedRestaurants = likedIds
-    .map((id) => likedById.current.get(id))
-    .filter((r): r is Restaurant => !!r)
+    .map((id, likeIndex) => ({ r: likedById.current.get(id), likeIndex }))
+    .filter((e): e is { r: Restaurant; likeIndex: number } => !!e.r)
+
+  // ⚠️ Displayed NEWEST FIRST. The thing you just said yes to is the thing you
+  // want to see, and a tray that appends to the right pushes it off-screen the
+  // moment there are more than four. `likeIndex` is carried through the reverse
+  // so a chip's placeholder photo never changes as later likes arrive.
+  const likedNewestFirst = [...likedRestaurants].reverse()
+
+  /**
+   * Un-like from the tray (long-press on a chip).
+   *
+   * ⚠️ IT MUST ALSO BE WRITTEN TO THE SWIPE LOG, or the server would put it
+   * straight back: `tinder-suggest` merges every RIGHT swipe in `swipes` into
+   * the liked set, so dropping the id from `likedIds` alone would be undone on
+   * arrival. Pushing a LEFT record is the honest fix rather than a workaround —
+   * the server already de-duplicates to the LATEST judgement per restaurant,
+   * and "I changed my mind" is exactly that. It also means the taste profile
+   * learns the retraction (-0.25) instead of keeping a like the user took back.
+   *
+   * `likedById` is deliberately NOT pruned: it is a lookup cache, and a
+   * re-swipe later should still find the restaurant without a refetch.
+   */
+  const unlike = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    swipeLog.current.push({ restaurantId: id, direction: 'LEFT' })
+    setLikedIds((prev) => prev.filter((x) => x !== id))
+  }
 
   const suggest = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
@@ -1135,9 +1206,9 @@ export default function TinderScreen() {
           like, which shoved the whole deck upward mid-swipe. Reserving the slot
           costs one band of empty space and buys a layout that never moves. */}
       <View style={{ height: TRAY_H, paddingTop: 4 }}>
-        {/* Label + count. The chip is the only thing in the tray that changes
-            size, and it is pinned to the right so the thumbnails below never
-            shift when it does. */}
+        {/* Label + count. The count badge is the only thing up here that
+            changes size, and it is pinned to the right so the chips below
+            never shift when it does. */}
         <View
           style={{
             flexDirection: 'row',
@@ -1159,8 +1230,8 @@ export default function TinderScreen() {
           <View style={{ flex: 1 }} />
           {likedRestaurants.length > 0 ? (
             <Animated.View
-              // Keyed on the count so each new like mounts a fresh chip and the
-              // number is seen to tick up rather than silently re-render.
+              // Keyed on the count so each new like mounts a fresh badge and
+              // the number is seen to tick up rather than silently re-render.
               key={likedRestaurants.length}
               entering={FadeIn.duration(220)}
               style={{
@@ -1186,28 +1257,34 @@ export default function TinderScreen() {
           ) : null}
         </View>
 
-        {likedRestaurants.length > 0 ? (
+        {likedNewestFirst.length > 0 ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            // No `gap` — the tiles set their own negative margin to overlap.
-            contentContainerStyle={{ paddingHorizontal: 20, alignItems: 'center' }}
+            // The row SCROLLS rather than growing: the tray's height is
+            // reserved and must not change, so overflow goes sideways.
+            contentContainerStyle={{
+              paddingHorizontal: 20,
+              alignItems: 'center',
+              gap: 8,
+            }}
           >
-            {likedRestaurants.map((r, i) => (
+            {likedNewestFirst.map(({ r, likeIndex }) => (
               <Animated.View
                 key={r.id}
-                // A new like lands by dropping into the stack rather than
-                // sliding the whole row across.
+                // The newest chip is inserted at the LEFT, so it zooms in where
+                // the eye already is...
                 entering={ZoomIn.springify().damping(14).stiffness(200)}
-                // The tile that was last stays put while the new one arrives.
+                exiting={FadeOut.duration(160)}
+                // ...and the rest slide right to make room rather than jumping.
                 layout={LinearTransition.springify().damping(18).stiffness(200)}
               >
-                <LikedThumb
+                <LikedChip
                   name={r.name}
-                  imageIndex={i}
+                  imageIndex={likeIndex}
                   imageUrl={photoUrls(r)[0]}
-                  overlap={i > 0}
                   onPress={() => openSheetFor(r)}
+                  onRemove={() => unlike(r.id)}
                 />
               </Animated.View>
             ))}
