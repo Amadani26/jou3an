@@ -5,7 +5,6 @@ import {
   Image,
   Pressable,
   ScrollView,
-  Linking,
   Dimensions,
   StyleSheet,
   ActivityIndicator,
@@ -38,13 +37,14 @@ import RestaurantDetailSheet from '../../components/RestaurantDetailSheet'
 import AreaSearchSheet from '../../components/AreaSearchSheet'
 import {
   getNearbyRestaurants,
+  callablePhone,
   displayArea,
   prettyDistance,
-  deliveryUrl,
   photoUrls,
   type AreaSuggestion,
   type Restaurant,
 } from '../../lib/api'
+import { openCallFor, openDirectionsFor, openOrderFor } from '../../lib/actions'
 import { getPlaceholderImage } from '../../lib/placeholderImages'
 import { usePressed } from '../../lib/usePressed'
 
@@ -809,21 +809,17 @@ export default function TinderScreen() {
   }))
 
   // Sheet action handlers — act on whichever restaurant the sheet is showing.
-  const mapsUrl = (r: Restaurant) =>
-    `https://maps.google.com/?q=${encodeURIComponent(
-      `${r.name} ${displayArea(r)} Dubai`,
-    )}`
+  // The URLs live in lib/actions so these match the results screen exactly.
+  // ⚠️ Nothing is RECORDED here: swiping is browsing, and the deck has no
+  // decision session to attach an action to.
   const openDirections = () => {
-    if (sheetRestaurant) Linking.openURL(mapsUrl(sheetRestaurant))
+    if (sheetRestaurant) void openDirectionsFor(sheetRestaurant)
   }
   const call = () => {
-    if (!sheetRestaurant) return
-    if (sheetRestaurant.phone) Linking.openURL(`tel:${sheetRestaurant.phone}`)
-    else Linking.openURL(mapsUrl(sheetRestaurant))
+    if (sheetRestaurant) void openCallFor(sheetRestaurant)
   }
   const order = () => {
-    if (!sheetRestaurant) return
-    Linking.openURL(deliveryUrl(sheetRestaurant) ?? mapsUrl(sheetRestaurant))
+    if (sheetRestaurant) void openOrderFor(sheetRestaurant)
   }
 
   // Restaurants swiped right on this session — newest last — for the "Liked"
@@ -1254,6 +1250,7 @@ export default function TinderScreen() {
           distanceKm={sheetRestaurant.distanceKm}
           calories={sheetRestaurant.averageCalories}
           description={sheetRestaurant.description}
+          phone={callablePhone(sheetRestaurant)}
           images={photoUrls(sheetRestaurant)}
           onDirections={openDirections}
           onCall={call}

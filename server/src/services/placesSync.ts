@@ -10,6 +10,7 @@ import prisma from '../lib/prisma'
 import {
   extractEditorialSummary,
   extractPeriods,
+  extractPhoneNumber,
   getPlaceDetails,
   rankPhotos,
   searchPlace,
@@ -39,6 +40,8 @@ export interface SyncOutcome {
   areaName: string | null
   /** Google's editorial summary, or null when it has none for this place. */
   description: string | null
+  /** Google's international phone number, or null when it lists none. */
+  phoneNumber: string | null
   /** Google's raw primary type, as stored. */
   primaryType: string | null
   /** What `classifyVenue` makes of the taxonomy — RESTAURANT unless Google says cafe. */
@@ -74,6 +77,7 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
         coords: '—',
         areaName: null,
         description: null,
+        phoneNumber: null,
         primaryType: null,
         venueType: r.venueType,
         apiCalls,
@@ -113,6 +117,9 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
   // existing description wiped, and that includes one written by
   // `npm run generate:descriptions`, which is the whole point of that script.
   const description = extractEditorialSummary(details)
+  // Same rule again: never wipe a number we already hold because this one
+  // response happened not to carry one.
+  const phoneNumber = extractPhoneNumber(details)
 
   await prisma.restaurant.update({
     where: { id: r.id },
@@ -128,6 +135,7 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
       ...(firstEnrichment ? { venueType: classified } : {}),
       ...(areaName ? { areaName } : {}),
       ...(description ? { description } : {}),
+      ...(phoneNumber ? { phoneNumber } : {}),
       // Prisma.DbNull (not JS null) is how a Json column is set back to SQL
       // NULL; plain null would be rejected by the generated type.
       openingHours: (periods ?? Prisma.DbNull) as unknown as Prisma.InputJsonValue,
@@ -143,6 +151,7 @@ export async function syncRestaurantPlaces(r: Restaurant): Promise<SyncOutcome> 
     hours: periods?.length ?? null,
     areaName,
     description,
+    phoneNumber,
     primaryType,
     venueType: classified,
     coords: location

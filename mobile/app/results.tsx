@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScrollView, View, Text, Pressable, Linking } from 'react-native'
+import { ScrollView, View, Text, Pressable } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -9,12 +9,13 @@ import ResultCard from '../components/ResultCard'
 import GhostButton from '../components/GhostButton'
 import SelectionReward from '../components/SelectionReward'
 import RestaurantDetailSheet from '../components/RestaurantDetailSheet'
+import { openCallFor, openDirectionsFor, openOrderFor } from '../lib/actions'
 import {
+  callablePhone,
   getDecision,
   tinderSuggest,
   saveDecisionSelection,
   displayArea,
-  deliveryUrl,
   photoUrls,
   type Restaurant,
   type Swipe,
@@ -284,34 +285,19 @@ export default function ResultsScreen() {
     void record(r.id, 'SELECT').then(() => record(r.id, action))
   }
 
+  // All three record FIRST, then open — see recordAction. The URLs themselves
+  // live in lib/actions so every screen's buttons do the same thing.
   const openDirections = (r: Restaurant) => {
     recordAction(r, 'DIRECTIONS')
-    Linking.openURL(
-      `https://maps.google.com/?q=${encodeURIComponent(
-        `${r.name} ${displayArea(r)} Dubai`,
-      )}`,
-    )
+    void openDirectionsFor(r)
   }
   const call = (r: Restaurant) => {
     recordAction(r, 'CALL')
-    if (r.phone) Linking.openURL(`tel:${r.phone}`)
-    else
-      Linking.openURL(
-        `https://maps.google.com/?q=${encodeURIComponent(
-          `${r.name} ${displayArea(r)} Dubai`,
-        )}`,
-      )
+    void openCallFor(r)
   }
   const order = (r: Restaurant) => {
     recordAction(r, 'ORDER')
-    const url = deliveryUrl(r)
-    if (url) Linking.openURL(url)
-    else
-      Linking.openURL(
-        `https://maps.google.com/?q=${encodeURIComponent(
-          `${r.name} ${displayArea(r)} Dubai`,
-        )}`,
-      )
+    void openOrderFor(r)
   }
 
   return (
@@ -511,6 +497,7 @@ export default function ResultsScreen() {
       distanceKm={preview?.distanceKm}
       calories={preview?.averageCalories}
       description={preview?.description}
+      phone={callablePhone(preview)}
       images={photoUrls(preview)}
       onDirections={() => preview && openDirections(preview)}
       onCall={() => preview && call(preview)}

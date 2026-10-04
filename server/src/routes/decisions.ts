@@ -430,6 +430,15 @@ router.get('/history', requireAuth, async (req, res) => {
         calories: r.averageCalories,
         // The two-sentence vibe line, for the detail sheet a history row opens.
         description: r.description,
+        // Both numbers: `phoneNumber` is Google's, `phone` the deprecated
+        // hand-seeded one the client falls back to. A history row opens the
+        // same detail sheet as everywhere else, so it needs the same Call
+        // button — without these it was the one surface that could not dial.
+        phoneNumber: r.phoneNumber,
+        phone: r.phone,
+        // Direct Talabat page when we have one; the Order button falls back to
+        // a Talabat search by name when we don't.
+        talabatUrl: r.talabatUrl,
         photoUrls: r.photoRefs.map(photoProxyPath),
       },
     ]

@@ -55,6 +55,16 @@ export interface PlaceDetails {
   regularOpeningHours?: PlaceOpeningHours
   addressComponents?: PlaceAddressComponent[]
   formattedAddress?: string
+  /**
+   * E.164-ish number with the country code — "+971 4 331 5353". Preferred over
+   * `nationalPhoneNumber` because `tel:` from a phone that is roaming, or on a
+   * foreign SIM, only connects reliably with the country code attached.
+   * ⚠️ Billed on the Places "Advanced" SKU, the same band as
+   * `regularOpeningHours`.
+   */
+  internationalPhoneNumber?: string
+  /** Local form ("04 331 5353"). Fallback only — see above. */
+  nationalPhoneNumber?: string
   /** Google's single best label ("coffee_shop"); what venue classification reads. */
   primaryType?: string
   types?: string[]
@@ -302,6 +312,10 @@ export async function discoverPlaces(
  * Place Details — photos, coordinates, rating, review count, taxonomy and
  * opening hours for one id.
  *
+ * `internationalPhoneNumber` rides along free of extra charge: it sits on the
+ * same "Advanced" band as `regularOpeningHours`, which this mask already asks
+ * for, so the request's price is unchanged.
+ *
  * `regularOpeningHours` is billed on the Places "Advanced" SKU and
  * `editorialSummary` on "Enterprise + Atmosphere", so it is worth knowing this
  * call costs more than the plain fields. `primaryType`/`types` and
@@ -315,7 +329,8 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
   return placesFetch<PlaceDetails>(
     `/places/${encodeURIComponent(placeId)}`,
     'id,displayName,location,rating,userRatingCount,primaryType,types,photos,' +
-      'regularOpeningHours,addressComponents,formattedAddress,editorialSummary',
+      'regularOpeningHours,internationalPhoneNumber,addressComponents,' +
+      'formattedAddress,editorialSummary',
     { method: 'GET' },
   )
 }
@@ -350,6 +365,40 @@ export async function getPlaceTaxonomy(placeId: string): Promise<PlaceDetails> {
     'id,displayName,primaryType,types,userRatingCount,rating',
     { method: 'GET' },
   )
+}
+
+/**
+ * Phone-only Place Details — the narrow call for the phone backfill.
+ *
+ * ⚠️ NARROW IS NOT CHEAP HERE. `internationalPhoneNumber` sits on the Places
+ * "Advanced" SKU — the same band as `regularOpeningHours` — so this costs the
+ * same per call as a hours-bearing request, not the Essentials price that
+ * `getPlaceAddress` enjoys. The mask is narrow only to avoid ALSO paying for
+ * photos, coordinates and address components we already store. Budget for a
+ * real bill before running it across the catalogue; `syncPhones` prints an
+ * estimate first.
+ */
+export async function getPlacePhone(placeId: string): Promise<PlaceDetails> {
+  return placesFetch<PlaceDetails>(
+    `/places/${encodeURIComponent(placeId)}`,
+    'id,displayName,internationalPhoneNumber',
+    { method: 'GET' },
+  )
+}
+
+/**
+ * A dialable number, or null when Google lists none.
+ *
+ * International first: `tel:+97143317778` connects from any network, while the
+ * national form only works for someone already on a UAE carrier — and this app
+ * is for a city full of visitors. Whitespace-only counts as none, or the app
+ * would render a Call button that dials nothing.
+ */
+export function extractPhoneNumber(details: PlaceDetails): string | null {
+  const international = details.internationalPhoneNumber?.trim()
+  if (international) return international
+  const national = details.nationalPhoneNumber?.trim()
+  return national || null
 }
 
 /**

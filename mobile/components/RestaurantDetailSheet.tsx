@@ -53,6 +53,16 @@ export interface RestaurantDetailSheetProps {
   description?: string | null
   /** Photo URLs — when provided, real Images render instead of placeholder slots. */
   images?: string[]
+  /**
+   * A dialable number, from `callablePhone(restaurant)`. Omit or null and the
+   * Call button is not rendered at all.
+   *
+   * ⚠️ A prop rather than a whole restaurant because this sheet is opened from
+   * four places with four different row shapes (a decision result, a Tinder
+   * card, a History row, the detail screen) — the caller already knows how to
+   * get a number out of whatever it is holding.
+   */
+  phone?: string | null
   onDirections?: () => void
   onCall?: () => void
   onOrder?: () => void
@@ -75,6 +85,9 @@ function ActionButton({
       {...pressHandlers}
       // Plain style, NOT ({ pressed }) => [...] — see lib/usePressed.
       style={{
+        // flex:1 — with two buttons they split the row evenly; with three they
+        // sit exactly where they always did.
+        flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         gap: 5,
@@ -202,6 +215,7 @@ export default function RestaurantDetailSheet({
   calories,
   description,
   images,
+  phone,
   onDirections,
   onCall,
   onOrder,
@@ -498,11 +512,16 @@ export default function RestaurantDetailSheet({
                   paddingTop: 12,
                   paddingBottom: insets.bottom + 16,
                   paddingHorizontal: 24,
-                  justifyContent: 'space-between',
                 }}
               >
+                {/* Call is dropped when there is no number — see the note in
+                    SelectionReward. The buttons are flex:1 rather than
+                    space-between so two of them share the row evenly instead
+                    of being shoved to opposite edges. */}
                 <ActionButton icon="navigate-outline" label="DIRECTIONS" onPress={onDirections} />
-                <ActionButton icon="call-outline" label="RESERVE" onPress={onCall} />
+                {phone ? (
+                  <ActionButton icon="call-outline" label="CALL" onPress={onCall} />
+                ) : null}
                 <ActionButton icon="fast-food-outline" label="ORDER" onPress={onOrder} />
               </View>
           </Animated.View>

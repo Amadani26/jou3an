@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { View, Text, ScrollView, Pressable, Linking } from 'react-native'
+import { View, Text, ScrollView, Pressable } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -15,11 +15,13 @@ import GhostButton from '../../components/GhostButton'
 import RestaurantDetailSheet from '../../components/RestaurantDetailSheet'
 import { useAuth } from '../../contexts/AuthContext'
 import {
+  callablePhone,
   getDecisionHistory,
   displayArea,
   photoUrls,
   type HistoryItem,
 } from '../../lib/api'
+import { openCallFor, openDirectionsFor, openOrderFor } from '../../lib/actions'
 import { usePressed } from '../../lib/usePressed'
 
 const ACTION_META: Record<string, { label: string; color: string }> = {
@@ -220,12 +222,23 @@ export default function HistoryScreen() {
   }
 
   // History rows carry no phone / delivery URLs, so all actions fall back to Maps.
-  const openMaps = (item: HistoryItem) =>
-    Linking.openURL(
-      `https://maps.google.com/?q=${encodeURIComponent(
-        `${item.restaurantName} ${displayArea(item)} Dubai`,
-      )}`,
-    )
+  /**
+   * A history row in the shape the shared actions expect.
+   *
+   * ⚠️ History used to point ALL THREE buttons at Google Maps, because its
+   * rows are shaped by the endpoint rather than being whole Restaurants and
+   * nothing here had a phone number or a Talabat link. The response carries
+   * both now, so a restaurant opened from History dials and orders exactly
+   * like one opened from a fresh decision.
+   */
+  const asTarget = (item: HistoryItem) => ({
+    name: item.restaurantName,
+    areaName: item.areaName,
+    area: item.area,
+    phoneNumber: item.phoneNumber,
+    phone: item.phone,
+    talabatUrl: item.talabatUrl,
+  })
 
   // Not signed in
   if (!isAuthenticated) {
@@ -308,10 +321,11 @@ export default function HistoryScreen() {
           googleRating={selected.googleRating}
           calories={selected.calories}
           description={selected.description}
+          phone={callablePhone(selected)}
           images={photoUrls(selected)}
-          onDirections={() => openMaps(selected)}
-          onCall={() => openMaps(selected)}
-          onOrder={() => openMaps(selected)}
+          onDirections={() => void openDirectionsFor(asTarget(selected))}
+          onCall={() => void openCallFor(selected)}
+          onOrder={() => void openOrderFor(asTarget(selected))}
         />
       ) : null}
     </ScrollView>

@@ -29,6 +29,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import {
+  callablePhone,
   displayArea,
   photoUrls,
   prettyDistance,
@@ -263,6 +264,8 @@ export default function SelectionReward({
   onCall,
   onOrder,
 }: Props) {
+  // Null means Google lists no number — the Call tile is dropped entirely.
+  const phone = callablePhone(restaurant)
   const insets = useSafeAreaInsets()
   const { isAuthenticated } = useAuth()
 
@@ -654,9 +657,15 @@ export default function SelectionReward({
               bodyStyle,
             ]}
           >
+            {/* ⚠️ Call is DROPPED, not disabled, when we have no number — the
+                tiles are flex:1, so the remaining two simply widen to fill the
+                row. A greyed-out third tile would be a permanent apology for
+                data we are never going to have for some places. */}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <ActionTile icon="navigate-outline" label="DIRECTIONS" onPress={onDirections} />
-              <ActionTile icon="call-outline" label="RESERVE" onPress={onCall} />
+              {phone ? (
+                <ActionTile icon="call-outline" label="CALL" onPress={onCall} />
+              ) : null}
               <ActionTile icon="fast-food-outline" label="ORDER" onPress={onOrder} />
             </View>
             <DoneButton onPress={dismiss} />

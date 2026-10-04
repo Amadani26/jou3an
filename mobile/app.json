@@ -15,6 +15,11 @@
       "buildNumber": "5",
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "talabat"
+        ]
       }
     },
     "android": {

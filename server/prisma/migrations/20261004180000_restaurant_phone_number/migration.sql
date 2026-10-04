@@ -1,0 +1,20 @@
+-- Google's phone number per restaurant, so the Call button can actually dial.
+--
+-- Purely ADDITIVE (one nullable column), hand-written and applied with
+-- `prisma migrate deploy` — the `restaurant_description` / `venue_type`
+-- pattern. That deliberately avoids `migrate dev` and its shadow database:
+-- see the shadow-DB warning in CLAUDE.md, where pointing a shadow at a real
+-- URL resets it and drops every table.
+--
+-- ⚠️ This does NOT replace the existing `phone` column. `phone` is
+-- hand-authored seed data (10 rows); `phoneNumber` is Google's
+-- `internationalPhoneNumber` ("+971 4 331 5353"), filled for the whole
+-- catalogue by `npm run sync:phones`. Same relationship as `area` (the coarse
+-- enum) and `areaName` (the real neighbourhood from Google): the new column is
+-- preferred, the old one survives as the fallback, and nothing silently loses
+-- a number somebody typed in by hand.
+--
+-- Nullable with no default and no backfill: not every place on Google has a
+-- listed number, and "no number" is a state the UI handles by hiding the Call
+-- button entirely.
+ALTER TABLE "Restaurant" ADD COLUMN "phoneNumber" TEXT;

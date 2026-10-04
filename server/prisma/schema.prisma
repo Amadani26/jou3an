@@ -59,14 +59,14 @@ enum VenueType {
 }
 
 model User {
-  id                 String       @id @default(cuid())
-  email              String       @unique
-  passwordHash       String?
-  name               String?
-  phoneNumber        String?
-  googleId           String?      @unique
-  locationArea       LocationArea @default(OTHER)
-  cuisinePreferences String[]
+  id                   String          @id @default(cuid())
+  email                String          @unique
+  passwordHash         String?
+  name                 String?
+  phoneNumber          String?
+  googleId             String?         @unique
+  locationArea         LocationArea    @default(OTHER)
+  cuisinePreferences   String[]
   /// Usual spend per person, from the taste quiz's budget step. NULL is a real
   /// answer — "No budget" — and the column is nullable precisely so it can be
   /// stored rather than smuggled in as a band nobody chose.
@@ -76,21 +76,21 @@ model User {
   /// still wins when it is the better pick. It is deliberately NOT a Stage-1
   /// constraint: a saved band that silently capped every future decision is
   /// the behaviour this replaced.
-  budgetRange        BudgetRange?
-  dietary            String[]
+  budgetRange          BudgetRange?
+  dietary              String[]
   /// Cuisines the taste quiz's "anything you avoid?" step collected. Mirrors
   /// `cuisinePreferences` (the loved side); both are translated into
   /// `UserTasteProfile.quizWeights` on save, never applied as a hard filter.
-  dislikedCuisines   String[]
+  dislikedCuisines     String[]
   /// Base wildcard ε for this user. See the Adventurousness enum.
-  adventurousness    Adventurousness @default(BALANCED)
+  adventurousness      Adventurousness @default(BALANCED)
   /// When the taste quiz was last completed. Null = never taken (the quiz is
   /// skippable), which is what Home/Profile read to offer it again.
   tasteQuizCompletedAt DateTime?
-  accountTier        AccountTier  @default(FREE)
-  stripeCustomerId   String?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  accountTier          AccountTier     @default(FREE)
+  stripeCustomerId     String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 
   decisionSessions DecisionSession[]
   tasteProfile     UserTasteProfile?
@@ -103,6 +103,9 @@ model Restaurant {
   area            LocationArea
   priceMin        Int
   priceMax        Int
+  /// ⚠️ DEPRECATED in favour of `phoneNumber`. Hand-authored seed data only
+  /// (10 rows); nothing writes it any more. Still READ, as the fallback when
+  /// Google has no number — same relationship as `area` -> `areaName`.
   phone           String?
   googleMapsUrl   String?
   talabatUrl      String?
@@ -120,26 +123,32 @@ model Restaurant {
   /// / `npm run sync:descriptions`, and for the rows Google has nothing for by
   /// `npm run generate:descriptions`. Null is normal — every surface hides the
   /// line rather than showing a placeholder.
-  description     String?
+  description String?
 
   /// RESTAURANT (default) or CAFE. A CAFE is parked, never served by a
   /// decision surface — see the VenueType enum. `/api/restaurants/:id` and
   /// decision history deliberately ignore this, so past picks still render.
-  venueType       VenueType    @default(RESTAURANT)
+  venueType VenueType @default(RESTAURANT)
 
   // --- Google Places (populated by `npm run sync:places`) ---
-  googlePlaceId  String?   @unique
+  googlePlaceId     String?   @unique
   /// Places photo resource names ("places/{placeId}/photos/{photoId}"), max 6.
   /// Served to clients via the /api/photos proxy so the API key never ships.
-  photoRefs      String[]
-  lat            Float?
-  lng            Float?
+  photoRefs         String[]
+  lat               Float?
+  lng               Float?
   /// Real Dubai neighbourhood from Google's address components ("Al Satwa",
   /// "Mirdif", "Motor City"). DISPLAY + search only — all filtering is driven
   /// by lat/lng. Null until the row has been Places-synced.
   /// Supersedes the coarse `area` enum, which cannot represent most of Dubai.
-  areaName       String?
-  googleRating   Float?
+  areaName          String?
+  /// Google's `internationalPhoneNumber` ("+971 4 331 5353") — the dialable
+  /// form, which carries the country code and therefore works from anywhere.
+  /// Filled by `npm run sync:places` and the `npm run sync:phones` backfill.
+  /// Null is normal: plenty of places have no number listed, and the app hides
+  /// the Call button rather than offering one that cannot ring.
+  phoneNumber       String?
+  googleRating      Float?
   /// How many reviews Google's rating is based on. Curation signal only —
   /// nothing ranks off it; the prune tool prints it so a 4.9/6-reviews row is
   /// recognisable as noise.
@@ -148,14 +157,14 @@ model Restaurant {
   /// full `types` array, stored verbatim. Kept because they are what venue
   /// classification reads: re-classifying must never need another Places call.
   googlePrimaryType String?
-  googleTypes      String[]
+  googleTypes       String[]
   /// Google `regularOpeningHours.periods` verbatim:
   /// [{ open: { day, hour, minute }, close?: { day, hour, minute } }].
   /// day is 0=Sunday..6=Saturday in the PLACE's local time (Asia/Dubai here).
   /// A period with no `close` means the place is open 24/7.
   /// Read through `isOpenNow()` in src/lib/hours.ts — never inline.
-  openingHours   Json?
-  googleSyncedAt DateTime?
+  openingHours      Json?
+  googleSyncedAt    DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -197,19 +206,19 @@ model DailyPick {
 /// updated by `applyTasteEvent()` in src/services/tasteProfile.ts. Stored as
 /// Json rather than rows because it is always read and written whole.
 model UserTasteProfile {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// LEARNED weights — moved only by real swipes and selections.
-  weights   Json     @default("{}")
+  weights     Json     @default("{}")
   /// The taste quiz's OWN contribution, kept separate on purpose.
   ///
   /// ⚠️ This is what makes re-taking the quiz idempotent: a save RECOMPUTES
   /// this column from the stored answers and never touches `weights`, so the
   /// +2/-2 deltas can't stack on every re-run. The engine reads the sum of the
   /// two (`effectiveTasteWeights`), clamped to the normal [-5, 10] range.
-  quizWeights Json   @default("{}")
-  updatedAt DateTime @updatedAt
+  quizWeights Json     @default("{}")
+  updatedAt   DateTime @updatedAt
 }
 
 /// DecisionEngine v2 — one row per engine invocation.

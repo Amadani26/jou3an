@@ -137,7 +137,17 @@ export interface Restaurant {
   area: LocationArea
   priceMin: number
   priceMax: number
+  /**
+   * ⚠️ DEPRECATED — hand-seeded only (10 rows). Read through `callablePhone()`,
+   * which prefers `phoneNumber`. Same relationship as `area` -> `areaName`.
+   */
   phone: string | null
+  /**
+   * Google's international number ("+971 4 331 5353"), filled by
+   * `npm run sync:phones`. Null is normal and MEANS SOMETHING: the Call button
+   * is hidden rather than shown dialling nothing.
+   */
+  phoneNumber?: string | null
   googleMapsUrl: string | null
   talabatUrl: string | null
   noonUrl: string | null
@@ -582,6 +592,12 @@ export interface HistoryItem {
   calories: number | null
   /** Two-sentence "vibe" line; null when nothing has written one. */
   description?: string | null
+  /** Google's international number; read through `callablePhone()`. */
+  phoneNumber?: string | null
+  /** @deprecated Hand-seeded fallback — `callablePhone()` handles both. */
+  phone?: string | null
+  /** Direct Talabat page when we have one; `orderUrl()` falls back to search. */
+  talabatUrl?: string | null
   /** Relative /api/photos/... proxy paths — pass through photoUrls(). */
   photoUrls?: string[]
 }
@@ -709,6 +725,80 @@ export function deriveReasoning(tags: string[]) {
 /** First available delivery URL (Order button). */
 export function deliveryUrl(r: Restaurant): string | null {
   return r.talabatUrl || r.noonUrl || r.deliverooUrl || null
+}
+
+/* ------------------------------------------------------------------ */
+/* The three action buttons                                            */
+/* ------------------------------------------------------------------ */
+
+/** Anything carrying the two phone columns — a Restaurant or a HistoryItem. */
+type HasPhone = { phoneNumber?: string | null; phone?: string | null }
+
+/**
+ * A dialable number, or null when we have none.
+ *
+ * Google's international form first (it connects from any network, which
+ * matters in a city this full of visitors), then the deprecated hand-seeded
+ * `phone` so the ten original rows never lose the number somebody typed in.
+ *
+ * ⚠️ NULL IS A REAL ANSWER and the UI must act on it: the Call button is
+ * HIDDEN, not disabled and not quietly rerouted. Call used to fall through to
+ * Google Maps when there was no number, which is how a button labelled "call"
+ * ended up opening a map — the bug this whole change exists to fix.
+ */
+export function callablePhone(r: HasPhone | null | undefined): string | null {
+  const preferred = r?.phoneNumber?.trim()
+  if (preferred) return preferred
+  const legacy = r?.phone?.trim()
+  return legacy || null
+}
+
+/**
+ * `tel:` target — the number stripped to what a dialer accepts.
+ *
+ * Spaces, dashes and parentheses are display formatting; iOS tolerates some of
+ * it and Android does not, so neither gets the chance. A leading "+" is kept:
+ * it is what makes the number work from a foreign SIM.
+ */
+export function telUrl(phone: string): string {
+  const cleaned = phone.replace(/[^\d+]/g, '')
+  return `tel:${cleaned}`
+}
+
+/**
+ * Talabat's iOS/Android app scheme, tried before the website.
+ *
+ * ⚠️ UNVERIFIED AGAINST A REAL INSTALL — nobody here has the Talabat app, and
+ * the simulator cannot have it. This is safe anyway because every caller
+ * guards with `Linking.canOpenURL`: if the scheme is wrong, or the app is not
+ * installed, or iOS has not been told to allow the query (see
+ * `LSApplicationQueriesSchemes` in app.json), the check returns false and the
+ * web URL opens instead. The worst case is the status quo, not a dead button.
+ */
+export const TALABAT_SCHEME = 'talabat://'
+
+/**
+ * Where "Order" goes.
+ *
+ * 1. The restaurant's own Talabat page when the catalogue has one (the ten
+ *    seeded rows do). This is the only option that lands on the actual menu,
+ *    and on a device with the app installed Talabat's universal links open it
+ *    there rather than in Safari — which is the real "deep link", and a far
+ *    more reliable one than a custom scheme.
+ * 2. Otherwise Talabat's UAE restaurants page, carrying the name as `query`.
+ *
+ * ⚠️ STEP 2 DOES NOT PRE-FILL THE SEARCH BOX, and the copy must never imply it
+ * does. Verified in a real browser on 2026-10-04: `talabat.com/uae/search` is
+ * a 404, and on `/uae/restaurants` the `query` param is only echoed back into
+ * the page's nav links — typing into Talabat's own search box filters the list
+ * CLIENT-SIDE without ever changing the URL, so there is no address Talabat
+ * will accept a search term at. The param is kept because it is harmless and
+ * starts working for free if they ever honour it; the user lands on Talabat's
+ * restaurant list with a working search box, one short step from the dish.
+ */
+export function orderUrl(r: { name: string; talabatUrl?: string | null }): string {
+  if (r.talabatUrl) return r.talabatUrl
+  return `https://www.talabat.com/uae/restaurants?query=${encodeURIComponent(r.name)}`
 }
 
 /* ------------------------------------------------------------------ */

@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, Linking, ActivityIndicator } from 'react-native'
+import { View, Text, ScrollView, Pressable, ActivityIndicator } from 'react-native'
 import type { ComponentProps } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -6,12 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import RedButton from '../../components/RedButton'
 import {
+  callablePhone,
   getRestaurant,
   displayArea,
   prettyTag,
-  deliveryUrl,
   type Restaurant,
 } from '../../lib/api'
+import { openCallFor, openDirectionsFor, openOrderFor } from '../../lib/actions'
 import { usePressed } from '../../lib/usePressed'
 
 type IconName = ComponentProps<typeof Ionicons>['name']
@@ -92,12 +93,8 @@ export default function RestaurantScreen() {
     retry: false,
   })
 
-  const openDirections = (rest: Restaurant) =>
-    Linking.openURL(
-      `https://maps.google.com/?q=${encodeURIComponent(
-        `${rest.name} ${displayArea(rest)} Dubai`,
-      )}`,
-    )
+  // Shared with every other surface — see lib/actions.
+  const openDirections = (rest: Restaurant) => void openDirectionsFor(rest)
 
   const platforms = r
     ? [
@@ -223,21 +220,16 @@ export default function RestaurantScreen() {
               label="Directions"
               onPress={() => openDirections(r)}
             />
-            <GhostAction
-              icon="call-outline"
-              label="Reserve"
-              onPress={() =>
-                r.phone ? Linking.openURL(`tel:${r.phone}`) : openDirections(r)
-              }
-            />
-            <RedButton
-              label="Order Delivery"
-              onPress={() => {
-                const url = deliveryUrl(r)
-                if (url) Linking.openURL(url)
-                else openDirections(r)
-              }}
-            />
+            {/* Dropped entirely when Google lists no number — never a Call
+                control that opens a map. */}
+            {callablePhone(r) ? (
+              <GhostAction
+                icon="call-outline"
+                label="Call"
+                onPress={() => void openCallFor(r)}
+              />
+            ) : null}
+            <RedButton label="Order Delivery" onPress={() => void openOrderFor(r)} />
           </View>
         </View>
       )}
