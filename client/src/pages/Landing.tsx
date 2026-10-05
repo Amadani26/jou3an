@@ -18,7 +18,7 @@ const STEPS = [
   {
     n: '02',
     title: 'Swipe or let Jou3an decide',
-    body: 'Swipe through tinder-style picks, or skip straight to an instant decision.',
+    body: 'Swipe through one card at a time, or skip straight to an instant decision.',
   },
   {
     n: '03',

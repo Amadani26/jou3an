@@ -50,12 +50,6 @@ const SURPRISE: Cuisine = {
   icon: 'shuffle-outline',
 }
 
-const NO_PREFERENCE: Cuisine = {
-  name: 'No preference',
-  descriptor: 'Show me anything',
-  icon: 'help-circle-outline',
-}
-
 const tap = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 
 /** Shared look for the area search's "nothing to show" messages. */
@@ -431,16 +425,17 @@ export default function DecideScreen() {
     )
   }
 
-  // "Surprise me" and "No preference" both advance immediately and clear any
-  // picks — neither contributes a cuisine to the prompt.
-  // Neither has a selected state to render: both advance on the tap, so the
-  // flag the old card needed for its highlight had no reader left.
+  // It has no selected state to render: it advances on the tap, so the flag
+  // the old card needed for its highlight had no reader left.
+  /**
+   * The ONE skip on this step: advance with no cuisine filter.
+   *
+   * ⚠️ There used to be a second, "No preference", whose handler was
+   * byte-identical to this one. Two controls that do exactly the same thing
+   * are not two options — they are a question about the difference between
+   * them, asked of someone who just wanted to move on.
+   */
   const chooseSurprise = () => {
-    setCuisines([])
-    goNext()
-  }
-
-  const chooseNoPreference = () => {
     setCuisines([])
     goNext()
   }
@@ -652,34 +647,28 @@ export default function DecideScreen() {
                 two utility rows plus a button to fit above the tab bar. */}
             <StepHeading compact eyebrow="STEP 2 · CUISINE" title="Any cuisine?" />
 
-            {/* Utility row + 2-col grid + utility row + Continue, all without
-                scrolling. The GRID takes the leftover height (rows flex between
-                80 and 96); the utility rows and the button are fixed, so the
-                grid is what absorbs a shorter screen.
+            {/* 2-col grid + "Surprise me" + Continue, all without scrolling.
+                The GRID takes the leftover height (rows flex between 92 and
+                112); the utility row and the button are fixed, so the grid is
+                what absorbs a shorter screen.
+                ⚠️ Those bounds went up from 80/96 when the duplicate "No
+                preference" row was removed — the ~64pt it occupied belongs to
+                the cards, not to extra white space.
                 Multi-select: tapping a grid card toggles, "Continue" advances. */}
             <View style={{ flex: 1, gap: 12, paddingBottom: 8 }}>
-              {/* Escape hatch for "I don't know" — advances with no cuisine.
-                  Deliberately the quietest thing on the step. */}
-              <UtilityRow
-                icon={NO_PREFERENCE.icon}
-                title={`${NO_PREFERENCE.name} · ${NO_PREFERENCE.descriptor}`}
-                height={52}
-                onPress={chooseNoPreference}
-              />
-
-              <View style={{ flex: 1, gap: 12 }}>
+              <View style={{ flex: 1, gap: 14 }}>
                 {CUISINE_ROWS.map((row, ri) => (
                   <View
                     key={ri}
                     style={{
                       flexDirection: 'row',
                       alignItems: 'stretch',
-                      gap: 12,
+                      gap: 14,
                       flexGrow: 1,
                       flexShrink: 1,
                       flexBasis: 0,
-                      minHeight: 80,
-                      maxHeight: 96,
+                      minHeight: 92,
+                      maxHeight: 112,
                     }}
                   >
                     {row.map((c) => (

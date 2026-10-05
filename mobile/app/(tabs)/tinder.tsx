@@ -933,7 +933,9 @@ export default function TinderScreen() {
             marginBottom: 6,
           }}
         >
-          SWIPE RIGHT TO SAVE · LEFT TO SKIP
+          {/* ⚠️ Does not start with "SWIPE" any more — the title right below
+              it does, and the two stacked read as a stutter. */}
+          RIGHT TO SAVE · LEFT TO SKIP
         </Text>
         <Text
           style={{
@@ -943,7 +945,12 @@ export default function TinderScreen() {
             letterSpacing: -1,
           }}
         >
-          Food Tinder
+          {/* DISPLAY NAME ONLY — a placeholder until the feature is named
+              properly. Everything internal (the route `tinder`, tinder.tsx,
+              `tinder-suggest`, `mode=tinder`) deliberately still says Tinder:
+              renaming a working API to chase a provisional label is churn
+              that buys nothing. See CLAUDE.md. */}
+          Swipe
         </Text>
       </View>
 

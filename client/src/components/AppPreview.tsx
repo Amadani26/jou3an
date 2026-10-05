@@ -8,7 +8,6 @@ import {
   Fish,
   Flame,
   Globe,
-  HelpCircle,
   Leaf,
   MapPin,
   Moon,
@@ -288,13 +287,6 @@ function CuisineStage({
         What are you feeling?
       </p>
 
-      <OptionRow
-        icon={HelpCircle}
-        title="No preference"
-        sub="Show me anything"
-        onClick={onSkip}
-      />
-
       <div className="grid grid-cols-2 gap-2.5">
         {DEMO_CUISINES.map((c) => (
           <CuisineCard
@@ -306,6 +298,9 @@ function CuisineStage({
         ))}
       </div>
 
+      {/* The ONE skip. A duplicate "No preference" row above the grid used to
+          call this exact same handler — mirroring the mobile step, which has
+          since dropped it for the same reason. */}
       <OptionRow
         icon={Shuffle}
         title="Surprise me"

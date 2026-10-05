@@ -12,7 +12,7 @@ const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Flame,
     title: 'Swipe to teach it',
-    body: 'Tinder-style cards. Swipe right on what tempts you, then ask for three picks built from your taste.',
+    body: 'One card at a time. Swipe right on what tempts you, then ask for three picks built from your taste.',
   },
   {
     icon: Layers,
