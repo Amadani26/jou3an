@@ -40,7 +40,7 @@ const dietaryNeed = z.enum(DIETARY_NEEDS)
 const preferencesSchema = z.object({
   cuisinePreferences: z.array(cuisineName).max(MAX_LOVED_CUISINES).optional(),
   dislikedCuisines: z.array(cuisineName).max(40).optional(),
-  // Nullable: null is the "No budget" answer, and the only way to clear a band.
+  // Nullable: null is the "Any budget" answer, and the only way to clear a band.
   budgetRange: z.nativeEnum(BudgetRange).nullable().optional(),
   dietary: z.array(dietaryNeed).optional(),
   adventurousness: z.nativeEnum(Adventurousness).optional(),
@@ -91,7 +91,7 @@ const tasteQuizSchema = z.object({
   lovedCuisines: z.array(cuisineName).max(MAX_LOVED_CUISINES).optional(),
   dislikedCuisines: z.array(cuisineName).max(40).optional(),
   dietary: z.array(dietaryNeed).optional(),
-  // null = "No budget": stored, and it makes the engine's price term neutral.
+  // null = "Any budget": stored, and it makes the engine's price term neutral.
   budgetRange: z.nativeEnum(BudgetRange).nullable().optional(),
   adventurousness: z.nativeEnum(Adventurousness).optional(),
 })

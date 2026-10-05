@@ -6,7 +6,7 @@
  * what the user reads in all three places, and the values are what the server
  * stores on `User.budgetRange`.
  *
- * ⚠️ 'ANY' is the UI's spelling of "No budget"; it is stored as NULL. The
+ * ⚠️ 'ANY' is the UI's spelling of "Any budget"; it is stored as NULL. The
  * column is nullable precisely so that answer can be stored rather than
  * approximated by a band nobody chose.
  *
@@ -37,7 +37,11 @@ export interface BudgetOption {
 export const BUDGET_OPTIONS: BudgetOption[] = [
   {
     value: 'ANY',
-    label: 'No budget',
+    // ⚠️ "Any budget", NOT "No budget". The old label read as "money is no
+    // object" — the opposite of a user who simply has not set a preference.
+    // What it means is that price is not a factor in the ranking, and "Any"
+    // says that; "No" said something about the wallet.
+    label: 'Any budget',
     sub: 'Price stays out of it',
   },
   {
@@ -67,4 +71,4 @@ export const budgetRangeOf = (choice: BudgetChoice): BudgetRange | null =>
 
 /** The short label for a choice — used by the pill and the Profile row. */
 export const budgetLabel = (choice: BudgetChoice): string =>
-  BUDGET_OPTIONS.find((o) => o.value === choice)?.label ?? 'No budget'
+  BUDGET_OPTIONS.find((o) => o.value === choice)?.label ?? 'Any budget'

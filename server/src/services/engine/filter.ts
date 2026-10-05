@@ -34,7 +34,7 @@ export const RADIUS_TIERS: { km: number; tier: RadiusTier }[] = [
  * saying why. As a score term it does what the answer actually meant — a lean,
  * not a ceiling — so a better restaurant a little over the band can still win.
  *
- * 'ANY' (the quiz's "No budget", and the stored NULL it maps from) has no band:
+ * 'ANY' (the quiz's "Any budget", and the stored NULL it maps from) has no band:
  * `priceFit` returns NEUTRAL, leaving the price term inert.
  */
 export const BUDGET_BANDS: Record<Exclude<Budget, 'ANY'>, { min: number; max: number }> = {

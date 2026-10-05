@@ -817,7 +817,7 @@ describe('priceFit — the bands the quiz offers', () => {
     expect(far).toBeLessThan(near)
   })
 
-  it('is NEUTRAL for "No budget", not zero', () => {
+  it('is NEUTRAL for "Any budget", not zero', () => {
     // A user with no band must not have every price punished equally — the term
     // goes inert. (Stored as NULL on User.budgetRange; mapped to ANY.)
     for (const mid of [30, 120, 500]) expect(priceFit(at(mid), 'ANY')).toBe(NEUTRAL)

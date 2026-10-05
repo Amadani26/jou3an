@@ -29,16 +29,18 @@ import { CUISINE_ROWS, type Cuisine } from '../../lib/cuisines'
 import { budgetChoiceOf, budgetLabel, budgetRangeOf, type BudgetChoice } from '../../lib/budget'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePressed } from '../../lib/usePressed'
+import { OPTION_HIGHLIGHT_MS } from '../../components/OptionSelector'
 import { useKeyboardHeight } from '../../lib/useKeyboardHeight'
 
 /**
- * How long the budget sheet stays open after a band is tapped.
+ * How long the chosen band stays on screen before the sheet dismisses.
  *
- * Just enough for OptionSelector's highlight to reach the new row. Closing on
- * the same frame as the tap is what made the choice feel like it had been
- * swallowed rather than made.
+ * ⚠️ Must OUTLAST `OPTION_HIGHLIGHT_MS`, or the sheet starts sliding away while
+ * the highlight is still travelling — the selection is never actually seen to
+ * land, which is the whole reason the delay exists. The extra beat is the pause
+ * after it settles.
  */
-const BUDGET_SETTLE_MS = 260
+const BUDGET_SETTLE_MS = OPTION_HIGHLIGHT_MS + 90
 
 type LocationChoice = 'Nearby' | 'Anywhere in Dubai' | `Near ${string}`
 type Format = 'Delivery' | 'Dine In'

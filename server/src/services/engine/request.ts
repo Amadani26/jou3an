@@ -77,7 +77,7 @@ export interface RequestFilters {
  * the quiz has defaults that reproduce the engine's historical behaviour.
  */
 export interface UserPrefs {
-  /** Null = the quiz's "No budget" (or never answered) — see BUDGET_MAP. */
+  /** Null = the quiz's "Any budget" (or never answered) — see BUDGET_MAP. */
   budgetRange?: BudgetRange | null
   /** Declared dietary needs — a Stage-1 exclusion. See src/lib/dietary.ts. */
   dietary?: string[] | null

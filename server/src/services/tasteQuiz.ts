@@ -44,7 +44,7 @@ export interface TasteQuizAnswers {
   lovedCuisines?: string[]
   dislikedCuisines?: string[]
   dietary?: string[]
-  /** NULL is a real answer — the "No budget" card. See NormalizedAnswers. */
+  /** NULL is a real answer — the "Any budget" card. See NormalizedAnswers. */
   budgetRange?: BudgetRange | null
   adventurousness?: Adventurousness
 }
@@ -71,7 +71,7 @@ export interface NormalizedAnswers {
   dietary?: string[]
   /**
    * ⚠️ THREE states, all meaningful: absent leaves the stored band alone, a
-   * band sets it, and explicit NULL clears it — which is how "No budget" is
+   * band sets it, and explicit NULL clears it — which is how "Any budget" is
    * stored, and the only way a user can un-say a band they once chose.
    */
   budgetRange?: BudgetRange | null

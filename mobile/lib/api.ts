@@ -69,7 +69,7 @@ export type LocationArea =
   | 'OTHER'
 
 /**
- * A saved budget band. NULL on the user means "No budget" — a real answer from
+ * A saved budget band. NULL on the user means "Any budget" — a real answer from
  * the quiz, not a missing one. See lib/budget.ts for the shared vocabulary and
  * the labels; `BudgetChoice` there is this type plus the explicit 'ANY'.
  *
@@ -107,7 +107,7 @@ export interface User {
   cuisinePreferences: string[]
   /** Cuisines the quiz's "rather skip" step collected — a -2 lean, not a ban. */
   dislikedCuisines: string[]
-  /** Null = "No budget". Never assume a band is present. */
+  /** Null = "Any budget". Never assume a band is present. */
   budgetRange: BudgetRange | null
   dietary: string[]
   adventurousness: Adventurousness
@@ -519,7 +519,7 @@ export interface TasteQuizAnswers {
   dislikedCuisines?: string[]
   /** Not asked by the quiz any more; edited from Profile → Preferences. */
   dietary?: DietaryNeed[]
-  /** ⚠️ NULL is a real answer ("No budget"); undefined leaves it unchanged. */
+  /** ⚠️ NULL is a real answer ("Any budget"); undefined leaves it unchanged. */
   budgetRange?: BudgetRange | null
   adventurousness?: Adventurousness
 }
@@ -558,7 +558,7 @@ export interface PreferencesPatch {
   cuisinePreferences?: string[]
   dislikedCuisines?: string[]
   dietary?: DietaryNeed[]
-  /** ⚠️ NULL clears the band ("No budget"); undefined leaves it alone. */
+  /** ⚠️ NULL clears the band ("Any budget"); undefined leaves it alone. */
   budgetRange?: BudgetRange | null
   adventurousness?: Adventurousness
 }

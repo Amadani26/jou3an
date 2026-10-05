@@ -24,9 +24,17 @@ import {
 } from '../../lib/budget'
 import { PRIVACY_URL, TERMS_URL, openLegal } from '../../lib/legal'
 import { usePressed } from '../../lib/usePressed'
+import { OPTION_HIGHLIGHT_MS } from '../../components/OptionSelector'
 
-/** Time the budget sheet stays open after a tap, so its highlight can land. */
-const BUDGET_SETTLE_MS = 260
+/**
+ * How long the chosen band stays on screen before the sheet dismisses.
+ *
+ * ⚠️ Must OUTLAST `OPTION_HIGHLIGHT_MS`, or the sheet starts sliding away while
+ * the highlight is still travelling — the selection is never actually seen to
+ * land, which is the whole reason the delay exists. The extra beat is the pause
+ * after it settles.
+ */
+const BUDGET_SETTLE_MS = OPTION_HIGHLIGHT_MS + 90
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */

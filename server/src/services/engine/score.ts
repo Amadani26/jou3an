@@ -110,7 +110,7 @@ export function vibeFit(r: Candidate, vibe: Vibe): number {
  * whole point: the quiz asks what you usually spend, not what you will never
  * exceed, so the answer leans the ranking instead of capping it.
  *
- * 'ANY' ("No budget") returns NEUTRAL, which makes the term inert rather than
+ * 'ANY' ("Any budget") returns NEUTRAL, which makes the term inert rather than
  * punishing every price equally.
  */
 export function priceFit(r: Candidate, budget: Budget): number {

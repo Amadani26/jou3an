@@ -2,11 +2,11 @@ import { useEffect } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Animated, {
+  Easing,
   interpolateColor,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated'
 import { usePressed } from '../lib/usePressed'
@@ -21,7 +21,22 @@ export interface SelectOption<V extends string> {
 /** Uniform, so the sliding highlight's offset is arithmetic rather than measured. */
 export const OPTION_ROW_H = 64
 const GAP = 8
-const SPRING = { damping: 18, stiffness: 200, mass: 0.6 }
+
+/**
+ * How long the highlight takes to travel between rows.
+ *
+ * ⚠️ TIMING WITH AN EASE-OUT, NOT A SPRING. It used to be
+ * `withSpring({ damping: 18, stiffness: 200, mass: 0.6 })` — a damping ratio of
+ * about 0.82, i.e. underdamped, i.e. it overshot the row and wobbled back. On a
+ * decorative element that reads as life; on the thing that tells you which
+ * option is selected it reads as indecision, and it is still moving when the
+ * sheet starts to dismiss. Glide and settle, nothing else.
+ *
+ * Exported because the call sites hold the selection on screen for a beat
+ * before advancing or dismissing, and that beat has to outlast this.
+ */
+export const OPTION_HIGHLIGHT_MS = 240
+const EASE_OUT = Easing.out(Easing.cubic)
 
 const UNSELECTED_BG = '#141414'
 const SELECTED_BG = '#1a0d0d'
@@ -72,7 +87,12 @@ export default function OptionSelector<V extends string>({
     if (selected) {
       // First appearance drops in without travelling from a row nobody chose.
       if (presence.value === 0) position.value = index
-      else position.value = withSpring(index, SPRING)
+      else {
+        position.value = withTiming(index, {
+          duration: OPTION_HIGHLIGHT_MS,
+          easing: EASE_OUT,
+        })
+      }
       presence.value = withTiming(1, { duration: 160 })
     } else {
       presence.value = withTiming(0, { duration: 160 })

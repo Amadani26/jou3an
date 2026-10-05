@@ -36,7 +36,7 @@ import CuisineTile from '../components/CuisineTile'
 import { CUISINE_ROWS } from '../lib/cuisines'
 import { BUDGET_OPTIONS, budgetChoiceOf, budgetRangeOf, type BudgetChoice } from '../lib/budget'
 import { usePressed } from '../lib/usePressed'
-import OptionSelector from '../components/OptionSelector'
+import OptionSelector, { OPTION_HIGHLIGHT_MS } from '../components/OptionSelector'
 import { useAuth } from '../contexts/AuthContext'
 import {
   submitTasteQuiz,
@@ -52,11 +52,12 @@ const tap = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 /**
  * How long a tapped answer is left on screen before the step moves on.
  *
- * Long enough for OptionSelector's highlight to reach the row, short enough
- * that nobody waits for it. A step that advances in the same frame as the tap
- * never shows the answer landing — it just cuts.
+ * ⚠️ Derived from `OPTION_HIGHLIGHT_MS` rather than typed, so it can never fall
+ * back under it: a step that advances while the highlight is still travelling
+ * never shows the answer landing — it just cuts, which is what this delay was
+ * added to stop.
  */
-const SETTLE_MS = 230
+const SETTLE_MS = OPTION_HIGHLIGHT_MS + 70
 const settleThen = (go: () => void) => setTimeout(go, SETTLE_MS)
 
 interface AdventureOption {
@@ -263,7 +264,7 @@ function SkipLink({ onPress, label = 'Skip for now' }: { onPress: () => void; la
  */
 interface Answered {
   skipped: string[]
-  /** null = not answered this run; 'ANY' = answered "No budget". */
+  /** null = not answered this run; 'ANY' = answered "Any budget". */
   budget: BudgetChoice | null
   adventure: Adventurousness | null
 }
@@ -286,9 +287,9 @@ export default function OnboardingScreen() {
   const [skipped, setSkipped] = useState<string[]>(user?.dislikedCuisines ?? [])
   /**
    * null means "not answered in this run", which is NOT the same as 'ANY'
-   * ("No budget") — only an answered question is submitted.
+   * ("Any budget") — only an answered question is submitted.
    *
-   * ⚠️ A stored null is ambiguous on its own: it is both "No budget" and "never
+   * ⚠️ A stored null is ambiguous on its own: it is both "Any budget" and "never
    * asked". `tasteQuizCompletedAt` is what disambiguates — once the quiz has
    * been finished, a null band is a real answer worth showing as selected.
    */

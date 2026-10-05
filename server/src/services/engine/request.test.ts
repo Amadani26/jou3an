@@ -39,7 +39,7 @@ describe('toEngineContext', () => {
     expect(toEngineContext({}, null, date).budget).toBe('ANY')
   })
 
-  it('reads a stored NULL band as ANY — "No budget" is an answer', () => {
+  it('reads a stored NULL band as ANY — "Any budget" is an answer', () => {
     // User.budgetRange is nullable and the quiz's first budget card stores null.
     // It must mean "leave the price term neutral", not "fall back to a band".
     expect(toEngineContext({}, { budgetRange: null }, date).budget).toBe('ANY')
