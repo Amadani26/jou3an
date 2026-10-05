@@ -60,10 +60,27 @@ const PAGE_SIZE = 20
 /** Refill this many cards from the end, so the next batch lands before it's needed. */
 const REFILL_AT = 3
 /**
- * Radius ladder for a located deck. 5 km is the neighbourhood; 15 km is "still
- * worth the drive". Past that we stop pretending and widen to the whole city.
+ * How far a located deck reaches, as the user sets it.
+ *
+ * ⚠️ THIS REPLACED AN AUTOMATIC LADDER (5 km → 15 km → whole city). The ladder
+ * was right while the radius was invisible: "nothing within 5 km" is a
+ * statement about the radius, not about Dubai, so widening silently was the
+ * kinder answer. It is wrong now. Once the radius is a control the user has
+ * set, quietly overriding it is the app telling them their choice didn't
+ * count — somebody who drags down to 2 km means 2 km.
+ *
+ * The ONE exception is at the top of the range: see `loadDeck`.
  */
-const RADIUS_LADDER = [5, 15]
+const RADIUS_MIN = 2
+const RADIUS_MAX = 15
+const RADIUS_DEFAULT = 5
+/**
+ * Settle time between letting go of the slider and reloading.
+ *
+ * Long enough to coalesce a quick re-grab, short enough that the deck feels
+ * like it responded to the release rather than to a timer.
+ */
+const RADIUS_RELOAD_DELAY_MS = 260
 /** The server caps this too — matching it here keeps the URL honest. */
 const EXCLUDE_CAP = 300
 
@@ -116,6 +133,13 @@ const ANYWHERE: DeckLocation = { mode: 'anywhere', coords: null, areaLabel: null
  * launch starts from Anywhere, because yesterday's area is rarely today's.
  */
 let sessionLocation: DeckLocation = ANYWHERE
+
+/**
+ * The radius, remembered for the session alongside the location — same
+ * reasoning, same lifetime: it survives leaving the tab, and dies with the
+ * process rather than being persisted.
+ */
+let sessionRadiusKm = RADIUS_DEFAULT
 
 /**
  * The seed that deals this session's deck.
@@ -417,6 +441,183 @@ function LocationPill({
   )
 }
 
+/* ---------------- Radius slider ---------------- */
+
+/** Reserved height for the slider row. See the layout note at its call site. */
+const RADIUS_ROW_H = 40
+const SLIDER_LABEL_W = 84
+const SLIDER_GAP = 12
+const SLIDER_TRACK_H = 4
+const SLIDER_THUMB = 18
+/**
+ * Where a radius sits on the track, 0..1.
+ *
+ * ⚠️ MODULE-LEVEL AND MARKED `'worklet'`. As a plain arrow inside the
+ * component it was a JS function, and calling it from the pan's `onEnd` —
+ * which runs on the UI thread — threw "Tried to synchronously call a Remote
+ * Function". A worklet declared up here is callable from both threads.
+ */
+function radiusPct(km: number): number {
+  'worklet'
+  return (km - RADIUS_MIN) / (RADIUS_MAX - RADIUS_MIN)
+}
+
+/** Track is whatever the row's padding and the fixed label leave behind. */
+const SLIDER_TRACK_W = W - 40 - SLIDER_LABEL_W - SLIDER_GAP
+/** The thumb's centre travels this far; it is inset so it never clips out. */
+const SLIDER_SPAN = SLIDER_TRACK_W - SLIDER_THUMB
+
+/**
+ * How far to look, as a drag.
+ *
+ * ⚠️ Hand-built on Gesture.Pan rather than a slider package. The value has to
+ * follow the finger on the UI thread — a JS-driven slider on a screen that is
+ * also running a card gesture and a photo cross-fade is exactly where dropped
+ * frames show up. Nothing here crosses to JS except the integer km, and only
+ * when it actually changes.
+ *
+ * ⚠️ The label is a FIXED WIDTH. "Within 2 km" and "Within 15 km" are different
+ * lengths, and a label that resizes mid-drag would resize the track with it —
+ * the thumb would slide out from under the finger that is holding it.
+ */
+function RadiusSlider({
+  value,
+  onChange,
+  onRelease,
+}: {
+  /** Current radius in km. Drives the thumb when it changes from outside. */
+  value: number
+  /** Fires on each whole-km change during the drag — label only, no network. */
+  onChange: (km: number) => void
+  /** Fires once, on release. This is what reloads the deck. */
+  onRelease: (km: number) => void
+}) {
+  const x = useSharedValue(radiusPct(value) * SLIDER_SPAN)
+  /** Last km handed to JS, so a drag emits one event per whole kilometre. */
+  const lastKm = useSharedValue(value)
+
+  // Keep the thumb honest when the value is changed from outside the drag
+  // (a fresh session default, or a mode switch).
+  useEffect(() => {
+    if (lastKm.value !== value) {
+      lastKm.value = value
+      x.value = withTiming(radiusPct(value) * SLIDER_SPAN, { duration: 160 })
+    }
+    // radiusPct is pure; x and lastKm are stable shared values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+
+  const kmAt = (px: number) => {
+    'worklet'
+    const pct = Math.min(1, Math.max(0, px / SLIDER_SPAN))
+    return Math.round(RADIUS_MIN + pct * (RADIUS_MAX - RADIUS_MIN))
+  }
+
+  const settle = (px: number) => {
+    'worklet'
+    const clamped = Math.min(SLIDER_SPAN, Math.max(0, px))
+    const km = kmAt(clamped)
+    if (km !== lastKm.value) {
+      lastKm.value = km
+      runOnJS(onChange)(km)
+    }
+    return clamped
+  }
+
+  const pan = Gesture.Pan()
+    // The card behind this row has its own Pan. Without this the deck would
+    // steal a horizontal drag that started on the slider.
+    .activeOffsetX([-4, 4])
+    .onBegin((e) => {
+      // Tap-to-set: jump to where the finger landed. Touching the thumb is a
+      // no-op visually, because that is already where it is.
+      x.value = settle(e.x - SLIDER_THUMB / 2)
+    })
+    .onUpdate((e) => {
+      x.value = settle(e.x - SLIDER_THUMB / 2)
+    })
+    .onEnd(() => {
+      // Snap to the whole kilometre the label has been showing, so the thumb
+      // never comes to rest between two values it never reported.
+      x.value = withTiming(radiusPct(lastKm.value) * SLIDER_SPAN, { duration: 120 })
+      runOnJS(onRelease)(lastKm.value)
+    })
+
+  const thumbStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }))
+  const fillStyle = useAnimatedStyle(() => ({ width: x.value + SLIDER_THUMB / 2 }))
+
+  return (
+    <View
+      style={{
+        height: RADIUS_ROW_H,
+        paddingHorizontal: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: SLIDER_GAP,
+      }}
+    >
+      <Text
+        style={{
+          width: SLIDER_LABEL_W,
+          fontFamily: 'DMSans_600SemiBold',
+          fontSize: 12,
+          color: '#8A847E',
+        }}
+      >
+        Within {value} km
+      </Text>
+
+      <GestureDetector gesture={pan}>
+        {/* Full-height hit area around a 4pt track — a 4pt target is unusable. */}
+        <View
+          style={{
+            width: SLIDER_TRACK_W,
+            height: RADIUS_ROW_H,
+            justifyContent: 'center',
+          }}
+        >
+          <View
+            style={{
+              height: SLIDER_TRACK_H,
+              borderRadius: SLIDER_TRACK_H / 2,
+              backgroundColor: '#242424',
+            }}
+          />
+          <Animated.View
+            style={[
+              {
+                position: 'absolute',
+                left: 0,
+                height: SLIDER_TRACK_H,
+                borderRadius: SLIDER_TRACK_H / 2,
+                backgroundColor: '#E63946',
+              },
+              fillStyle,
+            ]}
+          />
+          <Animated.View
+            style={[
+              {
+                position: 'absolute',
+                left: 0,
+                width: SLIDER_THUMB,
+                height: SLIDER_THUMB,
+                borderRadius: SLIDER_THUMB / 2,
+                backgroundColor: '#E63946',
+                // A ring in the page colour so the thumb reads as sitting ON
+                // the track rather than being a bead threaded through it.
+                borderWidth: 2,
+                borderColor: '#080808',
+              },
+              thumbStyle,
+            ]}
+          />
+        </View>
+      </GestureDetector>
+    </View>
+  )
+}
+
 /**
  * One liked restaurant in the tray: photo + name, as a compact pill.
  *
@@ -515,6 +716,16 @@ export default function TinderScreen() {
   /* ---------------- Location filter ---------------- */
   const [location, setLocation] = useState<DeckLocation>(sessionLocation)
   const [areaSheetOpen, setAreaSheetOpen] = useState(false)
+  /**
+   * The radius the slider is showing. Seeded from the session so coming back
+   * to the tab restores the range as well as the place.
+   *
+   * It is also updated mid-drag (one setState per whole kilometre), which is
+   * what makes the label live without the deck reloading under the finger.
+   */
+  const [radiusKm, setRadiusKm] = useState(sessionRadiusKm)
+  /** Coalesces a release, so drag–release–drag–release reloads once. */
+  const radiusReload = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   /* ---------------- Deck paging ---------------- */
   /** True once the server has no more rows for this filter — the loop's cue. */
@@ -531,7 +742,7 @@ export default function TinderScreen() {
   /** What the refills should ask for — set once the load settles on a radius. */
   const activeQuery = useRef<{ coords: { lat: number; lng: number } | null; radiusKm: number }>({
     coords: null,
-    radiusKm: RADIUS_LADDER[0],
+    radiusKm: RADIUS_DEFAULT,
   })
   /**
    * Every swipe this session, in order, repeats included — and now WITH its
@@ -572,11 +783,23 @@ export default function TinderScreen() {
   /**
    * Loads the first page for a location choice, replacing the deck.
    *
-   * A located deck climbs the radius ladder before giving up and going
-   * city-wide: an empty deck is never an acceptable answer, and "nothing within
-   * 5 km" is a statement about the radius, not about Dubai.
+   * ⚠️ THE CHOSEN RADIUS IS HONOURED LITERALLY. No automatic widening — see
+   * RADIUS_MIN for why the old ladder had to go once the radius became a
+   * control. An empty result at 2 km is a true answer, and the empty state
+   * says which number produced it and invites the user to drag.
+   *
+   * ⚠️ ONE EXCEPTION, at the top of the range. At RADIUS_MAX there is nothing
+   * left to widen to, so a user who is simply not in Dubai (the simulator
+   * defaults to San Francisco) would be stranded looking at an empty deck with
+   * a hint they cannot act on. There, and only there, we fall back to the whole
+   * city and say so. "An empty deck is never an acceptable answer" survives
+   * exactly where the user has run out of ways to fix it themselves.
+   *
+   * ⚠️ Swipe history and likes are NOT reset. `swipeLog` and `likedById` belong
+   * to the session, not to a deck, so changing the radius keeps the Liked tray
+   * and keeps feeding Suggest 3 — same contract as changing the location.
    */
-  const loadDeck = useCallback(async (loc: DeckLocation) => {
+  const loadDeck = useCallback(async (loc: DeckLocation, radiusKm: number) => {
     const token = ++loadToken.current
     setLoading(true)
     setNotice(null)
@@ -597,27 +820,22 @@ export default function TinderScreen() {
       let message: string | null = null
 
       if (loc.coords) {
-        for (const km of RADIUS_LADDER) {
-          activeQuery.current = { coords: loc.coords, radiusKm: km }
-          rows = await fetchPage(0)
-          if (token !== loadToken.current) return
-          if (rows.length) {
-            if (km !== RADIUS_LADDER[0]) {
-              message = `Nothing within ${RADIUS_LADDER[0]} km — widened to ${km} km`
-            }
-            break
-          }
-        }
-        if (!rows.length) {
-          // Outside Dubai entirely (the simulator defaults to San Francisco),
-          // or a very quiet corner of it.
-          activeQuery.current = { coords: null, radiusKm: RADIUS_LADDER[0] }
+        activeQuery.current = { coords: loc.coords, radiusKm }
+        rows = await fetchPage(0)
+        if (token !== loadToken.current) return
+
+        // Only at the ceiling — below it, the user can widen for themselves and
+        // the empty state tells them so.
+        if (!rows.length && radiusKm >= RADIUS_MAX) {
+          activeQuery.current = { coords: null, radiusKm }
           rows = await fetchPage(0)
           if (token !== loadToken.current) return
           if (rows.length) message = 'Nothing nearby — showing all of Dubai'
         }
       } else {
-        activeQuery.current = { coords: null, radiusKm: RADIUS_LADDER[0] }
+        // Anywhere: the server ignores `radius` without coordinates, so there
+        // is nothing to pass and nothing for the slider to do.
+        activeQuery.current = { coords: null, radiusKm }
         rows = await fetchPage(0)
         if (token !== loadToken.current) return
       }
@@ -637,9 +855,9 @@ export default function TinderScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // First load. Restores whatever the session last chose.
+  // First load. Restores whatever the session last chose — place and range.
   useEffect(() => {
-    loadDeck(sessionLocation)
+    loadDeck(sessionLocation, sessionRadiusKm)
   }, [loadDeck])
 
   /**
@@ -708,9 +926,44 @@ export default function TinderScreen() {
     async (next: DeckLocation) => {
       sessionLocation = next
       setLocation(next)
-      await loadDeck(next)
+      await loadDeck(next, sessionRadiusKm)
     },
     [loadDeck],
+  )
+
+  /**
+   * Mid-drag: move the label, touch nothing else.
+   *
+   * ⚠️ Deliberately does NOT reload. Dragging 5 → 12 passes through seven
+   * values; reloading on each would fire seven requests, throw away six decks,
+   * and leave whichever response happened to land last in charge.
+   */
+  const previewRadius = useCallback((km: number) => {
+    setRadiusKm(km)
+    Haptics.selectionAsync()
+  }, [])
+
+  /** On release: remember the choice and reload once, after a short settle. */
+  const commitRadius = useCallback(
+    (km: number) => {
+      setRadiusKm(km)
+      sessionRadiusKm = km
+      if (radiusReload.current) clearTimeout(radiusReload.current)
+      radiusReload.current = setTimeout(() => {
+        // `sessionLocation` rather than `location`: this closure is memoised on
+        // [loadDeck] and the user may have switched place since it was made.
+        void loadDeck(sessionLocation, km)
+      }, RADIUS_RELOAD_DELAY_MS)
+    },
+    [loadDeck],
+  )
+
+  // A pending reload must not outlive the screen.
+  useEffect(
+    () => () => {
+      if (radiusReload.current) clearTimeout(radiusReload.current)
+    },
+    [],
   )
 
   const chooseNearby = async () => {
@@ -751,6 +1004,9 @@ export default function TinderScreen() {
       areaLabel: s.name,
     })
   }
+
+  /** Nearby and Pick-an-area both have a centre; only the radius differs. */
+  const located = location.coords !== null
 
   const current = restaurants[index]
   const currentPhotos = photoUrls(current)
@@ -994,6 +1250,22 @@ export default function TinderScreen() {
         />
       </View>
 
+      {/* Radius — only where there is a centre to measure from.
+          ⚠️ RESERVED SLOT, same contract as the filter row and the Liked tray:
+          a fixed RADIUS_ROW_H while it is mounted, so nothing below it moves
+          as the value changes. It appears and disappears with the MODE, which
+          is a deliberate user action that reloads the deck anyway — the card is
+          `flex: 1` under a cap and absorbs the difference.
+          Hidden in Anywhere, where the server ignores a radius sent without
+          coordinates: a control that does nothing is worse than no control. */}
+      {located ? (
+        <RadiusSlider
+          value={radiusKm}
+          onChange={previewRadius}
+          onRelease={commitRadius}
+        />
+      ) : null}
+
       {/* Card area — flexes to fill the space between the header and the tray.
           The fixed paddingTop is a barrier the (fixed-height) card can't cross. */}
       <View
@@ -1022,9 +1294,15 @@ export default function TinderScreen() {
                 fontSize: 13,
                 color: '#504B47',
                 textAlign: 'center',
+                paddingHorizontal: 32,
               }}
             >
-              Try Anywhere, or pick a different area
+              {/* Name the number that produced the empty deck and point at the
+                  control that fixes it. "Try Anywhere" alone asked the user to
+                  abandon their filter rather than adjust it. */}
+              {located
+                ? `Nothing within ${radiusKm} km — drag the range wider, or try Anywhere`
+                : 'Try Anywhere, or pick a different area'}
             </Text>
           </View>
         ) : (
