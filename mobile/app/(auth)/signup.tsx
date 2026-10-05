@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { usePressed } from '../../lib/usePressed'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { API_BASE_URL, signupFailureOf, type SignupFailure } from '../../lib/api'
+import { PRIVACY_URL, TERMS_URL, openLegal } from '../../lib/legal'
 
 
 const fieldStyle = {
@@ -222,11 +223,55 @@ export default function SignupScreen() {
         />
       </View>
 
+      {/* ⚠️ The consent line sits ABOVE the button, not below it. Below, it is
+          something you read after agreeing; above, it is part of what you are
+          agreeing to. Both documents are hosted on the website — see
+          lib/legal. */}
+      <View style={{ marginTop: 16, paddingHorizontal: 4 }}>
+        <Text
+          style={{
+            fontFamily: 'DMSans_400Regular',
+            fontSize: 12,
+            lineHeight: 18,
+            color: '#8A847E',
+            textAlign: 'center',
+          }}
+        >
+          By creating an account you agree to our{' '}
+          <Text
+            onPress={() => openLegal(TERMS_URL)}
+            suppressHighlighting
+            accessibilityRole="link"
+            style={{
+              fontFamily: 'DMSans_600SemiBold',
+              color: '#F2EDE8',
+              textDecorationLine: 'underline',
+            }}
+          >
+            Terms
+          </Text>{' '}
+          and{' '}
+          <Text
+            onPress={() => openLegal(PRIVACY_URL)}
+            suppressHighlighting
+            accessibilityRole="link"
+            style={{
+              fontFamily: 'DMSans_600SemiBold',
+              color: '#F2EDE8',
+              textDecorationLine: 'underline',
+            }}
+          >
+            Privacy Policy
+          </Text>
+          .
+        </Text>
+      </View>
+
       <RedButton
         label={loading ? 'Creating…' : 'Create Account'}
         onPress={onSubmit}
         disabled={loading}
-        style={{ marginTop: 16 }}
+        style={{ marginTop: 14 }}
       />
       {failure ? (
         <Animated.View

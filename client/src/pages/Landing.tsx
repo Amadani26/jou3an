@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import AppPreview from '../components/AppPreview'
 import FAQ from '../components/FAQ'
 import Logo from '../components/Logo'
@@ -6,6 +7,7 @@ import Reveal from '../components/Reveal'
 import WaitlistCTA from '../components/WaitlistCTA'
 import WaitlistForm from '../components/WaitlistForm'
 import WhatIsJou3an from '../components/WhatIsJou3an'
+import { PRIVACY_EMAIL } from '../lib/legal'
 import { useParallax } from '../lib/reveal'
 
 /** The app's real flow, in three beats. */
@@ -313,15 +315,20 @@ export default function Landing() {
           </p>
 
           <div className="flex items-center gap-4 mt-2 text-sm text-text-secondary">
-            <a href="#" className="transition-colors hover:text-text-primary">
+            {/* Router <Link>, not <a href>: a full page load here would throw
+                away the service worker's warm start for no reason. */}
+            <Link to="/privacy" className="transition-colors hover:text-text-primary">
               Privacy
-            </a>
+            </Link>
             <span className="text-text-muted">·</span>
-            <a href="#" className="transition-colors hover:text-text-primary">
+            <Link to="/terms" className="transition-colors hover:text-text-primary">
               Terms
-            </a>
+            </Link>
             <span className="text-text-muted">·</span>
-            <a href="#" className="transition-colors hover:text-text-primary">
+            <a
+              href={`mailto:${PRIVACY_EMAIL}`}
+              className="transition-colors hover:text-text-primary"
+            >
               Contact
             </a>
           </div>

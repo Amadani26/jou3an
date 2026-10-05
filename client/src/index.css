@@ -499,3 +499,56 @@ a,
     scroll-behavior: auto;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Legal prose (/privacy, /terms)                                      */
+/*                                                                     */
+/* One place for the type scale and rhythm of the two legal documents, */
+/* so they read as documents rather than as a landing section. Scoped  */
+/* to .legal-prose — it must never leak into the marketing page.       */
+/* ------------------------------------------------------------------ */
+.legal-prose {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.75;
+}
+.legal-prose > * + * {
+  margin-top: 1.1rem;
+}
+.legal-prose h2 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.35rem;
+  line-height: 1.25;
+  color: var(--text-primary);
+  margin-top: 3rem;
+}
+.legal-prose h3 {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin-top: 1.9rem;
+}
+.legal-prose strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.legal-prose a {
+  color: var(--red);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.legal-prose ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.legal-prose li + li {
+  margin-top: 0.5rem;
+}
+/* A plain bordered block for the "what we don't do" / contact callouts. */
+.legal-note {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+  padding: 1.1rem 1.25rem;
+}

@@ -22,6 +22,7 @@ import {
   budgetRangeOf,
   type BudgetChoice,
 } from '../../lib/budget'
+import { PRIVACY_URL, TERMS_URL, openLegal } from '../../lib/legal'
 import { usePressed } from '../../lib/usePressed'
 
 /** Time the budget sheet stays open after a tap, so its highlight can land. */
@@ -464,7 +465,6 @@ export default function ProfileScreen() {
         />
         <Row
           label="Notifications"
-          last
           right={
             <Switch
               value={notifications}
@@ -474,6 +474,10 @@ export default function ProfileScreen() {
             />
           }
         />
+        {/* Both open the website — one copy of each document, correctable
+            without an App Store review. See lib/legal. */}
+        <Row label="Privacy Policy" onPress={() => openLegal(PRIVACY_URL)} />
+        <Row label="Terms of Service" onPress={() => openLegal(TERMS_URL)} last />
       </SectionCard>
 
       {/* Danger zone */}
