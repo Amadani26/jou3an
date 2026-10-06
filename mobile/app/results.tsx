@@ -10,6 +10,7 @@ import GhostButton from '../components/GhostButton'
 import SelectionReward from '../components/SelectionReward'
 import RestaurantDetailSheet from '../components/RestaurantDetailSheet'
 import { openCallFor, openDirectionsFor, openOrderFor } from '../lib/actions'
+import { accumulateShown, dismissDetail, openDetail } from '../lib/resultsFlow'
 import {
   callablePhone,
   getDecision,
@@ -20,9 +21,6 @@ import {
   type Restaurant,
   type Swipe,
 } from '../lib/api'
-
-/** The server's own cap on the accumulated list — kept in step by hand. */
-const MAX_EXCLUDE_IDS = 300
 
 export default function ResultsScreen() {
   const router = useRouter()
@@ -180,16 +178,51 @@ export default function ResultsScreen() {
    * entrance, which is why there is no separate interstitial to time out.
    */
   const select = (r: Restaurant) => {
-    // Guard against a double-tap selecting twice, or re-selecting after the
-    // decision is made — one session, one decision.
-    if (chosen) return
-    setChosen(r)
-    void record(r.id, 'SELECT')
-    setRewardVisible(true)
+    // Double-tap guard lives in openDetail: it refuses while a detail is open.
+    const next = openDetail(
+      { results, shownIds: shownIds.current, cycled, chosen, detailVisible: rewardVisible },
+      r,
+    )
+    if (next.detailVisible && !rewardVisible) void record(r.id, 'SELECT')
+    setChosen(next.chosen)
+    setRewardVisible(next.detailVisible)
   }
 
-  /** Dismissing the reward ends the flow — the decision is final. */
+  /**
+   * Dismissing the detail goes back to the THREE RESULTS — one level, not two.
+   *
+   * ⚠️ It used to `router.replace('/(tabs)')`, i.e. a single dismissal crossed
+   * two levels of the hierarchy and dumped the user on Home. The decision is
+   * still recorded the instant a card is tapped, so backing out of the detail
+   * costs nothing — it just stops being a one-way door.
+   *
+   * ⚠️ NOTHING ELSE IS RESET. The reward is a Modal rendered inside this
+   * screen, so closing it cannot unmount the screen: `results`, their order,
+   * `shownIds` and `cycled` are all still here, and no fetch is triggered.
+   * `dismissDetail` is what that promise is tested against.
+   */
   const closeReward = () => {
+    const next = dismissDetail({
+      results,
+      shownIds: shownIds.current,
+      cycled,
+      chosen,
+      detailVisible: rewardVisible,
+    })
+    setChosen(next.chosen)
+    setRewardVisible(next.detailVisible)
+  }
+
+  /**
+   * "Done" is the explicit FINISH, and the one exit that still goes Home.
+   *
+   * ⚠️ Deliberately different from the X and the swipe: those are "up one
+   * level", this is "I am finished deciding". A celebration with no visible way
+   * to leave reads as unfinished, which is why the button exists at all — but
+   * it must not be the only way out, which is what made dismissal feel like a
+   * trapdoor.
+   */
+  const finishFromReward = () => {
     setRewardVisible(false)
     router.replace('/(tabs)')
   }
@@ -222,19 +255,16 @@ export default function ResultsScreen() {
       setResults(res.results)
       setSessionId(res.sessionId)
 
-      // The brief is spent: the server dropped the exclusions to field three.
-      // Start the set over from these three, or every future Refresh would hand
-      // back the same cycled trio forever.
-      if (res.cycled) {
-        shownIds.current = res.results.map((r) => r.id)
-        if (!cycleAnnounced.current) {
-          cycleAnnounced.current = true
-          setCycled(true)
-        }
-      } else {
-        shownIds.current = [...shownIds.current, ...res.results.map((r) => r.id)].slice(
-          -MAX_EXCLUDE_IDS,
-        )
+      // Append, or restart the set when the brief has cycled — see
+      // accumulateShown, which is where that rule is tested.
+      shownIds.current = accumulateShown(
+        shownIds.current,
+        res.results,
+        res.cycled === true,
+      )
+      if (res.cycled && !cycleAnnounced.current) {
+        cycleAnnounced.current = true
+        setCycled(true)
       }
     } catch {
       const elapsed = Date.now() - started
@@ -470,11 +500,15 @@ export default function ResultsScreen() {
     </ScrollView>
 
     {/* THE REWARD — a FULL-SCREEN celebration of the pick, with the actions on
-        it. Dismissing (X or swipe down) goes Home: the decision is final. */}
+        it. ⚠️ X / swipe-down / Android back go UP ONE LEVEL to these three
+        cards; only "Done" finishes and goes Home. It is a Modal rendered inside
+        this screen, so coming back costs no fetch — the results are still
+        mounted exactly as they were. */}
     <SelectionReward
       visible={rewardVisible}
       restaurant={chosen}
       onClose={closeReward}
+      onFinish={finishFromReward}
       onDirections={() => chosen && openDirections(chosen)}
       onCall={() => chosen && call(chosen)}
       onOrder={() => chosen && order(chosen)}

@@ -56,8 +56,21 @@ interface Props {
   visible: boolean
   /** The restaurant the user just chose. Null while nothing is selected. */
   restaurant: Restaurant | null
-  /** X or swipe-down — the caller sends the user home; the decision is final. */
+  /**
+   * X or swipe-down — UP ONE LEVEL, back to the three results.
+   *
+   * ⚠️ This used to send the user Home, so a single dismissal crossed two
+   * levels of the hierarchy. The decision is already recorded by the time this
+   * screen appears, so backing out costs nothing.
+   */
   onClose: () => void
+  /**
+   * "Done" — the explicit FINISH, which does go Home.
+   *
+   * Deliberately not the same as `onClose`: a celebration needs a visible way
+   * to leave, but that must not be the ONLY way out.
+   */
+  onFinish: () => void
   onDirections: () => void
   onCall: () => void
   onOrder: () => void
@@ -187,7 +200,13 @@ function ActionTile({
   )
 }
 
-/** The way out. The X and a swipe down do the same thing; this one is findable. */
+/**
+ * The explicit finish.
+ *
+ * ⚠️ NOT the same exit as the X and the swipe any more: those go back to the
+ * three results, this one ends the flow. Both are needed — the X alone made
+ * leaving feel like a trapdoor, and Done alone hid the way back to the cards.
+ */
 function DoneButton({ onPress }: { onPress: () => void }) {
   const { pressed, pressHandlers } = usePressed()
 
@@ -254,12 +273,14 @@ function MetaRow({
  * It does, though, have to SAY the decision was kept — celebrating a choice and
  * then dropping the user on an unchanged Home screen is what made the flow feel
  * unfinished. Hence the receipt line and the explicit Done. All three exits
- * (Done, X, swipe) do the same thing: back to Home, decision final.
+ * ⚠️ The three exits are NO LONGER the same. X and swipe-down go UP ONE LEVEL
+ * to the three results; Done finishes and goes Home. One dismissal, one level.
  */
 export default function SelectionReward({
   visible,
   restaurant,
   onClose,
+  onFinish,
   onDirections,
   onCall,
   onOrder,
@@ -293,11 +314,17 @@ export default function SelectionReward({
     rule.value = withDelay(200, withSpring(1, { damping: 18, stiffness: 140 }))
   }, [visible, enter, translateY, bloom, rule])
 
-  const dismiss = () => {
+  /** Slide out, then hand control back. Used by the X, the swipe and Done. */
+  const slideOut = (then: () => void) => {
     translateY.value = withTiming(SCREEN_H, { duration: 240 }, (finished) => {
-      if (finished) runOnJS(onClose)()
+      if (finished) runOnJS(then)()
     })
   }
+
+  /** Up one level — back to the three results. Also Android's hardware back. */
+  const dismiss = () => slideOut(onClose)
+  /** Finish the flow. */
+  const finish = () => slideOut(onFinish)
 
   // Swipe down anywhere on the hero to leave — the same exit as the X.
   const pan = Gesture.Pan()
@@ -668,7 +695,7 @@ export default function SelectionReward({
               ) : null}
               <ActionTile icon="fast-food-outline" label="ORDER" onPress={onOrder} />
             </View>
-            <DoneButton onPress={dismiss} />
+            <DoneButton onPress={finish} />
           </Animated.View>
         </Animated.View>
       </GestureHandlerRootView>
