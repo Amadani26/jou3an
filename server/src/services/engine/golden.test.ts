@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { decide } from './index'
 import { isOpenNow } from '../../lib/hours'
 import { DIFC, MARINA, catalogue, context, input, resetIds, restaurant } from './fixtures'
+import { applyRestaurantEvent } from '../tasteProfile'
+import {
+  cuisineDimension,
+  emptyVector,
+  priceDimension,
+  tagDimension,
+} from '../tasteDimensions'
 import type { Decision3 } from './types'
 
 /**
@@ -46,7 +53,15 @@ describe('golden 1 — Marina casual burger lover', () => {
     decide(
       input({
         candidates: catalogue(),
-        tasteWeights: { 'american burgers': 8, 'comfort-food': 4 },
+        // A v2 vector: the cuisine AND the tag the old profile could not express.
+        taste: {
+          base: {
+            [cuisineDimension('American Burgers')]: 8,
+            [tagDimension('comfort-food')]: 4,
+          },
+          lunch: {},
+          dinner: {},
+        },
         context: context({ ...MARINA, vibe: 'CASUAL', budget: 'MID', date: at }),
         userId: 'burger-lover',
       }),
@@ -88,7 +103,7 @@ describe('golden 2 — DIFC fancy date night', () => {
     decide(
       input({
         candidates: catalogue(),
-        tasteWeights: {},
+        taste: {},
         context: context({ ...DIFC, vibe: 'FANCY', budget: 'HIGH', date: at }),
         userId: 'date-night',
       }),
@@ -188,7 +203,7 @@ describe('golden 4 — brand-new anonymous user, no taste, no location', () => {
     decide(
       input({
         candidates: catalogue(),
-        tasteWeights: {},
+        taste: {},
         context: context({ date: at }),
         userId: null,
         recentSelections: [],
@@ -209,8 +224,8 @@ describe('golden 4 — brand-new anonymous user, no taste, no location', () => {
 
   it('ranks on quality when taste is uninformative', () => {
     const decision = d()
-    // With an empty profile every taste score is neutral, so quality (the only
-    // other 0.4-weighted term) has to be doing the work.
+    // With an empty profile every taste score is neutral, so quality and the
+    // context term are the only things that can be doing the work.
     for (const b of decision.breakdown) expect(b.taste).toBeCloseTo(0.5)
     expect(decision.picks.some((p) => p.breakdown.topComponent === 'quality')).toBe(true)
   })
@@ -271,5 +286,92 @@ describe('golden 5 — regular whose usual was picked yesterday', () => {
 
   it('keeps cuisine diversity across the three', () => {
     expect(cuisines(scenario(0.1).decision).size).toBeGreaterThanOrEqual(2)
+  })
+})
+
+/**
+ * Golden 6 — Taste Vector v2's reason for existing.
+ *
+ * The user right-swipes steakhouses that share NO cuisine with each other. The
+ * old cuisine-only profile learned one weak weight per cuisine and nothing at
+ * all about "steakhouse"; the vector learns the tag, and the next decision
+ * leans on it.
+ */
+describe('golden 6 — the steakhouse learner (tags, not cuisines)', () => {
+  const at = new Date('2026-09-21T17:00:00Z') // Mon 21:00 Dubai — dinner
+
+  /** Four steakhouses, four different cuisines, all mid-priced. */
+  function swipedRight() {
+    let vector = emptyVector()
+    const steakhouses = [
+      { cuisineType: 'Argentinian', tags: ['steakhouse'], priceMin: 120, priceMax: 220 },
+      { cuisineType: 'American', tags: ['steakhouse'], priceMin: 130, priceMax: 210 },
+      { cuisineType: 'Brazilian', tags: ['steakhouse'], priceMin: 140, priceMax: 240 },
+      { cuisineType: 'French', tags: ['steakhouse'], priceMin: 150, priceMax: 230 },
+    ]
+    for (const r of steakhouses) {
+      vector = applyRestaurantEvent(vector, r, 'SWIPE_RIGHT', at)
+    }
+    return vector
+  }
+
+  /** A fifth steakhouse, in a cuisine the user has never been shown. */
+  function pool() {
+    resetIds()
+    return [
+      restaurant({
+        name: 'Gaucho Grill',
+        cuisineType: 'Uruguayan',
+        tags: ['steakhouse'],
+        priceMin: 140,
+        priceMax: 220,
+        googleRating: 4.2,
+      }),
+      restaurant({ name: 'Sushi', cuisineType: 'Japanese', tags: ['healthy'], googleRating: 4.3 }),
+      restaurant({ name: 'Pasta', cuisineType: 'Italian', tags: ['quick'], googleRating: 4.3 }),
+      restaurant({ name: 'Curry', cuisineType: 'Pakistani', tags: ['cheap'], googleRating: 4.3 }),
+      restaurant({ name: 'Pizza', cuisineType: 'Pizza', tags: ['comfort-food'], googleRating: 4.3 }),
+    ]
+  }
+
+  const decision = () =>
+    decide(
+      input({
+        candidates: pool(),
+        taste: swipedRight(),
+        context: context({ date: at }),
+        userId: 'steak-learner',
+      }),
+    )
+
+  it('still returns 3', () => {
+    expectUniversalInvariants(decision(), at)
+  })
+
+  it('learned the TAG, not just the four cuisines', () => {
+    const v = swipedRight()
+    expect(v.base[tagDimension('steakhouse')]).toBeGreaterThan(
+      v.base[cuisineDimension('American')],
+    )
+    // ...and the price band they all share.
+    expect(v.base[priceDimension('MID')]).toBeGreaterThan(0)
+  })
+
+  it('picks the unseen steakhouse over equally-rated alternatives', () => {
+    expect(names(decision())).toContain('Gaucho Grill')
+  })
+
+  it('explains it by the tag that earned it', () => {
+    const pick = decision().picks.find((p) => p.restaurant.name === 'Gaucho Grill')!
+    expect(pick.breakdown.topComponent).toBe('taste')
+    expect(pick.breakdown.tasteDimensions[0].key).toBe(tagDimension('steakhouse'))
+    expect(pick.reason).toBe('Right up your alley for steakhouse')
+  })
+
+  it('a cold profile does NOT pick it — the learning is what moved it', () => {
+    const cold = decide(
+      input({ candidates: pool(), taste: {}, context: context({ date: at }), userId: 'cold' }),
+    )
+    expect(names(cold)).not.toContain('Gaucho Grill')
   })
 })

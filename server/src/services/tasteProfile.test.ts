@@ -6,73 +6,337 @@ import {
   WEIGHT_MIN,
   QUIZ_DISLIKE_DELTA,
   QUIZ_LOVE_DELTA,
-  applyEventToWeights,
+  applyEventToVector,
+  applyRestaurantEvent,
   coerceWeights,
+  effectiveTasteVector,
   effectiveTasteWeights,
   quizWeightsFrom,
 } from './tasteProfile'
+import {
+  CONTEXT_EVENT_SCALE,
+  cuisineDimension,
+  coerceVector,
+  dimensionsFor,
+  emptyVector,
+  mealContextFor,
+  priceDimension,
+  tagDimension,
+  weightsFor,
+  type TasteVector,
+} from './tasteDimensions'
+
+/** 13:00 and 21:00 Dubai — one on each side of DINNER_FROM_HOUR. */
+const LUNCHTIME = new Date('2026-09-21T09:00:00Z')
+const DINNERTIME = new Date('2026-09-21T17:00:00Z')
+
+/** A mid-priced steakhouse: four dimensions in one row. */
+const STEAKHOUSE = {
+  cuisineType: 'American',
+  tags: ['steakhouse', 'date-night'],
+  priceMin: 120,
+  priceMax: 220,
+}
+
+const CUISINE = cuisineDimension('American')
+const STEAK = tagDimension('steakhouse')
+const MID = priceDimension('MID')
+
+/* ------------------------------------------------------------------ */
+/* Taste Vector v2 — event ingestion                                   */
+/* ------------------------------------------------------------------ */
 
 /** The pure core only — `applyTasteEvent` is the DB wrapper and isn't covered here. */
-describe('applyEventToWeights', () => {
-  it('applies each event delta at full strength on a fresh profile', () => {
-    expect(applyEventToWeights({}, 'Japanese', 'SWIPE_RIGHT').japanese).toBeCloseTo(1)
-    expect(applyEventToWeights({}, 'Japanese', 'SWIPE_LEFT').japanese).toBeCloseTo(-0.25)
-    expect(applyEventToWeights({}, 'Japanese', 'SELECT').japanese).toBeCloseTo(3)
+describe('applyEventToVector', () => {
+  it('applies each event delta at full strength to the base on a fresh profile', () => {
+    const right = applyRestaurantEvent(emptyVector(), STEAKHOUSE, 'SWIPE_RIGHT', DINNERTIME)
+    const left = applyRestaurantEvent(emptyVector(), STEAKHOUSE, 'SWIPE_LEFT', DINNERTIME)
+    const select = applyRestaurantEvent(emptyVector(), STEAKHOUSE, 'SELECT', DINNERTIME)
+
+    expect(right.base[CUISINE]).toBeCloseTo(EVENT_DELTA.SWIPE_RIGHT)
+    expect(left.base[CUISINE]).toBeCloseTo(EVENT_DELTA.SWIPE_LEFT)
+    expect(select.base[CUISINE]).toBeCloseTo(EVENT_DELTA.SELECT)
   })
 
-  it('normalises the cuisine key', () => {
-    const w = applyEventToWeights({}, '  JaPaNeSe  ', 'SELECT')
-    expect(Object.keys(w)).toEqual(['japanese'])
+  /** THE upgrade: one event, every dimension the row matches. */
+  it('credits the cuisine, EVERY tag and the price band from one event', () => {
+    const v = applyRestaurantEvent(emptyVector(), STEAKHOUSE, 'SWIPE_RIGHT', DINNERTIME)
+
+    expect(Object.keys(v.base).sort()).toEqual(
+      [CUISINE, STEAK, tagDimension('date-night'), MID].sort(),
+    )
+    // Same delta on each — the namespaces are weighted at SCORING time, not here.
+    for (const key of Object.keys(v.base)) {
+      expect(v.base[key]).toBeCloseTo(EVENT_DELTA.SWIPE_RIGHT)
+    }
   })
 
-  it('decays every weight before applying the delta', () => {
-    const before = { japanese: 4, lebanese: 2 }
-    const after = applyEventToWeights(before, 'japanese', 'SWIPE_RIGHT')
+  it('writes the active meal context at half strength and leaves the other empty', () => {
+    const v = applyRestaurantEvent(emptyVector(), STEAKHOUSE, 'SELECT', DINNERTIME)
 
-    // The targeted cuisine decays too, then takes the delta.
-    expect(after.japanese).toBeCloseTo(4 * DECAY + EVENT_DELTA.SWIPE_RIGHT)
-    // Untouched cuisines only decay.
-    expect(after.lebanese).toBeCloseTo(2 * DECAY)
+    expect(v.dinner[STEAK]).toBeCloseTo(EVENT_DELTA.SELECT * CONTEXT_EVENT_SCALE)
+    expect(v.lunch).toEqual({})
+    // The base is what makes the split cheap: full strength regardless.
+    expect(v.base[STEAK]).toBeCloseTo(EVENT_DELTA.SELECT)
   })
 
-  it('decays untouched cuisines toward neutral over many updates', () => {
-    let w: Record<string, number> = { lebanese: 5 }
-    for (let i = 0; i < 100; i++) w = applyEventToWeights(w, 'japanese', 'SWIPE_RIGHT')
+  it('routes a lunchtime event to the lunch map', () => {
+    const v = applyRestaurantEvent(emptyVector(), STEAKHOUSE, 'SELECT', LUNCHTIME)
+    expect(v.lunch[STEAK]).toBeCloseTo(EVENT_DELTA.SELECT * CONTEXT_EVENT_SCALE)
+    expect(v.dinner).toEqual({})
+  })
 
-    expect(w.lebanese).toBeLessThan(5 * 0.2)
+  it('decays every weight in the maps it writes before applying the delta', () => {
+    const before: TasteVector = {
+      base: { [CUISINE]: 4, [cuisineDimension('Lebanese')]: 2 },
+      lunch: {},
+      dinner: { [CUISINE]: 1 },
+    }
+    const after = applyRestaurantEvent(before, STEAKHOUSE, 'SWIPE_RIGHT', DINNERTIME)
+
+    // The targeted dimension decays too, then takes the delta.
+    expect(after.base[CUISINE]).toBeCloseTo(4 * DECAY + EVENT_DELTA.SWIPE_RIGHT)
+    // Untouched dimensions only decay.
+    expect(after.base[cuisineDimension('Lebanese')]).toBeCloseTo(2 * DECAY)
+    expect(after.dinner[CUISINE]).toBeCloseTo(
+      1 * DECAY + EVENT_DELTA.SWIPE_RIGHT * CONTEXT_EVENT_SCALE,
+    )
+  })
+
+  /**
+   * A month of dinners must not erase what we know about the user's lunches —
+   * each context fades on its OWN evidence. This is the rule that makes the
+   * split worth having rather than just halving the data.
+   */
+  it('does not decay the inactive meal context', () => {
+    const before: TasteVector = { base: {}, lunch: { [STEAK]: 3 }, dinner: {} }
+    let v = before
+    for (let i = 0; i < 50; i++) {
+      v = applyRestaurantEvent(v, STEAKHOUSE, 'SWIPE_RIGHT', DINNERTIME)
+    }
+    expect(v.lunch[STEAK]).toBe(3)
+  })
+
+  it('decays untouched dimensions toward neutral over many updates', () => {
+    let v: TasteVector = { base: { [cuisineDimension('Lebanese')]: 5 }, lunch: {}, dinner: {} }
+    for (let i = 0; i < 100; i++) {
+      v = applyRestaurantEvent(v, STEAKHOUSE, 'SWIPE_RIGHT', DINNERTIME)
+    }
+    expect(v.base[cuisineDimension('Lebanese')]).toBeLessThan(5 * 0.2)
     // Still positive — decay erodes, it does not invert a preference.
-    expect(w.lebanese).toBeGreaterThan(0)
+    expect(v.base[cuisineDimension('Lebanese')]).toBeGreaterThan(0)
   })
 
-  it('clamps to the ceiling no matter how many SELECTs land', () => {
-    let w: Record<string, number> = {}
-    for (let i = 0; i < 50; i++) w = applyEventToWeights(w, 'japanese', 'SELECT')
-    expect(w.japanese).toBeLessThanOrEqual(WEIGHT_MAX)
-    // And it should actually be pinned near the ceiling, not merely under it.
-    expect(w.japanese).toBeGreaterThan(WEIGHT_MAX - 1)
+  it('clamps every dimension to the ceiling no matter how many SELECTs land', () => {
+    let v = emptyVector()
+    for (let i = 0; i < 50; i++) v = applyRestaurantEvent(v, STEAKHOUSE, 'SELECT', DINNERTIME)
+
+    for (const key of [CUISINE, STEAK, MID]) {
+      expect(v.base[key]).toBeLessThanOrEqual(WEIGHT_MAX)
+      expect(v.base[key]).toBeGreaterThan(WEIGHT_MAX - 1)
+    }
+    // The context map is clamped independently, by the same bounds.
+    expect(v.dinner[STEAK]).toBeLessThanOrEqual(WEIGHT_MAX)
   })
 
   it('clamps to the floor no matter how many left-swipes land', () => {
-    let w: Record<string, number> = {}
-    for (let i = 0; i < 500; i++) w = applyEventToWeights(w, 'pizza', 'SWIPE_LEFT')
-    expect(w.pizza).toBeGreaterThanOrEqual(WEIGHT_MIN)
+    let v = emptyVector()
+    for (let i = 0; i < 500; i++) {
+      v = applyRestaurantEvent(v, STEAKHOUSE, 'SWIPE_LEFT', DINNERTIME)
+    }
+    expect(v.base[CUISINE]).toBeGreaterThanOrEqual(WEIGHT_MIN)
   })
 
   it('does not mutate the input', () => {
-    const before = { japanese: 4 }
-    applyEventToWeights(before, 'japanese', 'SELECT')
-    expect(before.japanese).toBe(4)
+    const before: TasteVector = { base: { [CUISINE]: 4 }, lunch: {}, dinner: {} }
+    applyRestaurantEvent(before, STEAKHOUSE, 'SELECT', DINNERTIME)
+    expect(before.base[CUISINE]).toBe(4)
+    expect(before.dinner).toEqual({})
   })
 
-  it('ignores an empty cuisine', () => {
-    expect(applyEventToWeights({ japanese: 1 }, '   ', 'SELECT')).toEqual({ japanese: 1 })
+  it('normalises dimension values', () => {
+    const v = applyRestaurantEvent(
+      emptyVector(),
+      { cuisineType: '  JaPaNeSe  ', tags: ['  SUSHI '], priceMin: 10, priceMax: 20 },
+      'SELECT',
+      DINNERTIME,
+    )
+    expect(Object.keys(v.base).sort()).toEqual(
+      [cuisineDimension('japanese'), tagDimension('sushi'), priceDimension('LOW')].sort(),
+    )
+  })
+
+  it('still decays when the event has no dimensions to credit', () => {
+    const before: TasteVector = { base: { [CUISINE]: 4 }, lunch: {}, dinner: {} }
+    const after = applyEventToVector(before, {
+      dimensions: [],
+      event: 'SELECT',
+      meal: 'dinner',
+    })
+    expect(after.base[CUISINE]).toBeCloseTo(4 * DECAY)
   })
 
   it('prunes weights that have decayed into noise', () => {
-    let w: Record<string, number> = { thai: 0.02 }
-    // Two decays take 0.02 below the 0.01 prune threshold.
-    for (let i = 0; i < 40; i++) w = applyEventToWeights(w, 'japanese', 'SWIPE_RIGHT')
-    expect(w.thai).toBeUndefined()
+    let v: TasteVector = { base: { [tagDimension('thai')]: 0.02 }, lunch: {}, dinner: {} }
+    for (let i = 0; i < 40; i++) {
+      v = applyRestaurantEvent(v, STEAKHOUSE, 'SWIPE_RIGHT', DINNERTIME)
+    }
+    expect(v.base[tagDimension('thai')]).toBeUndefined()
+  })
+})
+
+describe('dimensionsFor', () => {
+  it('namespaces the cuisine, the tags and the price band', () => {
+    expect(dimensionsFor(STEAKHOUSE).sort()).toEqual(
+      [CUISINE, STEAK, tagDimension('date-night'), MID].sort(),
+    )
+  })
+
+  it('de-duplicates a tag that repeats the cuisine', () => {
+    const keys = dimensionsFor({
+      cuisineType: 'Japanese',
+      tags: ['japanese'],
+      priceMin: 10,
+      priceMax: 20,
+    })
+    expect(keys.filter((k) => k === cuisineDimension('japanese'))).toHaveLength(1)
+  })
+
+  it('bands by midpoint, resolving a boundary upward', () => {
+    const band = (priceMin: number, priceMax: number) =>
+      dimensionsFor({ cuisineType: 'x', tags: [], priceMin, priceMax }).find((k) =>
+        k.startsWith('price:'),
+      )
+    expect(band(40, 80)).toBe(priceDimension('LOW'))
+    expect(band(100, 100)).toBe(priceDimension('MID'))
+    expect(band(200, 400)).toBe(priceDimension('HIGH'))
+  })
+
+  it('is empty for a row with nothing to learn from', () => {
+    expect(dimensionsFor({ cuisineType: '', tags: [] })).toEqual([])
+  })
+})
+
+describe('mealContextFor', () => {
+  it('splits lunch from dinner at the Dubai boundary', () => {
+    expect(mealContextFor(LUNCHTIME)).toBe('lunch')
+    expect(mealContextFor(DINNERTIME)).toBe('dinner')
+    // 16:59 and 17:00 Dubai.
+    expect(mealContextFor(new Date('2026-09-21T12:59:00Z'))).toBe('lunch')
+    expect(mealContextFor(new Date('2026-09-21T13:00:00Z'))).toBe('dinner')
+  })
+
+  it('files the small hours under dinner, not lunch', () => {
+    // 02:00 Dubai — a late-night shawarma run belongs to the night before.
+    expect(mealContextFor(new Date('2026-09-20T22:00:00Z'))).toBe('dinner')
+  })
+})
+
+describe('weightsFor — what scoring reads', () => {
+  const vector: TasteVector = {
+    base: { [STEAK]: 2, [CUISINE]: 1 },
+    lunch: { [STEAK]: -1 },
+    dinner: { [STEAK]: 1.5 },
+  }
+
+  it('sums the base and the ACTIVE meal context', () => {
+    expect(weightsFor(vector, 'dinner')[STEAK]).toBeCloseTo(3.5)
+    expect(weightsFor(vector, 'lunch')[STEAK]).toBeCloseTo(1)
+  })
+
+  it('lets lunch-you and dinner-you disagree', () => {
+    expect(weightsFor(vector, 'dinner')[STEAK]).toBeGreaterThan(
+      weightsFor(vector, 'lunch')[STEAK],
+    )
+  })
+
+  it('passes base-only dimensions through unchanged', () => {
+    expect(weightsFor(vector, 'lunch')[CUISINE]).toBe(1)
+  })
+
+  it('clamps the sum of two independently-clamped maps', () => {
+    const maxed: TasteVector = {
+      base: { [STEAK]: WEIGHT_MAX },
+      lunch: {},
+      dinner: { [STEAK]: WEIGHT_MAX },
+    }
+    expect(weightsFor(maxed, 'dinner')[STEAK]).toBe(WEIGHT_MAX)
+  })
+
+  it('is empty for a brand-new profile', () => {
+    expect(weightsFor(emptyVector(), 'dinner')).toEqual({})
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* The v1 -> v2 migration                                              */
+/* ------------------------------------------------------------------ */
+
+describe('coerceVector', () => {
+  it('reads a legacy flat cuisine map as a namespaced base, losing nothing', () => {
+    const v = coerceVector({ japanese: 3, thai: 1.5 })
+    expect(v.base).toEqual({
+      [cuisineDimension('japanese')]: 3,
+      [cuisineDimension('thai')]: 1.5,
+    })
+    expect(v.lunch).toEqual({})
+    expect(v.dinner).toEqual({})
+  })
+
+  it('is idempotent — a migrated profile survives a second pass unchanged', () => {
+    const once = coerceVector({ japanese: 3 })
+    expect(coerceVector(once)).toEqual(once)
+  })
+
+  it('round-trips a v2 vector', () => {
+    const v: TasteVector = { base: { [STEAK]: 2 }, lunch: { [MID]: 1 }, dinner: {} }
+    expect(coerceVector(v)).toEqual(v)
+  })
+
+  it('namespaces bare keys stored inside a v2 vector', () => {
+    expect(coerceVector({ base: { japanese: 3 }, lunch: {}, dinner: {} }).base).toEqual({
+      [cuisineDimension('japanese')]: 3,
+    })
+  })
+
+  it('drops junk values and junk shapes', () => {
+    expect(coerceVector({ base: { a: 'x', b: 2 }, lunch: {}, dinner: {} }).base).toEqual({
+      [cuisineDimension('b')]: 2,
+    })
+    expect(coerceVector(null)).toEqual(emptyVector())
+    expect(coerceVector([1, 2])).toEqual(emptyVector())
+    expect(coerceVector('nope')).toEqual(emptyVector())
+  })
+})
+
+describe('effectiveTasteVector', () => {
+  it('folds the quiz\'s cuisine weights into the BASE, namespaced', () => {
+    const learned: TasteVector = { base: { [STEAK]: 2 }, lunch: {}, dinner: {} }
+    const v = effectiveTasteVector(learned, quizWeightsFrom(['Japanese'], ['Seafood']))
+
+    expect(v.base[cuisineDimension('japanese')]).toBe(QUIZ_LOVE_DELTA)
+    expect(v.base[cuisineDimension('seafood')]).toBe(QUIZ_DISLIKE_DELTA)
+    expect(v.base[STEAK]).toBe(2)
+  })
+
+  it('sums rather than overwrites what swiping already learned', () => {
+    const learned: TasteVector = {
+      base: { [cuisineDimension('japanese')]: 3 },
+      lunch: {},
+      dinner: {},
+    }
+    expect(
+      effectiveTasteVector(learned, quizWeightsFrom(['Japanese'], [])).base[
+        cuisineDimension('japanese')
+      ],
+    ).toBe(5)
+  })
+
+  it('leaves the meal contexts alone — a stated preference is not about a meal', () => {
+    const learned: TasteVector = { base: {}, lunch: { [STEAK]: 1 }, dinner: {} }
+    const v = effectiveTasteVector(learned, quizWeightsFrom(['Japanese'], []))
+    expect(v.lunch).toEqual({ [STEAK]: 1 })
+    expect(v.dinner).toEqual({})
   })
 })
 
@@ -139,7 +403,7 @@ describe('quizWeightsFrom', () => {
   })
 
   it('does not decay — a stated preference is standing, not stale', () => {
-    // Contrast with applyEventToWeights, which decays everything on each call.
+    // Contrast with applyEventToVector, which decays on every event.
     expect(quizWeightsFrom(['Japanese'], []).japanese).toBe(
       quizWeightsFrom(['Japanese'], []).japanese,
     )

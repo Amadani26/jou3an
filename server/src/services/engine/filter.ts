@@ -8,6 +8,7 @@
  * so the caller (and the DecisionLog) can see it.
  */
 import { isOpenNow } from '../../lib/hours'
+import { PRICE_BANDS } from '../../lib/priceBands'
 import { normalizeCuisine } from '../tasteProfile'
 import { withinRadius, type Coords } from '../../lib/geo'
 import { isServeable } from '../../lib/venueType'
@@ -37,11 +38,8 @@ export const RADIUS_TIERS: { km: number; tier: RadiusTier }[] = [
  * 'ANY' (the quiz's "Any budget", and the stored NULL it maps from) has no band:
  * `priceFit` returns NEUTRAL, leaving the price term inert.
  */
-export const BUDGET_BANDS: Record<Exclude<Budget, 'ANY'>, { min: number; max: number }> = {
-  LOW: { min: 0, max: 100 },
-  MID: { min: 100, max: 200 },
-  HIGH: { min: 200, max: Number.POSITIVE_INFINITY },
-}
+export const BUDGET_BANDS: Record<Exclude<Budget, 'ANY'>, { min: number; max: number }> =
+  PRICE_BANDS
 
 export function matchesFormat(r: Candidate, format: FormatFilter): boolean {
   if (format === 'ANY') return true

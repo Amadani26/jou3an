@@ -46,6 +46,11 @@ export async function logDecision(
           // the catalogue signal, read from the other end.
           excludeCount: (input.context.excludeIds ?? []).length,
           cycled: decision.cycled,
+          // Which half of the taste vector was read. Worth recording even
+          // though it is derivable from `dateISO`: the lunch/dinner boundary is
+          // a tunable constant, so a log row written under today's boundary
+          // must still say what it actually did.
+          mealContext: decision.breakdown[0]?.mealContext ?? null,
         } as Prisma.InputJsonValue,
         breakdown: decision.breakdown as unknown as Prisma.InputJsonValue,
         chosenIds: decision.picks.map((p) => p.restaurant.id),

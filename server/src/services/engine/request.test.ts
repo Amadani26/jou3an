@@ -230,7 +230,7 @@ describe('reason wording — a learned habit is the only kind there is', () => {
    */
   function japanesePick(weights: Record<string, number>, over: Parameters<typeof context>[0] = {}) {
     const d = decide(
-      input({ candidates: catalogue(), tasteWeights: weights, context: context(over) }),
+      input({ candidates: catalogue(), taste: weights, context: context(over) }),
     )
     return d.picks.find((p) => p.restaurant.cuisineType === 'Japanese')
   }
@@ -250,7 +250,7 @@ describe('reason wording — a learned habit is the only kind there is', () => {
       input({
         candidates: catalogue(),
         userId: null,
-        tasteWeights: {},
+        taste: {},
         context: context({ cuisines: ['Japanese'] }),
       }),
     )

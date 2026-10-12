@@ -83,7 +83,7 @@ export function context(over: Partial<EngineContext> = {}): EngineContext {
 export function input(over: Partial<EngineInput> = {}): EngineInput {
   return {
     candidates: over.candidates ?? [restaurant(), restaurant(), restaurant()],
-    tasteWeights: {},
+    taste: {},
     context: context(),
     userId: 'user-1',
     ...over,

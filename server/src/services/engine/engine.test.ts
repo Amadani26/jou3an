@@ -10,9 +10,17 @@ import {
   explorationFor,
 } from './select'
 import { BUDGET_BANDS, filterCandidates, matchesCuisines } from './filter'
-import { NEUTRAL, priceFit, tasteScore } from './score'
+import { NEUTRAL, mealFit, normalizeWeight, priceFit, tasteScore } from './score'
+import { CONTEXT_WEIGHTS, TASTE_NAMESPACE_WEIGHTS, WEIGHTS } from './config'
+import { WEIGHT_MAX, WEIGHT_MIN } from '../tasteDimensions'
 import { conflictsWithDietary } from '../../lib/dietary'
 import { effectiveTasteWeights, quizWeightsFrom } from '../tasteProfile'
+import {
+  cuisineDimension,
+  namespaceLegacyWeights,
+  priceDimension,
+  tagDimension,
+} from '../tasteDimensions'
 import {
   DIFC,
   FAR,
@@ -24,6 +32,10 @@ import {
   resetIds,
   restaurant,
 } from './fixtures'
+
+/** 13:00 and 21:00 Dubai — one on each side of the lunch/dinner boundary. */
+const LUNCHTIME = new Date('2026-09-21T09:00:00Z')
+const DINNERTIME = new Date('2026-09-21T17:00:00Z')
 
 const CUISINES = (d: ReturnType<typeof decide>) =>
   new Set(d.picks.map((p) => p.restaurant.cuisineType.toLowerCase()))
@@ -239,7 +251,7 @@ describe('decide — taste weights', () => {
     ]
 
     const neutral = decide(input({ candidates }))
-    const loves = decide(input({ candidates, tasteWeights: { japanese: 9 } }))
+    const loves = decide(input({ candidates, taste: { japanese: 9 } }))
 
     const tasteOf = (d: ReturnType<typeof decide>) =>
       d.breakdown.find((b) => b.restaurantId === japanese.id)!.taste
@@ -249,7 +261,7 @@ describe('decide — taste weights', () => {
 
   it('treats an empty profile as neutral, not as dislike', () => {
     resetIds()
-    const d = decide(input({ candidates: catalogue(), tasteWeights: {} }))
+    const d = decide(input({ candidates: catalogue(), taste: {} }))
     for (const b of d.breakdown) expect(b.taste).toBeCloseTo(0.5)
   })
 })
@@ -323,7 +335,7 @@ describe('decide — parked cafes never reach a result', () => {
         // A profile that adores coffee, and a query explicitly asking for it.
         // The cuisine filter cannot field three Coffee rows, so it is given up
         // (reported in relaxed[]) — and even then the parked cafe stays out.
-        tasteWeights: { coffee: 10 },
+        taste: { coffee: 10 },
         context: context({ cuisines: ['Coffee'] }),
       }),
     )
@@ -469,11 +481,290 @@ describe('decide — breakdown', () => {
     }
   })
 
-  it('weights the components 0.4 / 0.4 / 0.2', () => {
+  it('weights the components by WEIGHTS, whatever they are set to', () => {
     const d = decide(input({ candidates: catalogue() }))
     for (const b of d.breakdown) {
-      expect(b.base).toBeCloseTo(0.4 * b.quality + 0.4 * b.taste + 0.2 * b.context, 10)
+      expect(b.base).toBeCloseTo(
+        WEIGHTS.quality * b.quality + WEIGHTS.taste * b.taste + WEIGHTS.context * b.context,
+        10,
+      )
     }
+  })
+
+  it('records the meal context it scored under', () => {
+    const lunch = decide(
+      input({ candidates: catalogue(), context: context({ date: LUNCHTIME }) }),
+    )
+    const dinner = decide(
+      input({ candidates: catalogue(), context: context({ date: DINNERTIME }) }),
+    )
+    for (const b of lunch.breakdown) expect(b.mealContext).toBe('lunch')
+    for (const b of dinner.breakdown) expect(b.mealContext).toBe('dinner')
+  })
+
+  /** Future training data, and the answer to "why THAT one?" at 2am. */
+  it('records the dimensions behind the taste term, strongest first', () => {
+    const steak = restaurant({
+      name: 'Steak',
+      cuisineType: 'American',
+      tags: ['steakhouse', 'date-night'],
+      priceMin: 120,
+      priceMax: 220,
+    })
+    const d = decide(
+      input({
+        candidates: [steak, restaurant(), restaurant()],
+        taste: {
+          base: {
+            [tagDimension('steakhouse')]: 4,
+            [cuisineDimension('American')]: 1,
+            [priceDimension('MID')]: -2,
+          },
+          lunch: {},
+          dinner: {},
+        },
+      }),
+    )
+
+    const b = d.breakdown.find((x) => x.name === 'Steak')!
+    expect(b.tasteDimensions.map((t) => t.key)).toEqual([
+      tagDimension('steakhouse'),
+      priceDimension('MID'),
+      cuisineDimension('American'),
+    ])
+    expect(b.tasteDimensions[0].weight).toBe(4)
+    expect(b.tasteDimensions[0].namespace).toBe('tag')
+  })
+
+  it('records no dimensions for a profile that knows nothing about the row', () => {
+    const d = decide(input({ candidates: catalogue(), taste: {} }))
+    for (const b of d.breakdown) expect(b.tasteDimensions).toEqual([])
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* Taste Vector v2 — multi-dimension scoring                           */
+/* ------------------------------------------------------------------ */
+
+describe('the weight constants', () => {
+  it('sum to exactly 1, so each one reads as a share of the score', () => {
+    expect(WEIGHTS.quality + WEIGHTS.taste + WEIGHTS.context).toBeCloseTo(1, 10)
+  })
+
+  it('is the rebalanced 30 / 40 / 30', () => {
+    expect(WEIGHTS).toEqual({ quality: 0.3, taste: 0.4, context: 0.3 })
+  })
+
+  it('gives taste the largest share — it is the only per-user component', () => {
+    expect(WEIGHTS.taste).toBeGreaterThan(WEIGHTS.quality)
+    expect(WEIGHTS.taste).toBeGreaterThan(WEIGHTS.context)
+  })
+
+  it('weights the context sub-terms with meal-fit the smallest', () => {
+    expect(CONTEXT_WEIGHTS.vibe + CONTEXT_WEIGHTS.price + CONTEXT_WEIGHTS.meal).toBeCloseTo(
+      1,
+      10,
+    )
+    expect(CONTEXT_WEIGHTS.meal).toBeLessThan(CONTEXT_WEIGHTS.price)
+    expect(CONTEXT_WEIGHTS.meal).toBeLessThan(CONTEXT_WEIGHTS.vibe)
+  })
+
+  it('ranks the taste namespaces cuisine > tag > price', () => {
+    expect(TASTE_NAMESPACE_WEIGHTS.cuisine).toBeGreaterThan(TASTE_NAMESPACE_WEIGHTS.tag)
+    expect(TASTE_NAMESPACE_WEIGHTS.tag).toBeGreaterThan(TASTE_NAMESPACE_WEIGHTS.price)
+  })
+})
+
+describe('taste term — more than one dimension', () => {
+  const steakhouse = () =>
+    restaurant({
+      cuisineType: 'American',
+      tags: ['steakhouse', 'date-night'],
+      priceMin: 120,
+      priceMax: 220,
+    })
+
+  it('is NEUTRAL for a brand-new profile', () => {
+    expect(tasteScore(steakhouse(), {})).toBe(NEUTRAL)
+  })
+
+  it('is NEUTRAL when the profile knows nothing about THIS restaurant', () => {
+    expect(tasteScore(steakhouse(), { [tagDimension('sushi')]: 5 })).toBe(NEUTRAL)
+  })
+
+  it('scores on a learned TAG even when the cuisine is unknown', () => {
+    // The whole point: six steakhouses across four cuisines used to teach
+    // nothing at all.
+    expect(tasteScore(steakhouse(), { [tagDimension('steakhouse')]: 4 })).toBeGreaterThan(
+      NEUTRAL,
+    )
+  })
+
+  it('scores on a learned PRICE BAND alone', () => {
+    expect(tasteScore(steakhouse(), { [priceDimension('MID')]: 3 })).toBeGreaterThan(NEUTRAL)
+    expect(tasteScore(steakhouse(), { [priceDimension('MID')]: -3 })).toBeLessThan(NEUTRAL)
+  })
+
+  /**
+   * Cuisine is the loudest namespace and therefore the normalisation floor, so
+   * a cuisine-only profile is read at FULL strength — which is what keeps the
+   * quiz's ±2 worth exactly what it was worth before the vector existed. A
+   * weaker namespace on its own speaks at its own share of the vote.
+   */
+  it('reads a cuisine-only profile at full strength, a tag-only one more quietly', () => {
+    const viaCuisine = tasteScore(steakhouse(), { [cuisineDimension('American')]: 4 })
+    const viaTag = tasteScore(steakhouse(), { [tagDimension('steakhouse')]: 4 })
+    expect(viaCuisine).toBe(normalizeWeight(4))
+    expect(viaTag).toBeGreaterThan(NEUTRAL)
+    expect(viaTag).toBeLessThan(viaCuisine)
+  })
+
+  /**
+   * ⚠️ REGRESSION. Without TASTE_NORMALISATION_FLOOR, a candidate matching only
+   * the near-universal `price:LOW` had that one weight read as the whole
+   * profile and OUT-SCORED a candidate matching a mildly-liked cuisine as well.
+   * Caught on the live catalogue, where 530 of 580 rows are in that band.
+   */
+  it('never lets knowing LESS about a restaurant score higher', () => {
+    const weights = { [priceDimension('LOW')]: 4, [cuisineDimension('Japanese')]: 1 }
+    const known = restaurant({ cuisineType: 'Japanese', tags: [], priceMin: 40, priceMax: 80 })
+    const unknown = restaurant({ cuisineType: 'Peruvian', tags: [], priceMin: 40, priceMax: 80 })
+
+    expect(tasteScore(known, weights)).toBeGreaterThan(tasteScore(unknown, weights))
+  })
+
+  it('lets the cuisine outvote a tag when the two disagree', () => {
+    const score = tasteScore(steakhouse(), {
+      [cuisineDimension('American')]: 4,
+      [tagDimension('steakhouse')]: -4,
+    })
+    expect(score).toBeGreaterThan(NEUTRAL)
+  })
+
+  it('lets the cuisine and the tag outvote the price band', () => {
+    const score = tasteScore(steakhouse(), {
+      [cuisineDimension('American')]: 4,
+      [tagDimension('steakhouse')]: 4,
+      [priceDimension('MID')]: -4,
+    })
+    expect(score).toBeGreaterThan(NEUTRAL)
+  })
+
+  it('averages the tags rather than summing them', () => {
+    const one = tasteScore(steakhouse(), { [tagDimension('steakhouse')]: 4 })
+    const both = tasteScore(steakhouse(), {
+      [tagDimension('steakhouse')]: 4,
+      [tagDimension('date-night')]: 4,
+    })
+    // Two agreeing tags are not twice as loud as one — they are the same claim.
+    expect(both).toBeCloseTo(one, 10)
+  })
+
+  it('lets a strong negative dimension pull a positive one down', () => {
+    const liked = tasteScore(steakhouse(), { [tagDimension('steakhouse')]: 4 })
+    const mixed = tasteScore(steakhouse(), {
+      [tagDimension('steakhouse')]: 4,
+      [cuisineDimension('American')]: -4,
+    })
+    expect(mixed).toBeLessThan(liked)
+  })
+
+  /**
+   * THE comparability guard. A plain sum of matching weights would make every
+   * candidate score higher for a heavy user than for a new one, and the 0.4
+   * taste weight would quietly stop meaning 0.4.
+   */
+  it('stays comparable across profile sizes', () => {
+    const small = { [tagDimension('steakhouse')]: 4 }
+    const large: Record<string, number> = { ...small }
+    // 200 learned dimensions this restaurant does not match.
+    for (let i = 0; i < 200; i++) large[tagDimension(`other-${i}`)] = 4
+
+    expect(tasteScore(steakhouse(), large)).toBeCloseTo(tasteScore(steakhouse(), small), 10)
+    expect(tasteScore(steakhouse(), large)).toBeLessThanOrEqual(1)
+  })
+
+  it('never leaves [0,1], whatever the profile holds', () => {
+    const extreme = {
+      [cuisineDimension('American')]: WEIGHT_MAX,
+      [tagDimension('steakhouse')]: WEIGHT_MAX,
+      [priceDimension('MID')]: WEIGHT_MAX,
+    }
+    const hated = {
+      [cuisineDimension('American')]: WEIGHT_MIN,
+      [tagDimension('steakhouse')]: WEIGHT_MIN,
+      [priceDimension('MID')]: WEIGHT_MIN,
+    }
+    expect(tasteScore(steakhouse(), extreme)).toBeLessThanOrEqual(1)
+    expect(tasteScore(steakhouse(), hated)).toBeGreaterThanOrEqual(0)
+  })
+
+  it('reads the meal context: the same brief scores differently at lunch', () => {
+    const taste = {
+      base: {},
+      lunch: { [tagDimension('steakhouse')]: -4 },
+      dinner: { [tagDimension('steakhouse')]: 4 },
+    }
+    const candidates = [steakhouse(), restaurant(), restaurant(), restaurant()]
+
+    const at = (date: Date) => {
+      const d = decide(input({ candidates, taste, context: context({ date }) }))
+      return d.breakdown.find((b) => b.restaurantId === candidates[0].id)!.taste
+    }
+
+    expect(at(DINNERTIME)).toBeGreaterThan(NEUTRAL)
+    expect(at(LUNCHTIME)).toBeLessThan(NEUTRAL)
+  })
+
+  it('a learned tag can win a slot the cuisine never would have', () => {
+    resetIds()
+    // Four different cuisines, identical ratings; only one is a steakhouse.
+    const candidates = [
+      restaurant({ name: 'Steak', cuisineType: 'Argentinian', tags: ['steakhouse'] }),
+      restaurant({ name: 'Sushi', cuisineType: 'Japanese', tags: ['healthy'] }),
+      restaurant({ name: 'Pasta', cuisineType: 'Italian', tags: ['comfort-food'] }),
+      restaurant({ name: 'Curry', cuisineType: 'Pakistani', tags: ['cheap'] }),
+    ]
+    const d = decide(
+      input({ candidates, taste: { [tagDimension('steakhouse')]: 6 } }),
+    )
+    expect(d.picks.map((p) => p.restaurant.name)).toContain('Steak')
+  })
+})
+
+describe('meal-fit — a nudge, not a filter', () => {
+  const brunch = restaurant({ tags: ['brunch'] })
+  const late = restaurant({ tags: ['late-night'] })
+
+  it('favours the meal it is', () => {
+    expect(mealFit(brunch, 'lunch')).toBeGreaterThan(NEUTRAL)
+    expect(mealFit(brunch, 'dinner')).toBeLessThan(NEUTRAL)
+    expect(mealFit(late, 'dinner')).toBeGreaterThan(NEUTRAL)
+  })
+
+  it('is NEUTRAL for a row that signals both meals, or neither', () => {
+    expect(mealFit(restaurant({ tags: [] }), 'lunch')).toBe(NEUTRAL)
+    expect(mealFit(restaurant({ tags: ['brunch', 'late-night'] }), 'lunch')).toBe(NEUTRAL)
+  })
+
+  it("reads Google's own primary type", () => {
+    expect(
+      mealFit(restaurant({ tags: [], googlePrimaryType: 'brunch_restaurant' }), 'lunch'),
+    ).toBeGreaterThan(NEUTRAL)
+  })
+
+  /** It must never be able to keep a place off the list on its own. */
+  it('cannot outweigh a rating gap', () => {
+    const worseButRightTime = restaurant({ tags: ['brunch'], googleRating: 4.0 })
+    const betterButWrongTime = restaurant({ tags: ['late-night'], googleRating: 4.8 })
+    const d = decide(
+      input({
+        candidates: [worseButRightTime, betterButWrongTime, restaurant(), restaurant()],
+        context: context({ date: LUNCHTIME }),
+      }),
+    )
+    const score = (id: string) => d.breakdown.find((b) => b.restaurantId === id)!.base
+    expect(score(betterButWrongTime.id)).toBeGreaterThan(score(worseButRightTime.id))
   })
 })
 
@@ -640,7 +931,9 @@ describe('quiz-seeded taste weights', () => {
    * got, so "I love Pakistani food" actively demoted Pakistani food.
    */
   it('scores a loved cuisine above an unknown one, and a disliked one below', () => {
-    const loved = quizWeightsFrom(['Pakistani'], ['Japanese'])
+    // Namespaced, because tasteScore reads dimension keys now — this is what
+    // `coerceVector` does to a quiz map on the way into the engine.
+    const loved = namespaceLegacyWeights(quizWeightsFrom(['Pakistani'], ['Japanese']))
     const curry = restaurant({ cuisineType: 'Pakistani', tags: [] })
     const sushi = restaurant({ cuisineType: 'Japanese', tags: [] })
     const other = restaurant({ cuisineType: 'French', tags: [] })
@@ -662,7 +955,7 @@ describe('quiz-seeded taste weights', () => {
     const d = decide(
       input({
         candidates: even,
-        tasteWeights: effectiveTasteWeights({}, quizWeightsFrom(['Pakistani'], [])),
+        taste: effectiveTasteWeights({}, quizWeightsFrom(['Pakistani'], [])),
       }),
     )
     expect(d.picks.map((p) => p.restaurant.name)).toContain('Curry')
@@ -675,8 +968,8 @@ describe('quiz-seeded taste weights', () => {
    * quality — so the property worth asserting is that the rank improves.
    */
   it('improves a loved cuisine’s rank without overriding quality', () => {
-    const rankOf = (weights: Parameters<typeof decide>[0]['tasteWeights']) => {
-      const d = decide(input({ candidates: catalogue(), tasteWeights: weights }))
+    const rankOf = (weights: Parameters<typeof decide>[0]['taste']) => {
+      const d = decide(input({ candidates: catalogue(), taste: weights }))
       const sorted = [...d.breakdown].sort((a, b) => b.total - a.total)
       return sorted.findIndex((b) => b.cuisine === 'Pakistani')
     }
@@ -688,14 +981,14 @@ describe('quiz-seeded taste weights', () => {
 
   it('a disliked cuisine is pushed out of the picks', () => {
     // Japanese earns a slot on quality alone with a cold profile...
-    const cold = decide(input({ candidates: catalogue(), tasteWeights: {} }))
+    const cold = decide(input({ candidates: catalogue(), taste: {} }))
     expect(CUISINES(cold)).toContain('japanese')
 
     // ...and -2 is enough to lose it, without filtering it out of the pool.
     const avoided = decide(
       input({
         candidates: catalogue(),
-        tasteWeights: effectiveTasteWeights({}, quizWeightsFrom([], ['Japanese'])),
+        taste: effectiveTasteWeights({}, quizWeightsFrom([], ['Japanese'])),
       }),
     )
     expect(CUISINES(avoided)).not.toContain('japanese')
@@ -710,7 +1003,7 @@ describe('quiz-seeded taste weights', () => {
     const d = decide(
       input({
         candidates: catalogue(),
-        tasteWeights: effectiveTasteWeights(
+        taste: effectiveTasteWeights(
           {},
           quizWeightsFrom(['Pakistani', 'Lebanese'], ['Japanese', 'Pizza']),
         ),
@@ -843,7 +1136,7 @@ describe('skipped cuisines are soft', () => {
     const d = decide(
       input({
         candidates,
-        tasteWeights: effectiveTasteWeights({}, quizWeightsFrom([], ['Japanese'])),
+        taste: effectiveTasteWeights({}, quizWeightsFrom([], ['Japanese'])),
       }),
     )
     expect(d.picks.map((p) => p.restaurant.name)).toContain('Sushi')

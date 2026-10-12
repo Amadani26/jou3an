@@ -73,6 +73,17 @@ export function dubaiWeekMinutes(date: Date): number {
   return toWeekMinutes(day, hour, minute)
 }
 
+/**
+ * The Dubai wall-clock hour (0–23) of an absolute instant.
+ *
+ * Shares `dubaiWeekMinutes`' Intl conversion rather than re-deriving one, so
+ * "what time is it for the user" has a single implementation. Used by the taste
+ * system's lunch/dinner split and by the engine's meal-fit context term.
+ */
+export function dubaiHour(date: Date): number {
+  return Math.floor((dubaiWeekMinutes(date) % MINUTES_PER_DAY) / 60)
+}
+
 /** A period is valid only if its `open` carries usable numbers. */
 function isUsable(p: unknown): p is HoursPeriod {
   if (!p || typeof p !== 'object') return false

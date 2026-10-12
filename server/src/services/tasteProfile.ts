@@ -1,80 +1,148 @@
 /**
- * DecisionEngine v2 — learned taste profiles.
+ * DecisionEngine v2 — learned taste profiles ("Taste Vector v2").
  *
- * One `UserTasteProfile` row per user holds a flat map of cuisine/tag -> weight.
- * Every swipe and every selection nudges it, and the whole map decays slightly
- * on each update so old enthusiasm fades instead of dominating forever.
+ * One `UserTasteProfile` row per user holds a VECTOR: a shared `base` map plus
+ * one map per meal context, each keyed by namespaced dimension
+ * (`cuisine:japanese`, `tag:steakhouse`, `price:MID`). The representation, the
+ * migration from v1's flat cuisine map, and the decay/clamp constants all live
+ * in ./tasteDimensions.ts — this file owns the EVENT MATHS and the database.
+ *
+ * ⚠️ ONE EVENT NOW MOVES EVERY MATCHING DIMENSION. A right-swipe on a
+ * mid-priced steakhouse credits `cuisine:american`, `tag:steakhouse`,
+ * `tag:date-night` AND `price:MID` — same delta, same decay, same clamp on
+ * each. That is the whole upgrade: the old profile could only write down the
+ * coarsest fact on the row, so six steakhouses across four cuisines taught it
+ * nothing at all.
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../lib/prisma'
+import {
+  CONTEXT_EVENT_SCALE,
+  DECAY,
+  PRUNE_BELOW,
+  WEIGHT_MAX,
+  WEIGHT_MIN,
+  addToBase,
+  clampWeight,
+  coerceVector,
+  coerceWeights,
+  cuisineDimension,
+  dimensionsFor,
+  emptyVector,
+  mealContextFor,
+  namespaceLegacyWeights,
+  normalizeDimensionValue,
+  type DimensionSource,
+  type MealContext,
+  type TasteVector,
+  type TasteWeights,
+} from './tasteDimensions'
 
 export type TasteEvent = 'SWIPE_RIGHT' | 'SWIPE_LEFT' | 'SELECT'
 
-/** How much each signal moves a cuisine's weight. */
+/** How much each signal moves every dimension it touches. */
 export const EVENT_DELTA: Record<TasteEvent, number> = {
   SWIPE_RIGHT: 1,
   SWIPE_LEFT: -0.25,
   SELECT: 3,
 }
 
-/**
- * Applied to EVERY weight before each delta, so a cuisine the user has stopped
- * engaging with drifts back toward neutral. Mild on purpose: at 0.98 a weight
- * keeps ~82% of its value after 10 updates and ~13% after 100.
- */
-export const DECAY = 0.98
+// Re-exported so the many existing importers of these names (the engine's
+// score.ts, filter.ts, select.ts, tasteQuiz.ts) keep working unchanged.
+export {
+  DECAY,
+  WEIGHT_MAX,
+  WEIGHT_MIN,
+  coerceWeights,
+  coerceVector,
+  dimensionsFor,
+  mealContextFor,
+  type TasteVector,
+  type TasteWeights,
+}
 
-/** Weights are clamped so no single cuisine can run away with the score. */
-export const WEIGHT_MIN = -5
-export const WEIGHT_MAX = 10
+/** @deprecated Dimension values are no longer only cuisines — see tasteDimensions. */
+export const normalizeCuisine = normalizeDimensionValue
 
-/** Below this a weight is noise; dropping it keeps the JSON blob small. */
-const PRUNE_BELOW = 0.01
-
-export type TasteWeights = Record<string, number>
-
-/** Cuisines arrive from Google, seed data and user input — normalise hard. */
-export const normalizeCuisine = (c: string) => c.trim().toLowerCase()
-
-const clamp = (n: number) => Math.min(WEIGHT_MAX, Math.max(WEIGHT_MIN, n))
-
-/** Defensive read: the Json column is `unknown` as far as the type system goes. */
-export function coerceWeights(raw: unknown): TasteWeights {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+/** Decays every weight in one map and drops what has decayed into noise. */
+function decayMap(weights: TasteWeights): TasteWeights {
   const out: TasteWeights = {}
-  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof v === 'number' && Number.isFinite(v)) out[k] = v
+  for (const [k, v] of Object.entries(weights)) {
+    const decayed = v * DECAY
+    if (Math.abs(decayed) >= PRUNE_BELOW) out[k] = decayed
   }
   return out
 }
 
-/**
- * Pure core: decay everything, then apply one event's delta to one cuisine.
- *
- * Split out from the DB write so the maths is testable on its own and so the
- * engine can replay a profile forward without touching Postgres.
- */
-export function applyEventToWeights(
+/** Adds one delta to every listed dimension, clamping each. */
+function applyDelta(
   weights: TasteWeights,
-  cuisine: string,
-  event: TasteEvent,
+  dimensions: readonly string[],
+  delta: number,
 ): TasteWeights {
-  const key = normalizeCuisine(cuisine)
-  if (!key) return { ...weights }
+  const out: TasteWeights = { ...weights }
+  for (const key of dimensions) {
+    if (!key) continue
+    out[key] = clampWeight((out[key] ?? 0) + delta)
+  }
+  return out
+}
 
-  const next: TasteWeights = {}
+export interface TasteEventInput {
+  /** Dimension keys from `dimensionsFor(restaurant)`. */
+  dimensions: readonly string[]
+  event: TasteEvent
+  /** Which map takes the half-strength half of the delta. */
+  meal: MealContext
+}
 
-  // Decay first, so the incoming delta lands at full strength.
-  for (const [k, v] of Object.entries(weights)) {
-    const decayed = v * DECAY
-    if (Math.abs(decayed) >= PRUNE_BELOW) next[k] = decayed
+/**
+ * Pure core: decay, then apply one event across every matching dimension.
+ *
+ * ⚠️ Only the two maps being WRITTEN decay — the base and the active meal
+ * context. Decaying the other context too would mean a month of dinners erased
+ * what we know about the user's lunches, which is the opposite of why the
+ * split exists: each context should fade on its own evidence, not on the
+ * other's.
+ *
+ * ⚠️ The delta lands on EVERY dimension at the SAME strength. Weighting them
+ * differently here (cuisine louder than a tag, say) would hide a ranking
+ * decision inside the learning step, where nothing can see or tune it. The
+ * namespaces are weighted once, visibly, at scoring time — see
+ * TASTE_NAMESPACE_WEIGHTS in engine/config.ts.
+ */
+export function applyEventToVector(
+  vector: TasteVector,
+  { dimensions, event, meal }: TasteEventInput,
+): TasteVector {
+  const keys = dimensions.filter(Boolean)
+  const next: TasteVector = {
+    base: decayMap(vector.base),
+    lunch: meal === 'lunch' ? decayMap(vector.lunch) : { ...vector.lunch },
+    dinner: meal === 'dinner' ? decayMap(vector.dinner) : { ...vector.dinner },
   }
 
-  next[key] = clamp((next[key] ?? 0) + EVENT_DELTA[event])
+  if (!keys.length) return next
 
-  // A delta can land a weight back inside the prune window (e.g. a lone
-  // SWIPE_LEFT on an unseen cuisine); keep it anyway — it is a real signal.
+  const delta = EVENT_DELTA[event]
+  next.base = applyDelta(next.base, keys, delta)
+  next[meal] = applyDelta(next[meal], keys, delta * CONTEXT_EVENT_SCALE)
+
   return next
+}
+
+/** Convenience: one restaurant row -> its dimensions -> one event. */
+export function applyRestaurantEvent(
+  vector: TasteVector,
+  restaurant: DimensionSource,
+  event: TasteEvent,
+  now: Date,
+): TasteVector {
+  return applyEventToVector(vector, {
+    dimensions: dimensionsFor(restaurant),
+    event,
+    meal: mealContextFor(now),
+  })
 }
 
 /**
@@ -85,21 +153,24 @@ export function applyEventToWeights(
  */
 export async function applyTasteEvent(
   userId: string | null | undefined,
-  cuisine: string,
+  restaurant: DimensionSource | null | undefined,
   event: TasteEvent,
-): Promise<TasteWeights | null> {
-  if (!userId || !cuisine?.trim()) return null
+  now: Date = new Date(),
+): Promise<TasteVector | null> {
+  if (!userId || !restaurant) return null
+  const dimensions = dimensionsFor(restaurant)
+  if (!dimensions.length) return null
 
   const existing = await prisma.userTasteProfile.findUnique({ where: { userId } })
-  const weights = applyEventToWeights(coerceWeights(existing?.weights), cuisine, event)
+  const vector = applyRestaurantEvent(coerceVector(existing?.weights), restaurant, event, now)
 
-  await prisma.userTasteProfile.upsert({
-    where: { userId },
-    create: { userId, weights: weights as Prisma.InputJsonValue },
-    update: { weights: weights as Prisma.InputJsonValue },
-  })
+  await saveVector(userId, vector)
+  return vector
+}
 
-  return weights
+export interface RestaurantTasteEvent {
+  restaurant: DimensionSource
+  event: TasteEvent
 }
 
 /**
@@ -109,33 +180,40 @@ export async function applyTasteEvent(
  */
 export async function applyTasteEvents(
   userId: string | null | undefined,
-  events: { cuisine: string; event: TasteEvent }[],
-): Promise<TasteWeights | null> {
+  events: RestaurantTasteEvent[],
+  now: Date = new Date(),
+): Promise<TasteVector | null> {
   if (!userId || !events.length) return null
 
   const existing = await prisma.userTasteProfile.findUnique({ where: { userId } })
-  let weights = coerceWeights(existing?.weights)
+  let vector = coerceVector(existing?.weights)
   for (const e of events) {
-    if (!e.cuisine?.trim()) continue
-    weights = applyEventToWeights(weights, e.cuisine, e.event)
+    if (!e.restaurant) continue
+    if (!dimensionsFor(e.restaurant).length) continue
+    vector = applyRestaurantEvent(vector, e.restaurant, e.event, now)
   }
 
-  await prisma.userTasteProfile.upsert({
-    where: { userId },
-    create: { userId, weights: weights as Prisma.InputJsonValue },
-    update: { weights: weights as Prisma.InputJsonValue },
-  })
-
-  return weights
+  await saveVector(userId, vector)
+  return vector
 }
 
-/** Current LEARNED weights for a user; `{}` for anonymous or not-yet-learned. */
-export async function getTasteWeights(
+/** The one write. Stored as plain JSON — `weights` is already a Json column. */
+async function saveVector(userId: string, vector: TasteVector): Promise<void> {
+  const weights = vector as unknown as Prisma.InputJsonValue
+  await prisma.userTasteProfile.upsert({
+    where: { userId },
+    create: { userId, weights },
+    update: { weights },
+  })
+}
+
+/** Current LEARNED vector for a user; empty for anonymous or not-yet-learned. */
+export async function getTasteVector(
   userId: string | null | undefined,
-): Promise<TasteWeights> {
-  if (!userId) return {}
+): Promise<TasteVector> {
+  if (!userId) return emptyVector()
   const row = await prisma.userTasteProfile.findUnique({ where: { userId } })
-  return coerceWeights(row?.weights)
+  return coerceVector(row?.weights)
 }
 
 /* ------------------------------------------------------------------ */
@@ -148,6 +226,12 @@ export const QUIZ_DISLIKE_DELTA = -2
 
 /**
  * The quiz's own weights, derived PURELY from its stored answers.
+ *
+ * ⚠️ STILL FLAT AND STILL CUISINE-ONLY, on purpose. The quiz asks about
+ * cuisines and nothing else, so there is nothing to namespace at the point of
+ * storage; `quizWeights` keeps the exact shape it has always had and older rows
+ * need no migration. It is namespaced into `cuisine:` when it is summed with
+ * the learned vector — see effectiveTasteVector.
  *
  * ⚠️ This is the whole idempotency story. The quiz never applies a delta to the
  * learned `weights` column; it recomputes this map from scratch and overwrites
@@ -166,12 +250,12 @@ export function quizWeightsFrom(
   const out: TasteWeights = {}
 
   for (const raw of lovedCuisines ?? []) {
-    const key = normalizeCuisine(String(raw))
+    const key = normalizeDimensionValue(String(raw))
     if (key) out[key] = QUIZ_LOVE_DELTA
   }
   // Applied second so it wins a collision.
   for (const raw of dislikedCuisines ?? []) {
-    const key = normalizeCuisine(String(raw))
+    const key = normalizeDimensionValue(String(raw))
     if (key) out[key] = QUIZ_DISLIKE_DELTA
   }
 
@@ -179,12 +263,10 @@ export function quizWeightsFrom(
 }
 
 /**
- * What the engine actually scores against: learned + quiz, summed and clamped.
- *
- * Additive on purpose — the spec for the quiz is that it SEEDS the profile
- * without overwriting it. A user who swiped right on Japanese ten times and
- * then said they love Japanese should end up more enthusiastic than either
- * signal alone, not reset to +2.
+ * Sum of two flat maps, clamped. The quiz SEEDS the profile without overwriting
+ * it: a user who swiped right on Japanese ten times and then said they love
+ * Japanese should end up more enthusiastic than either signal alone, not reset
+ * to +2.
  */
 export function effectiveTasteWeights(
   learned: TasteWeights,
@@ -192,19 +274,33 @@ export function effectiveTasteWeights(
 ): TasteWeights {
   const out: TasteWeights = {}
   for (const key of new Set([...Object.keys(learned), ...Object.keys(quiz)])) {
-    out[key] = clamp((learned[key] ?? 0) + (quiz[key] ?? 0))
+    out[key] = clampWeight((learned[key] ?? 0) + (quiz[key] ?? 0))
   }
   return out
 }
 
-/** Effective weights for a user — one query, both columns. */
-export async function getEffectiveTasteWeights(
+/**
+ * What the engine actually scores against: the learned vector with the quiz's
+ * cuisine weights folded into its BASE.
+ *
+ * The base, not a context map — a stated preference is not a statement about
+ * lunch or about dinner, so it applies to both equally.
+ */
+export function effectiveTasteVector(
+  learned: TasteVector,
+  quiz: TasteWeights,
+): TasteVector {
+  return addToBase(learned, namespaceLegacyWeights(quiz))
+}
+
+/** Effective vector for a user — one query, both columns. */
+export async function getEffectiveTasteVector(
   userId: string | null | undefined,
-): Promise<TasteWeights> {
-  if (!userId) return {}
+): Promise<TasteVector> {
+  if (!userId) return emptyVector()
   const row = await prisma.userTasteProfile.findUnique({ where: { userId } })
-  if (!row) return {}
-  return effectiveTasteWeights(coerceWeights(row.weights), coerceWeights(row.quizWeights))
+  if (!row) return emptyVector()
+  return effectiveTasteVector(coerceVector(row.weights), coerceWeights(row.quizWeights))
 }
 
 /**
@@ -230,3 +326,6 @@ export async function saveQuizWeights(
 
   return quizWeights
 }
+
+/** @deprecated Use `cuisineDimension` from ./tasteDimensions. */
+export { cuisineDimension }

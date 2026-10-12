@@ -14,11 +14,12 @@
  * Four stages:
  *   1. filter   — active, open, format, cuisine, dietary, 5->10->city ladder,
  *                 then the Refresh exclusions
- *   2. score    — 0.4 quality + 0.4 taste + 0.2 context
+ *   2. score    — WEIGHTS.quality/taste/context (0.3 / 0.4 / 0.3), see config.ts
  *   3. select   — diversity constraint, repeat-damping, ε-wildcard
  *   4. reason   — one line per pick, from its dominant component
  */
 import { distanceKm as kmBetween, hasCoords, roundKm, type Coords } from '../../lib/geo'
+import { coerceVector, mealContextFor, weightsFor } from '../tasteDimensions'
 import { filterCandidates, REQUIRED } from './filter'
 import { buildReason, withDistance } from './reason'
 import { dubaiDateString, hashSeed, seededRandom } from './rng'
@@ -40,7 +41,18 @@ export {
   dampingFor,
   explorationFor,
 } from './select'
-export { WEIGHTS, NEUTRAL, qualityScore, tasteScore, contextScore } from './score'
+export {
+  WEIGHTS,
+  NEUTRAL,
+  qualityScore,
+  tasteScore,
+  tasteDetail,
+  contextScore,
+  mealFit,
+  priceFit,
+  vibeFit,
+} from './score'
+export * from './config'
 
 /**
  * Builds the seed for this invocation.
@@ -60,7 +72,11 @@ export function seedFor(input: EngineInput): number {
 }
 
 export function decide(input: EngineInput): Decision3 {
-  const { candidates, tasteWeights, context } = input
+  const { candidates, context } = input
+  // The profile arrives as a vector (or a legacy flat map, read as all-base),
+  // and is flattened ONCE here: base + whichever meal map "now" falls in.
+  const mealContext = mealContextFor(context.date)
+  const tasteWeights = weightsFor(coerceVector(input.taste), mealContext)
   const recent = input.recentSelections ?? []
   const pickRates = input.pickRates ?? {}
 
@@ -92,7 +108,7 @@ export function decide(input: EngineInput): Decision3 {
   // Noise is drawn in a fixed order (pool order) so the seed fully determines
   // every score; the pool itself is already deterministic out of Stage 1.
   const breakdown: ScoreBreakdown[] = pool.map((r) => {
-    const components = scoreCandidate(r, tasteWeights, context)
+    const components = scoreCandidate(r, tasteWeights, context, mealContext)
     const damping = dampingFor(r.id, recent, pickRates, context.date)
     const noise = (random() - 0.5) * 2 * noiseAmplitude
 
@@ -108,6 +124,8 @@ export function decide(input: EngineInput): Decision3 {
       noise,
       total: components.base * damping + noise,
       topComponent: components.topComponent,
+      tasteDimensions: components.tasteDimensions,
+      mealContext,
       distanceKm: distanceOf(r),
     }
   })

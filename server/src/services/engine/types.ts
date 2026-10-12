@@ -1,6 +1,11 @@
 /** DecisionEngine v2 — shared types. */
 import type { Restaurant } from '@prisma/client'
-import type { TasteWeights } from '../tasteProfile'
+import type {
+  MealContext,
+  Namespace,
+  TasteVector,
+  TasteWeights,
+} from '../tasteDimensions'
 
 export type FormatFilter = 'DELIVERY' | 'DINE_IN' | 'ANY'
 export type Vibe = 'CASUAL' | 'FANCY' | 'ANY'
@@ -74,9 +79,30 @@ export interface EngineContext {
   refreshNonce?: string | number
 }
 
+/**
+ * The profile, in either shape.
+ *
+ * A `TasteVector` is what v2 stores and what the route passes. A flat
+ * `TasteWeights` map is accepted too and read as "all base, no meal split" —
+ * which is exactly what a v1 row is, and keeps every older caller working. The
+ * conversion (and the `cuisine:` namespacing of bare keys) happens once, in
+ * `decide()`, via `coerceVector`.
+ */
+export type TasteInput = TasteVector | TasteWeights
+
+/** One dimension's contribution to a candidate's taste score. */
+export interface TasteContribution {
+  /** The namespaced key, e.g. `tag:steakhouse`. */
+  key: string
+  namespace: Namespace
+  /** The learned weight itself, in [WEIGHT_MIN, WEIGHT_MAX]. */
+  weight: number
+}
+
 export interface EngineInput {
   candidates: Candidate[]
-  tasteWeights: TasteWeights
+  /** The user's taste vector (or a legacy flat map) — see TasteInput. */
+  taste: TasteInput
   context: EngineContext
   /** Null/anonymous is fine — it only affects the seed and damping. */
   userId?: string | null
@@ -110,6 +136,18 @@ export interface ScoreBreakdown {
   total: number
   /** Which component contributed most, relative to a neutral 0.5 baseline. */
   topComponent: ReasonComponent
+  /**
+   * The dimensions that moved `taste`, strongest-magnitude first and capped at
+   * TOP_TASTE_DIMENSIONS — e.g. `tag:steakhouse +1.8, price:MID +0.9`.
+   *
+   * Written to DecisionLog.breakdown, which makes it both the debugging answer
+   * to "why THAT one?" and the training data for whatever eventually replaces
+   * these hand-set weights. Empty for a profile with nothing to say about this
+   * restaurant, which is the honest encoding of a neutral taste term.
+   */
+  tasteDimensions: TasteContribution[]
+  /** Which meal map was read — see tasteDimensions.mealContextFor. */
+  mealContext: MealContext
   distanceKm: number | null
 }
 

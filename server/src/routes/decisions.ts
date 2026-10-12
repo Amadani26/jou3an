@@ -8,7 +8,7 @@ import { SERVEABLE_WHERE, isServeable } from '../lib/venueType'
 import {
   applyTasteEvent,
   applyTasteEvents,
-  getEffectiveTasteWeights,
+  getEffectiveTasteVector,
   type TasteEvent,
 } from '../services/tasteProfile'
 import { decide, type Decision3, type EngineInput } from '../services/engine'
@@ -161,8 +161,8 @@ router.post('/query', optionalAuth, async (req, res) => {
     // Effective weights = swipe/select-learned PLUS the onboarding quiz's own
     // contribution, summed and clamped. The quiz seeds the profile; it does not
     // replace it — see effectiveTasteWeights().
-    const [profileWeights, recentSelections, pickRates, prefs] = await Promise.all([
-      getEffectiveTasteWeights(validUserId),
+    const [profileVector, recentSelections, pickRates, prefs] = await Promise.all([
+      getEffectiveTasteVector(validUserId),
       getRecentSelections(validUserId),
       getPickRates(validUserId),
       validUserId
@@ -182,7 +182,7 @@ router.post('/query', optionalAuth, async (req, res) => {
       // The profile as it stands. ⚠️ Requested cuisines are NOT folded in here
       // any more (`boostedTasteWeights`, deleted): they are a hard Stage-1
       // filter, so taste now ranks only WITHIN what the user asked for.
-      tasteWeights: profileWeights,
+      taste: profileVector,
       context: toEngineContext(
         { format, vibe, lat, lng, refreshNonce, cuisines, budget, excludeIds },
         prefs,
@@ -349,27 +349,31 @@ router.post('/tinder-suggest', optionalAuth, async (req, res) => {
     const swipedIds = dedupedSwipes.length
       ? dedupedSwipes.map((s) => s.restaurantId)
       : effectiveLikedIds
-    const cuisineById = new Map(
+    // ⚠️ Taste Vector v2 needs the TAGS and the PRICE too, not just the
+    // cuisine: one swipe now credits every dimension the row matches.
+    const rowById = new Map(
       (swipedIds.length
         ? await prisma.restaurant.findMany({
             where: { id: { in: swipedIds } },
-            select: { id: true, cuisineType: true },
+            select: { id: true, cuisineType: true, tags: true, priceMin: true, priceMax: true },
           })
         : []
-      ).map((r) => [r.id, r.cuisineType]),
+      ).map((r) => [r.id, r]),
     )
 
     const events = (
       dedupedSwipes.length
         ? dedupedSwipes.map((s) => ({
-            cuisine: cuisineById.get(s.restaurantId) ?? '',
+            restaurant: rowById.get(s.restaurantId),
             event: (s.direction === 'RIGHT' ? 'SWIPE_RIGHT' : 'SWIPE_LEFT') as TasteEvent,
           }))
         : effectiveLikedIds.map((id) => ({
-            cuisine: cuisineById.get(id) ?? '',
+            restaurant: rowById.get(id),
             event: 'SWIPE_RIGHT' as TasteEvent,
           }))
-    ).filter((e) => e.cuisine)
+    ).filter((e): e is { restaurant: NonNullable<typeof e.restaurant>; event: TasteEvent } =>
+      Boolean(e.restaurant),
+    )
 
     // Never let a telemetry failure cost the user their suggestions.
     await applyTasteEvents(req.userId, events).catch((err) =>
@@ -483,10 +487,11 @@ router.patch('/:sessionId/select', async (req, res) => {
     if (learnerId && parsed.data.actionTaken === 'SELECT') {
       const restaurant = await prisma.restaurant.findUnique({
         where: { id: parsed.data.selectedResultId },
-        select: { cuisineType: true },
+        // Every dimension the pick matches — cuisine, tags and price band.
+        select: { cuisineType: true, tags: true, priceMin: true, priceMax: true },
       })
       if (restaurant) {
-        await applyTasteEvent(learnerId, restaurant.cuisineType, 'SELECT').catch((err) =>
+        await applyTasteEvent(learnerId, restaurant, 'SELECT').catch((err) =>
           console.error('[tasteProfile] select update failed:', err),
         )
       }
