@@ -169,6 +169,12 @@ export interface Restaurant {
   lat?: number | null
   lng?: number | null
   googleRating?: number | null
+  /**
+   * How many Google reviews are behind `googleRating`. Shown beside the score
+   * on the cards so "4.9" from six reviews can't read like "4.9" from two
+   * thousand. ⚠️ Still ranks NOTHING — it is display (and curation) only.
+   */
+  googleRatingCount?: number | null
 }
 
 export interface DailyToday {

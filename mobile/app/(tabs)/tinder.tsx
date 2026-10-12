@@ -35,6 +35,7 @@ import Animated, {
 import RedButton from '../../components/RedButton'
 import RestaurantDetailSheet from '../../components/RestaurantDetailSheet'
 import AreaSearchSheet from '../../components/AreaSearchSheet'
+import RatingBadge from '../../components/RatingBadge'
 import {
   getNearbyRestaurants,
   callablePhone,
@@ -1385,6 +1386,12 @@ export default function TinderScreen() {
                   <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 15, color: '#FFB547' }}>
                     AED {current.priceMin}–{current.priceMax}
                   </Text>
+                  {/* Google's rating — a badge rather than another dot-separated
+                      number, so the score doesn't read as part of the price. */}
+                  <RatingBadge
+                    rating={current.googleRating}
+                    count={current.googleRatingCount}
+                  />
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <Ionicons name="location-outline" size={14} color="#8A847E" />

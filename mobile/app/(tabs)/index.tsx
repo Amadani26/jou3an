@@ -338,6 +338,8 @@ export default function HomeScreen() {
                   priceMin={r.priceMin}
                   priceMax={r.priceMax}
                   imageUrl={photoUrls(r)[0]}
+                  googleRating={r.googleRating}
+                  googleRatingCount={r.googleRatingCount}
                   onPress={() => router.push(`/restaurant/${r.id}`)}
                 />
               ))

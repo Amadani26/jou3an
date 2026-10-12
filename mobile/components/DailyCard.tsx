@@ -2,6 +2,7 @@ import { Image, Pressable, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { getPlaceholderImage } from '../lib/placeholderImages'
 import { usePressed } from '../lib/usePressed'
+import RatingBadge from './RatingBadge'
 
 interface DailyCardProps {
   rank: number
@@ -12,6 +13,11 @@ interface DailyCardProps {
   priceMax: number
   /** Google Places photo URL; falls back to the placeholder when absent. */
   imageUrl?: string
+  /** Google's 0–5 score. Absent on the static FALLBACK_PICKS, so the badge
+   *  simply isn't rendered there. */
+  googleRating?: number | null
+  /** Review count behind that score; shown in brackets when present. */
+  googleRatingCount?: number | null
   onPress?: () => void
 }
 
@@ -23,6 +29,8 @@ export default function DailyCard({
   priceMin,
   priceMax,
   imageUrl,
+  googleRating,
+  googleRatingCount,
   onPress,
 }: DailyCardProps) {
   const { pressed, pressHandlers } = usePressed()
@@ -61,21 +69,36 @@ export default function DailyCard({
           style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 90 }}
           pointerEvents="none"
         />
-        <Text
+        {/* Bottom-left: rank + Google's rating, in one row so a wide badge
+            can never land on the numeral. */}
+        <View
           style={{
             position: 'absolute',
             left: 16,
+            right: 16,
             bottom: 6,
-            fontFamily: 'DMSans_800ExtraBold',
-            fontSize: 38,
-            color: '#E8272A',
-            textShadowColor: 'rgba(0,0,0,0.6)',
-            textShadowRadius: 8,
-            textShadowOffset: { width: 0, height: 2 },
+            flexDirection: 'row',
+            alignItems: 'flex-end',
+            gap: 10,
           }}
         >
-          {rank}
-        </Text>
+          <Text
+            style={{
+              fontFamily: 'DMSans_800ExtraBold',
+              fontSize: 38,
+              lineHeight: 42,
+              color: '#E8272A',
+              textShadowColor: 'rgba(0,0,0,0.6)',
+              textShadowRadius: 8,
+              textShadowOffset: { width: 0, height: 2 },
+            }}
+          >
+            {rank}
+          </Text>
+          <View style={{ marginBottom: 8 }}>
+            <RatingBadge rating={googleRating} count={googleRatingCount} />
+          </View>
+        </View>
       </View>
 
       {/* Content */}

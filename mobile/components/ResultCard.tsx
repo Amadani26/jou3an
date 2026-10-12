@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { getPlaceholderImage } from '../lib/placeholderImages'
 import { prettyDistance } from '../lib/api'
+import RatingBadge from './RatingBadge'
 
 export interface ResultCardProps {
   rank: number
@@ -20,6 +21,10 @@ export interface ResultCardProps {
   reason?: string
   /** Google Places photo URL; falls back to the placeholder when absent. */
   imageUrl?: string
+  /** Google's 0–5 score. Null/absent hides the badge entirely — never a dash. */
+  googleRating?: number | null
+  /** Review count behind that score; shown in brackets when present. */
+  googleRatingCount?: number | null
   /**
    * Tap the card body — in results.tsx this IS the decision: it saves the
    * SELECT and opens the full-screen reward.
@@ -52,6 +57,8 @@ export default function ResultCard({
   distanceKm,
   reason,
   imageUrl,
+  googleRating,
+  googleRatingCount,
   onSelect,
   onLongPress,
 }: ResultCardProps) {
@@ -96,22 +103,39 @@ export default function ResultCard({
             style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 80 }}
             pointerEvents="none"
           />
-          <Text
+          {/* Bottom-left: the rank, with Google's rating riding beside it.
+              One row rather than two absolute children, so the badge can
+              never collide with a two-digit rank. `flex-end` + the badge's
+              own nudge sits it on the numeral's baseline — the 34pt glyph is
+              shorter than its 38pt line box. */}
+          <View
             style={{
               position: 'absolute',
               left: 14,
+              right: 14,
               bottom: 6,
-              fontFamily: 'DMSans_800ExtraBold',
-              fontSize: 34,
-              lineHeight: 38,
-              color: '#E63946',
-              textShadowColor: 'rgba(0,0,0,0.6)',
-              textShadowRadius: 8,
-              textShadowOffset: { width: 0, height: 2 },
+              flexDirection: 'row',
+              alignItems: 'flex-end',
+              gap: 9,
             }}
           >
-            {rank}
-          </Text>
+            <Text
+              style={{
+                fontFamily: 'DMSans_800ExtraBold',
+                fontSize: 34,
+                lineHeight: 38,
+                color: '#E63946',
+                textShadowColor: 'rgba(0,0,0,0.6)',
+                textShadowRadius: 8,
+                textShadowOffset: { width: 0, height: 2 },
+              }}
+            >
+              {rank}
+            </Text>
+            <View style={{ marginBottom: 7 }}>
+              <RatingBadge rating={googleRating} count={googleRatingCount} />
+            </View>
+          </View>
         </View>
 
         {/* Content */}

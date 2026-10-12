@@ -470,6 +470,8 @@ export default function ResultsScreen() {
                 distanceKm={r.distanceKm}
                 reason={r.reason}
                 imageUrl={photoUrls(r)[0]}
+                googleRating={r.googleRating}
+                googleRatingCount={r.googleRatingCount}
                 onSelect={() => select(r)}
                 onLongPress={() => setPreview(r)}
               />
