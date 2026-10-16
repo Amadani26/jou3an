@@ -50,3 +50,6 @@ server/imports/
 
 # taste-skill working output (screenshots, inspector reports)
 .taste-skill/
+
+# scratch assets for review artifacts
+client/.artifact-assets/
