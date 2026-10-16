@@ -1,15 +1,26 @@
 import { Suspense, lazy } from 'react'
 import { Link } from 'react-router-dom'
 import AppPreview from '../components/AppPreview'
-import HeroSection from '../components/HeroSection'
+import HeroMorph from '../components/hero/HeroMorph'
+import { useVariant } from '../lib/variants'
 
 /*
- * Everything below the fold is split out, which keeps the animation library
- * off the critical path: the hero is the LCP element and animates in pure CSS,
- * so nothing it needs is in this chunk. The fallback reserves the section's
- * exact height, so a late chunk cannot shift the page (CLS stays 0).
+ * Section variants, chosen by URL (?hero=a|b&problem=a|b) so both can be
+ * compared on a real phone without a deploy. Each is its own chunk, so a
+ * visitor downloads the one they are shown and not the other.
+ *
+ * The fallbacks reserve each section's exact height: a chunk that arrives late
+ * must not shift the page under the reader (CLS stays 0).
  */
-const ProblemField = lazy(() => import('../components/ProblemField'))
+/*
+ * Hero A is imported STATICALLY and everything else is lazy. The hero is the
+ * LCP element: behind a dynamic import it cost a second round trip and pushed
+ * LCP from 2.8s to 3.3s. Variant B and both problem variants stay lazy — they
+ * are either below the fold or not the default.
+ */
+const HeroProduct = lazy(() => import('../components/hero/HeroProduct'))
+const ProblemChaos = lazy(() => import('../components/problem/ProblemChaos'))
+const ProblemGrid = lazy(() => import('../components/problem/ProblemGrid'))
 import FAQ from '../components/FAQ'
 import Logo from '../components/Logo'
 import PhoneMockup from '../components/PhoneMockup'
@@ -84,18 +95,39 @@ function StepRow({
 }
 
 export default function Landing() {
+  const hero = useVariant('hero')
+  const problem = useVariant('problem')
+
   return (
     <div className="relative overflow-x-clip">
       {/* ============================================================ */}
-      {/* SECTION 1 — HERO (the monument)                              */}
+      {/* SECTION 1 — HERO  (?hero=a morph · ?hero=b product)          */}
       {/* ============================================================ */}
-      <HeroSection />
+      {/* The fallback carries hero-bleed too. Without it the placeholder sits
+          56px lower than the real hero and everything below jumps when the
+          chunk lands — worth 0.068 of CLS under throttling, and invisible on a
+          fast local load, which is why it took Lighthouse to find it. */}
+      {hero === 'b' ? (
+        <Suspense
+          fallback={
+            <div className="hero-bleed" style={{ minHeight: '100svh' }} aria-hidden="true" />
+          }
+        >
+          <HeroProduct />
+        </Suspense>
+      ) : (
+        <HeroMorph />
+      )}
 
       {/* ============================================================ */}
-      {/* SECTION 1b — THE PROBLEM (the field that condenses)          */}
+      {/* SECTION 1b — PROBLEM  (?problem=a chaos · ?problem=b grid)   */}
       {/* ============================================================ */}
-      <Suspense fallback={<div style={{ height: '240svh' }} aria-hidden="true" />}>
-        <ProblemField />
+      <Suspense
+        fallback={
+          <div style={{ height: problem === 'b' ? '250svh' : '230svh' }} aria-hidden="true" />
+        }
+      >
+        {problem === 'b' ? <ProblemGrid /> : <ProblemChaos />}
       </Suspense>
 
       {/* ============================================================ */}
