@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import AppPreview from '../components/AppPreview'
 import FAQ from '../components/FAQ'
@@ -176,11 +177,15 @@ export default function Landing() {
           </p>
         </div>
 
-        {/* Scroll indicator */}
+        {/* Scroll indicator. Was a Material Symbols glyph — 465 KB of icon
+            font from Google, render-blocking, for this one chevron. */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
-          <span className="material-symbols-outlined text-text-muted bounce-dot text-[28px]">
-            keyboard_arrow_down
-          </span>
+          <ChevronDown
+            className="text-text-muted bounce-dot"
+            size={28}
+            strokeWidth={1.5}
+            aria-hidden="true"
+          />
         </div>
       </section>
 

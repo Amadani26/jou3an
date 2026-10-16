@@ -6,7 +6,7 @@
     <!-- Mobile / PWA viewport -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
 
     <!--
@@ -99,6 +99,13 @@
       })()
     </script>
 
+    <!-- Motion gate. Must run BEFORE first paint: index.css only hides
+         reveal-on-scroll content under `html.js`, so that content stays
+         visible for anything that never runs this script. -->
+    <script>
+      document.documentElement.classList.add('js')
+    </script>
+
     <!-- Favicons — the standalone red "3" mark (transparent, reads on both
          light and dark browser chrome) -->
     <link rel="icon" type="image/png" sizes="32x32" href="/brand/jou3an-icon-32.png" />
@@ -150,94 +157,24 @@
     />
     <meta name="twitter:image:alt" content="Jou3an" />
 
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Fonts: self-hosted, latin subset, same origin. @font-face lives in
+         src/index.css. Only Syne is preloaded — the hero headline is the LCP
+         element, and the other two faces are not on the critical path. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Syne:wght@400..800&family=DM+Sans:opsz,wght@9..40,300..600&family=Instrument+Serif:ital@0;1&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0"
-      rel="stylesheet"
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/syne-latin-var.woff2"
+      crossorigin
     />
 
 
     <title>Jou3an — Hungry? We decide for you.</title>
 
-    <style>
-      #splash {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        background: #000000;
-        transition: opacity 0.4s ease;
-      }
-      #splash.hide {
-        opacity: 0;
-        pointer-events: none;
-      }
-      /* Text, not the PNG — see src/components/Logo.tsx. It needs no preload
-         and cannot flash at the wrong size, and the system fallback keeps it
-         legible before Syne arrives. */
-      #splash .wordmark {
-        font-family: 'Syne', system-ui, sans-serif;
-        font-weight: 800;
-        font-size: 2.6rem;
-        letter-spacing: -0.03em;
-        line-height: 1;
-        color: #F2EDE8;
-      }
-      #splash .wordmark span {
-        color: #FE0000;
-      }
-      #splash .ar {
-        font-size: 1rem;
-        color: #FE0000;
-      }
-    </style>
   </head>
   <body>
-    <!-- App splash (fades out once React mounts) -->
-    <div id="splash">
-      <div class="wordmark" role="img" aria-label="Jou3an">Jou<span>3</span>an</div>
-      <div class="ar" dir="rtl">جوعان</div>
-    </div>
-
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 
-    <script>
-      // Hide the splash: immediately if the app is already cached/controlled by
-      // the service worker, otherwise fade out shortly after load.
-      (function () {
-        function hideSplash() {
-          var el = document.getElementById('splash')
-          if (!el) return
-          el.classList.add('hide')
-          setTimeout(function () {
-            if (el && el.parentNode) el.parentNode.removeChild(el)
-          }, 450)
-        }
-        window.__hideSplash = hideSplash
-
-        if (
-          navigator.serviceWorker &&
-          navigator.serviceWorker.controller
-        ) {
-          // Already cached — don't linger on the splash.
-          hideSplash()
-        } else {
-          window.addEventListener('load', function () {
-            setTimeout(hideSplash, 400)
-          })
-        }
-      })()
-    </script>
   </body>
 </html>

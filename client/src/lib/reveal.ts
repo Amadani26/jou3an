@@ -24,7 +24,18 @@ export function useReveal<T extends HTMLElement = HTMLDivElement>() {
 
   useEffect(() => {
     const el = ref.current
-    if (!el || shown) return
+    if (!el) return
+
+    // Already on screen when we mounted? Show it now and never hide it.
+    // Without this, anything above the fold paints at opacity 0 and waits a
+    // frame for the observer to tell it what it could already have known —
+    // which reads as a flicker on exactly the content the visitor is looking at.
+    if (!shown && el.getBoundingClientRect().top < window.innerHeight) {
+      setShown(true)
+      return
+    }
+
+    if (shown) return
 
     const io = new IntersectionObserver(
       (entries) => {

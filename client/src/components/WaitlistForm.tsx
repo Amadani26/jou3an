@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowRight, Check, Loader2 } from 'lucide-react'
-import { isValidEmail, joinWaitlist } from '../lib/supabase'
+import { isValidEmail, joinWaitlist, preloadSupabase } from '../lib/supabase'
 import { refreshWaitlistCount } from '../lib/waitlistCount'
 import WaitlistCount from './WaitlistCount'
 
@@ -96,6 +96,9 @@ export default function WaitlistForm() {
             if (status !== 'idle' && status !== 'submitting') setStatus('idle')
           }}
           placeholder="you@email.com"
+          /* Focus means they are about to submit: fetch the Supabase chunk now
+             so the press itself never waits on a network round-trip for it. */
+          onFocus={preloadSupabase}
           aria-label="Email address"
           aria-invalid={status === 'invalid'}
           className="flex-1 min-w-0 bg-bg-2 border text-text-primary placeholder:text-text-muted outline-none transition-colors duration-300 focus:border-[rgba(254,0,0,0.55)]"

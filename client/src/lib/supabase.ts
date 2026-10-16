@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 /**
  * The landing page talks to Supabase DIRECTLY — it must work standalone on
@@ -13,13 +13,49 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 /** Baseline so the counter reads as a real community from day one. */
 export const WAITLIST_BASE_COUNT = 731
 
-/** Null when the env vars are missing — every caller degrades gracefully. */
-export const supabase: SupabaseClient | null =
-  url && anonKey
-    ? createClient(url, anonKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
+/** False when the env vars are missing — every caller degrades gracefully. */
+export const isSupabaseConfigured = Boolean(url && anonKey)
+
+/**
+ * The SDK is LOADED ON DEMAND, not imported at module scope.
+ *
+ * @supabase/supabase-js drags in auth-js, realtime-js and storage-js — 95 KB of
+ * the initial bundle was unused per Lighthouse — for what this page actually
+ * does: one INSERT and one RPC. As a static import it sat in the entry chunk
+ * and competed with the hero for bandwidth. As a dynamic import it is a
+ * separate chunk fetched when someone is about to use the waitlist, or when
+ * the browser goes idle.
+ *
+ * The import is memoised (one chunk, one client, however many callers) and a
+ * failed fetch resolves to null rather than rejecting — a dead network must
+ * leave the form reporting a friendly error, not throw past it.
+ */
+let clientPromise: Promise<SupabaseClient | null> | null = null
+
+function getClient(): Promise<SupabaseClient | null> {
+  if (!isSupabaseConfigured) return Promise.resolve(null)
+  if (!clientPromise) {
+    clientPromise = import('@supabase/supabase-js')
+      .then(({ createClient }) =>
+        createClient(url, anonKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        }),
+      )
+      .catch((err) => {
+        console.error('[waitlist] supabase sdk failed to load', err)
+        // Null it so a later attempt (the user pressing submit) can retry
+        // instead of being stuck with a permanently rejected promise.
+        clientPromise = null
+        return null
       })
-    : null
+  }
+  return clientPromise
+}
+
+/** Warm the chunk ahead of the first interaction, off the critical path. */
+export function preloadSupabase(): void {
+  void getClient()
+}
 
 export type WaitlistResult = 'joined' | 'duplicate' | 'error'
 
@@ -37,6 +73,7 @@ export async function joinWaitlist(
   email: string,
   source = 'landing',
 ): Promise<WaitlistResult> {
+  const supabase = await getClient()
   if (!supabase) return 'error'
 
   const { error } = await supabase
@@ -54,6 +91,7 @@ export async function joinWaitlist(
  * baseline). Falls back to the static baseline on any failure.
  */
 export async function fetchWaitlistCount(): Promise<number> {
+  const supabase = await getClient()
   if (!supabase) return WAITLIST_BASE_COUNT
 
   const { data, error } = await supabase.rpc('waitlist_count')

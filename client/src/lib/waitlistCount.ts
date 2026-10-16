@@ -37,12 +37,28 @@ export function refreshWaitlistCount() {
   void load()
 }
 
+/**
+ * Run the first fetch when the browser is idle, not during mount.
+ *
+ * The count arrives from Supabase, whose SDK is a lazily-imported chunk. Firing
+ * it at mount pulls that chunk in while the hero is still painting, which is
+ * exactly the competition the dynamic import exists to avoid. The counter shows
+ * the baseline until the real number lands, which is what it already did on any
+ * failure — so the deferred state is a state the UI was always built for.
+ */
+function loadWhenIdle() {
+  if (typeof window === 'undefined') return
+  const ric = window.requestIdleCallback
+  if (typeof ric === 'function') ric(() => void load(), { timeout: 2500 })
+  else window.setTimeout(() => void load(), 1200)
+}
+
 export function useWaitlistCount(): number {
   const [count, setCount] = useState(current)
 
   useEffect(() => {
     listeners.add(setCount)
-    void load()
+    loadWhenIdle()
     return () => {
       listeners.delete(setCount)
     }

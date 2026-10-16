@@ -2,6 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ------------------------------------------------------------------ */
+/* Fonts — SELF-HOSTED, latin subset, same origin                      */
+/* ------------------------------------------------------------------ */
+/*
+ * These used to be two render-blocking <link>s to fonts.googleapis.com, and
+ * Lighthouse put 3,700ms of blocked rendering on them. One of the two was the
+ * whole Material Symbols icon font — 465 KB — loaded for a SINGLE chevron,
+ * which is now a lucide <ChevronDown />.
+ *
+ * All three faces together are 100 KB here, served from our own origin with no
+ * extra DNS/TLS handshake. Syne is preloaded in index.html because the hero
+ * headline is the LCP element; the other two are discovered from this file,
+ * which is fine — neither paints the largest thing on the first screen.
+ *
+ * unicode-range is latin ONLY, deliberately. The Arabic wordmark (جوعان) has
+ * no glyphs in any of these faces and falls through to the system Arabic font,
+ * which is what already happened and what renders correctly.
+ */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/syne-latin-var.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url('/fonts/dm-sans-latin-var.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/instrument-serif-latin-italic.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   /* Brand — the landing page's only accent.
      History: #E8272A -> #FF3133 (sampled from the logo PNGs) -> #FE0000 (current).
@@ -60,7 +111,7 @@ body {
 
 body {
   position: relative;
-  min-height: 100vh;
+  min-height: 100svh;
   background-color: #000000;
   color: #F2EDE8;
   font-family: 'DM Sans', sans-serif;
@@ -86,11 +137,6 @@ body::before {
   pointer-events: none;
   opacity: 0.05;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-/* Material Symbols defaults */
-.material-symbols-outlined {
-  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
 }
 
 /* Thin custom scrollbar */
@@ -351,15 +397,42 @@ a,
  * element enters the viewport — see src/lib/reveal.ts. Transform + opacity
  * only, so the whole thing stays on the compositor.
  */
+/*
+ * CONTENT IS VISIBLE BY DEFAULT. The hidden-then-reveal state is scoped to
+ * `html.js`, a class set by an inline script in index.html that runs before
+ * first paint. Motion is the enhancement; the text is never the thing that
+ * depends on a script.
+ *
+ * This is not hypothetical: a full-page WebKit capture of the old build came
+ * back as whole screens of pure black, because `.reveal { opacity: 0 }` applied
+ * unconditionally and the IntersectionObserver never fired for a viewport that
+ * tall. Anything that cannot see the observer run — a capture, a print, a
+ * translation proxy, a bot, a browser where IO is broken — saw an empty page.
+ */
 .reveal {
+  opacity: 1;
+  transform: none;
+}
+
+html.js .reveal {
   opacity: 0;
   transform: translate3d(0, 22px, 0);
   transition: opacity 0.75s var(--ease), transform 0.75s var(--ease);
 }
 
-.reveal.is-visible {
+html.js .reveal.is-visible {
   opacity: 1;
   transform: none;
+}
+
+/* Printing never scrolls, so the observer never fires. Without this the whole
+   page past the first screen prints blank. */
+@media print {
+  html.js .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -464,7 +537,8 @@ a,
 @media (prefers-reduced-motion: reduce) {
   /* Content must never be stranded invisible: useReveal() already sets
      is-visible immediately in this mode, but belt-and-braces. */
-  .reveal {
+  .reveal,
+  html.js .reveal {
     opacity: 1;
     transform: none;
     transition: none;
