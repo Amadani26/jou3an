@@ -1,15 +1,22 @@
-import { ChevronDown } from 'lucide-react'
+import { Suspense, lazy } from 'react'
 import { Link } from 'react-router-dom'
 import AppPreview from '../components/AppPreview'
+import HeroSection from '../components/HeroSection'
+
+/*
+ * Everything below the fold is split out, which keeps the animation library
+ * off the critical path: the hero is the LCP element and animates in pure CSS,
+ * so nothing it needs is in this chunk. The fallback reserves the section's
+ * exact height, so a late chunk cannot shift the page (CLS stays 0).
+ */
+const ProblemField = lazy(() => import('../components/ProblemField'))
 import FAQ from '../components/FAQ'
 import Logo from '../components/Logo'
 import PhoneMockup from '../components/PhoneMockup'
 import Reveal from '../components/Reveal'
-import WaitlistCTA from '../components/WaitlistCTA'
 import WaitlistForm from '../components/WaitlistForm'
 import WhatIsJou3an from '../components/WhatIsJou3an'
 import { PRIVACY_EMAIL } from '../lib/legal'
-import { useParallax } from '../lib/reveal'
 
 /** The app's real flow, in three beats. */
 const STEPS = [
@@ -77,117 +84,19 @@ function StepRow({
 }
 
 export default function Landing() {
-  // Light hero parallax: the two orbs drift at different rates as the page
-  // scrolls away, and the copy lags just slightly behind it. Transform-only,
-  // rAF-throttled, and switched off entirely under prefers-reduced-motion.
-  const redOrb = useParallax<HTMLSpanElement>(0.22)
-  const goldOrb = useParallax<HTMLSpanElement>(-0.14)
-  const heroCopy = useParallax<HTMLDivElement>(0.06)
-
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative overflow-x-clip">
       {/* ============================================================ */}
-      {/* SECTION 1 — HERO                                             */}
+      {/* SECTION 1 — HERO (the monument)                              */}
       {/* ============================================================ */}
-      <section className="relative min-h-[100svh] flex flex-col items-center justify-center text-center px-5 md:px-8">
-        {/* Gradient orbs */}
-        <span
-          ref={redOrb}
-          className="pointer-events-none absolute top-0 -left-16 w-80 h-80 rounded-full"
-          style={{
-            background:
-              'radial-gradient(circle, rgba(254,0,0,0.28), transparent 70%)',
-            filter: 'blur(70px)',
-          }}
-        />
-        <span
-          ref={goldOrb}
-          className="pointer-events-none absolute bottom-0 -right-16 w-96 h-96 rounded-full"
-          style={{
-            background:
-              'radial-gradient(circle, rgba(255,181,71,0.20), transparent 70%)',
-            filter: 'blur(80px)',
-          }}
-        />
+      <HeroSection />
 
-        <div ref={heroCopy} className="relative flex flex-col items-center w-full">
-          <p
-            className="text-red uppercase font-bold fade-up"
-            style={{
-              // 11 -> 13 with the longer "First" wording, then the whole
-              // clamp scaled +15% (11/3.1/13 x 1.15). The vw term leads so the
-              // line shrinks on phones instead of wrapping: a fixed cap plus
-              // 0.14em tracking would break this 34-char line in two.
-              fontSize: 'clamp(12.65px, 3.57vw, 14.95px)',
-              letterSpacing: '0.14em',
-              // REQUIRED, not insurance. This <p> is a flex item under
-              // `items-center`, so it sizes to max-content and would OVERFLOW
-              // — clipped by the hero's overflow-hidden — instead of wrapping.
-              // Measured 346px at the 14.95px cap: one line down to ~340pt,
-              // and at 320pt it needs 293px against 280px, so it WRAPS there.
-              // Without this it would clip instead, which is the bug the h1
-              // above already hit once.
-              maxWidth: '100%',
-              marginBottom: 20,
-            }}
-          >
-            Dubai&apos;s First Food Decision Engine
-          </p>
-
-          <h1
-            className="font-display font-extrabold uppercase text-text-primary fade-up"
-            style={{
-              // The vw term has to LEAD on phones: with a 3.2rem floor the
-              // minimum won on every handset (9vw is only ~36px at 402pt), so
-              // "HUNGRY?" rendered wider than the padded viewport and clipped
-              // at both edges. 10.5vw keeps it inside with headroom down to
-              // 320pt, and the 6.5rem cap keeps desktop exactly as it was.
-              fontSize: 'clamp(2rem, 10.5vw, 6.5rem)',
-              lineHeight: 0.95,
-              animationDelay: '0.05s',
-            }}
-          >
-            Hungry?
-            <br />
-            We{' '}
-            <em className="font-serif italic normal-case font-normal text-red">
-              decide
-            </em>
-          </h1>
-
-          {/* Section lede — white + bold, the weight below the headline. */}
-          <p
-            className="mt-6 max-w-[480px] text-white font-bold fade-up"
-            style={{ animationDelay: '0.15s' }}
-          >
-            Tell us what you&apos;re craving. We&apos;ll give you exactly 3
-            options. No menus. No scrolling. Just a decision.
-          </p>
-
-          <WaitlistCTA
-            className="mt-9 w-full max-w-[340px] fade-up"
-            label="Join the Waitlist"
-          />
-
-          <p
-            className="mt-5 text-text-muted text-sm fade-up"
-            style={{ animationDelay: '0.28s' }}
-          >
-            Launching in Dubai · Invites in batches
-          </p>
-        </div>
-
-        {/* Scroll indicator. Was a Material Symbols glyph — 465 KB of icon
-            font from Google, render-blocking, for this one chevron. */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
-          <ChevronDown
-            className="text-text-muted bounce-dot"
-            size={28}
-            strokeWidth={1.5}
-            aria-hidden="true"
-          />
-        </div>
-      </section>
+      {/* ============================================================ */}
+      {/* SECTION 1b — THE PROBLEM (the field that condenses)          */}
+      {/* ============================================================ */}
+      <Suspense fallback={<div style={{ height: '240svh' }} aria-hidden="true" />}>
+        <ProblemField />
+      </Suspense>
 
       {/* ============================================================ */}
       {/* SECTION 2 — HOW IT WORKS (vertical timeline)                 */}

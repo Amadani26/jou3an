@@ -1,29 +1,33 @@
 import Logo from './Logo'
-import { scrollToWaitlist } from '../lib/scroll'
 
+/**
+ * Wordmark only.
+ *
+ * Two things left this bar deliberately:
+ *
+ * - THE GLASS. It carried backdrop-filter: blur(20px) across a full-width
+ *   fixed element, which is one of the most expensive things you can ask an
+ *   iPhone to repaint on every scroll frame, and "floating pill nav over
+ *   frosted glass" is the most generic chrome on the web.
+ *
+ * - THE "JOIN WAITLIST" PILL. The hero's own full-width CTA is the page's one
+ *   action, and a second one in the corner sat directly on top of the giant 3.
+ *   Legal links are unaffected: Privacy and Terms have always lived in the
+ *   footer, and still do.
+ *
+ * The bar is transparent so the 3 passes behind it and is cropped by the top
+ * edge of the SCREEN rather than by a bar 56px down.
+ */
 export default function Nav() {
   return (
-    <header
-      className="fixed top-0 inset-x-0 z-50 h-[calc(56px_+_env(safe-area-inset-top))] md:h-[62px] pt-[env(safe-area-inset-top)] md:pt-0 flex items-center justify-between px-4 md:px-8 border-b border-border-soft"
-      style={{
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        background: 'rgba(0, 0, 0, 0.72)',
-      }}
-    >
-      {/* Logo — white wordmark on the nav's dark blurred bar. ONE node: 26px
-          clears both the 56px mobile bar and the 62px desktop bar. */}
-      <a href="/" aria-label="Jou3an — home" className="flex items-center">
+    <header className="fixed top-0 inset-x-0 z-50 h-[calc(56px_+_env(safe-area-inset-top))] md:h-[62px] pt-[env(safe-area-inset-top)] md:pt-0 flex items-center px-4 md:px-8 pointer-events-none">
+      <a
+        href="/"
+        aria-label="Jou3an — home"
+        className="flex items-center pointer-events-auto"
+      >
         <Logo height={26} />
       </a>
-
-      {/* Waitlist CTA */}
-      <button
-        onClick={scrollToWaitlist}
-        className="px-4 py-2 rounded-full bg-red text-white text-sm font-semibold transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:shadow-[0_10px_26px_-10px_rgba(254,0,0,0.7)]"
-      >
-        Join Waitlist
-      </button>
     </header>
   )
 }
