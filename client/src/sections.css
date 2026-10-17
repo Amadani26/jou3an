@@ -188,91 +188,184 @@
   padding: 14px 18px calc(22px + env(safe-area-inset-bottom));
 }
 
+
 /* ==================================================================== */
-/* PROBLEM B — the grid collapses                                       */
+/* PROBLEM — the wall of appetite                                       */
 /* ==================================================================== */
 
-.grid-section { position: relative; height: 250svh; }
+.wall-section { position: relative; height: 320svh; }
 
-.grid-sticky {
+.wall-sticky {
   position: sticky; top: 0;
   height: 100svh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  background: #000;
 }
 
-.grid-field {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 0 14px;
-  align-content: center;
-  transition: transform 900ms var(--ease-in-out);
+/* One perspective for the whole wall, so the tilt reads as a plane in a
+   room rather than five rows individually skewed. */
+.wall-perspective {
+  position: absolute;
+  inset: 0;
+  perspective: 1100px;
+  perspective-origin: 50% 30%;
+  overflow: hidden;
+}
+
+.wall-plane {
+  position: absolute;
+  inset: -4% -12%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  transform-origin: 50% 20%;
   will-change: transform;
 }
 
-.grid-cell {
-  /* The delay IS the ripple: outermost cards leave first, so the collapse
-     arrives at the centre as a wave. The curve IS the spring. */
-  transition:
-    transform 620ms var(--ease-spring) var(--d),
-    opacity 420ms var(--ease-out) var(--d);
-  will-change: transform, opacity;
+.wall-row { overflow: visible; }
+
+.wall-track {
+  display: flex;
+  width: max-content;
+  animation: wallDrift var(--rowdur) linear infinite;
+  will-change: transform;
+}
+.wall-row[data-dir='rtl'] .wall-track { animation-direction: reverse; }
+
+@keyframes wallDrift {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
 }
 
-.grid-sticky[data-stage='collapsing'] .grid-cell[data-keep='no'],
-.grid-sticky[data-stage='resolved'] .grid-cell[data-keep='no'] {
-  transform: translate3d(var(--tx), var(--ty), 0) scale(0.62);
-  opacity: 0;
-}
+.wall-set { display: flex; gap: 10px; padding-right: 10px; }
 
-/* The three survivors sit in the same grid column, so nothing has to jump out
-   of layout to gather them: the field slides over and they grow in place. */
-/* The survivors share one grid column, so gathering them needs no element to
-   leave layout: the field slides until that column is centred and they grow
-   in place. 2 columns -> column 0's centre sits at 25%, so +25% centres it. */
-.grid-sticky[data-stage='resolved'] .grid-field { transform: translateX(25%); }
+/* ---- the poster cards ---- */
 
-.grid-sticky[data-stage='resolved'] .grid-cell[data-keep='yes'] {
-  transform: scale(1.34);
-  z-index: 2;
-  transition-delay: calc(var(--k) * 80ms + 180ms);
-}
-
-.grid-copy {
+.wcard {
   position: relative;
-  z-index: 3;
-  text-align: center;
-  padding: 26px 20px calc(18px + env(safe-area-inset-bottom));
-  max-width: 560px;
-  margin: 0 auto;
+  flex: none;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #101010;
 }
 
-.grid-line {
+.wcard-lg { width: 212px; height: 160px; }
+.wcard-md { width: 156px; height: 160px; }
+.wcard-sm { width: 128px; height: 160px; }
+
+.wcard-photo,
+.wcard-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.wcard-field { opacity: 0.38; }
+
+/* Legibility over photos without a blur in sight. */
+.wcard-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.12) 30%, rgba(0,0,0,0.78) 100%);
+}
+
+.wcard-body {
+  position: absolute;
+  inset: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.wcard-score {
+  position: absolute;
+  top: 9px; right: 9px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(8,8,8,0.72);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.wcard-name {
   margin: 0;
   font-family: 'Syne', system-ui, sans-serif;
   font-weight: 800;
-  font-size: min(9.4vw, 52px);
-  line-height: 1;
-  letter-spacing: -0.04em;
+  font-size: 15px;
+  line-height: 1.04;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
-  text-shadow: 0 2px 26px rgba(0, 0, 0, 0.9);
 }
-.grid-sticky[data-stage='resolved'] .grid-line { color: var(--red); }
+.wcard-sm .wcard-name { font-size: 13px; font-family: 'DM Sans', sans-serif; font-weight: 700; }
 
-.grid-sub {
-  margin: 11px auto 0;
-  max-width: 38ch;
-  font-size: 14.5px;
-  line-height: 1.55;
+.wcard-meta {
+  margin: 3px 0 0;
+  font-size: 10.5px;
+  color: rgba(242, 237, 232, 0.78);
+}
+
+.wcard-price {
+  margin: 1px 0 0;
+  font-size: 10.5px;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
+/* The dark the tilted plane recedes into — a flat field, not a blur. */
+.wall-haze {
+  position: absolute;
+  inset: -2% 0 auto;
+  height: 34%;
+  background: linear-gradient(180deg, #000 12%, transparent 100%);
+  pointer-events: none;
+}
+
+/* ---- copy over the wall ---- */
+
+.wall-copy {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding: 0 20px;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.wall-line {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(10.4vw, 58px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+  text-shadow: 0 2px 30px rgba(0,0,0,0.95), 0 0 80px rgba(0,0,0,0.85);
+}
+
+.wall-sub {
+  margin: 12px auto 0;
+  max-width: 36ch;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  text-shadow: 0 1px 14px rgba(0,0,0,0.9);
+}
+
 @media (min-width: 768px) {
-  .grid-field { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 0 40px; max-width: 1100px; margin: 0 auto; }
-  .grid-sticky[data-stage='resolved'] .grid-field { transform: translateX(37.5%); }
+  .wcard-lg { width: 300px; height: 198px; }
+  .wcard-md { width: 216px; height: 198px; }
+  .wcard-sm { width: 172px; height: 198px; }
+  .wcard-name { font-size: 19px; }
+  .wall-plane { gap: 14px; }
+  .wall-set { gap: 14px; padding-right: 14px; }
 }
 
 /* -------------------------------------------------------------------- */
@@ -280,8 +373,9 @@
 /* -------------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
-  .grid-cell,
-  .grid-field { transition: none; }
+  /* The wall holds still: composition kept, drift and tilt dropped. */
+  .wall-track { animation: none; }
+  .wall-plane { transform: none; }
   /* The 3D stage never mounts under reduced motion (the shell checks), so
      the poster simply stays — no rule needed, but the fade must not linger. */
   .hero3d-poster { transition: none; }

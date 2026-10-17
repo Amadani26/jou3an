@@ -11,7 +11,7 @@ import Hero3D from '../components/hero/Hero3D'
  * The fallbacks reserve each section's exact height: a chunk that arrives late
  * must not shift the page under the reader (CLS stays 0).
  */
-const ProblemGrid = lazy(() => import('../components/problem/ProblemGrid'))
+const ProblemWall = lazy(() => import('../components/problem/ProblemWall'))
 import FAQ from '../components/FAQ'
 import Logo from '../components/Logo'
 import PhoneMockup from '../components/PhoneMockup'
@@ -96,8 +96,8 @@ export default function Landing() {
       {/* ============================================================ */}
       {/* SECTION 1b — PROBLEM (the wall that collapses, locked)       */}
       {/* ============================================================ */}
-      <Suspense fallback={<div style={{ height: '250svh' }} aria-hidden="true" />}>
-        <ProblemGrid />
+      <Suspense fallback={<div style={{ height: '320svh' }} aria-hidden="true" />}>
+        <ProblemWall />
       </Suspense>
 
       {/* ============================================================ */}
