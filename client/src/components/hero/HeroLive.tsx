@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import WaitlistCount from '../WaitlistCount'
-import PhoneScreenLive from './PhoneScreenLive'
+import PhoneScreenLive, { type Phase } from './PhoneScreenLive'
 import { scrollToWaitlist } from '../../lib/scroll'
 import { DISHES, SURVIVOR_INDEXES, SURVIVOR_REASONS } from '../../lib/dishes'
 import { prefersReducedMotion } from '../../lib/reveal'
@@ -17,15 +17,28 @@ import { prefersReducedMotion } from '../../lib/reveal'
  * LCP, so it pays for every byte. The below-the-fold sections load motion in
  * their own lazy chunks, where it costs the first paint nothing.
  *
- * THE HANDOFF: as scrolling starts, the three result cards lift off the
- * glass into the page. One rAF-coalesced scroll listener writes a single
- * custom property (--lift, 0..1) on the layer; each card's transform is a
- * calc() on that variable, so the whole choreography is one style write per
- * frame. The value is a RATCHET — it only ever rises — so the lift plays
- * once, forward, and scrolling back up never re-docks the cards.
+ * THE CARDS ARE THE LOOP'S PAYOFF, and they live BEHIND the device — the
+ * lift layer stacks under the phone, so no geometry can ever put a card over
+ * the glass. The first build floated them in front, and the scroll ratchet
+ * could strand a half-lifted card on top of the screen's story; both are
+ * impossible now by construction.
  *
- * Reduced motion: static final frame — screen on its selected state, float
- * and sheen off (CSS), no scroll listener, cards docked.
+ *   - Desktop: when the screen's loop reaches its 3 results, the three cards
+ *     spring out from behind the glass and settle BESIDE the phone (60ms
+ *     stagger); when the loop restarts they ease back in behind it. It reads
+ *     as "the app just produced these".
+ *   - iPhone widths: no room beside and none below (the device fills the
+ *     stage), so the cards stay out of the hero entirely until the SCROLL
+ *     HANDOFF — then they slide out from behind the device as the hero
+ *     leaves. Never over the glass at any width.
+ *
+ * The scroll handoff is unchanged in spirit: one rAF listener writes --lift
+ * (a ratchet, play-once) and LATCHES the cards visible permanently, so the
+ * loop can no longer retract them once the story has moved on.
+ *
+ * Reduced motion: static device on its selected screen; cards shown settled
+ * beside the phone on desktop, absent on phone widths (no overlap anywhere);
+ * no listeners, no timers.
  */
 
 const LIFT_START = 0.03
@@ -34,6 +47,15 @@ const LIFT_SPAN = 0.47
 export default function HeroLive() {
   const ref = useRef<HTMLElement | null>(null)
   const liftLayerRef = useRef<HTMLDivElement | null>(null)
+  // The loop's payoff state: true while the screen is showing its 3 results.
+  const [popped, setPopped] = useState(false)
+  // The scroll latch: once true, the cards stay out forever (play-once).
+  const [latched, setLatched] = useState(false)
+  const latchedRef = useRef(false)
+
+  const onPhase = useCallback((phase: Phase) => {
+    setPopped(phase === 'results' || phase === 'select' || phase === 'hold')
+  }, [])
 
   useEffect(() => {
     const section = ref.current
@@ -52,6 +74,10 @@ export default function HeroLive() {
       if (lift > max) {
         max = lift
         layer.style.setProperty('--lift', max.toFixed(4))
+        if (max > 0.04 && !latchedRef.current) {
+          latchedRef.current = true
+          setLatched(true)
+        }
       }
     }
 
@@ -98,7 +124,7 @@ export default function HeroLive() {
               <div className="dev-stage">
                 <span className="dev-body" aria-hidden="true" />
                 <div className="dev-face">
-                  <PhoneScreenLive />
+                  <PhoneScreenLive onPhase={onPhase} />
                   <span className="dev-sheen" aria-hidden="true" />
                 </div>
               </div>
@@ -107,7 +133,13 @@ export default function HeroLive() {
           <span className="dev-shadow" aria-hidden="true" />
         </div>
 
-        <div ref={liftLayerRef} className="lift-layer" aria-hidden="true">
+        <div
+          ref={liftLayerRef}
+          className="lift-layer"
+          data-pop={popped ? 'yes' : 'no'}
+          data-latch={latched ? 'yes' : 'no'}
+          aria-hidden="true"
+        >
           {SURVIVOR_INDEXES.map((di, i) => {
             const d = DISHES[di]
             return (

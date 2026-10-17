@@ -481,14 +481,24 @@
 
 /* ---- the handoff: cards lifting off the glass ---- */
 
+/*
+ * THE LIFT LAYER sits BEHIND the device (z-index below .dev-wrap), so a card
+ * can never cover the glass — travel between states passes under the phone
+ * and emerges at its sides. Hidden at rest; shown when the screen's loop
+ * reaches its results (desktop) or the scroll handoff latches (all widths).
+ */
+.hero-live-stage .dev-wrap { position: relative; z-index: 2; }
+
 .lift-layer {
   position: absolute;
   inset: 0;
+  z-index: 1;
   pointer-events: none;
-  /* Written by one rAF scroll listener in HeroLive; every card's transform
-     below is a calc() on it. One style write per frame, ratcheted 0..1. */
+  /* Scroll ratchet, 0..1 — written by HeroLive, drifts the settled cards a
+     little further as the hero leaves. */
   --lift: 0;
 }
+
 .lift-slot {
   position: absolute;
   left: 50%;
@@ -497,34 +507,47 @@
   justify-content: center;
   perspective: 900px;
 }
-.lift-slot-1 { top: 36%; }
-.lift-slot-2 { top: 52%; }
-.lift-slot-3 { top: 68%; }
+/* Per-slot geometry: x/y as fractions of the stage reach, a turn, a stagger. */
+.lift-slot-1 { top: 36%; --sx: -0.92; --sy: -0.38; --rot: -14deg; --d: 0ms; }
+.lift-slot-2 { top: 52%; --sx: 0.98; --sy: -0.06; --rot: 15deg; --d: 60ms; }
+.lift-slot-3 { top: 68%; --sx: -0.78; --sy: 0.4; --rot: -11deg; --d: 120ms; }
 
+/* One settled transform per slot, shared by the pop, the latch and reduced
+   motion, so the three states can never disagree about where a card lives. */
 .lift-move {
+  --settle:
+    translate3d(
+      calc(min(30vw, 330px) * var(--sx) + var(--lift) * var(--sx) * 44px),
+      calc(min(20vh, 210px) * var(--sy)),
+      0
+    )
+    rotateY(var(--rot));
+  opacity: 0;
+  transform: translate3d(0, 12px, 0) scale(0.7);
+  transition:
+    transform 620ms var(--ease-spring) 0ms,
+    opacity 300ms var(--ease-out) 0ms;
   will-change: transform, opacity;
-  opacity: min(1, calc(var(--lift) * 10));
-  transition: transform 180ms var(--ease-out), opacity 180ms linear;
 }
-/* The fan, as pure calc(): x/y spread, a turn, a swell. */
-.lift-slot-1 .lift-move {
-  transform:
-    translate3d(calc(min(30vw, 330px) * var(--lift) * -0.92), calc(min(20vh, 210px) * var(--lift) * -0.38), 0)
-    rotateY(calc(var(--lift) * -14deg))
-    scale(calc(0.9 + 0.22 * var(--lift)));
+
+/* Shown: the loop's payoff (desktop) or the permanent scroll latch. */
+.lift-layer[data-pop='yes'] .lift-move,
+.lift-layer[data-latch='yes'] .lift-move {
+  opacity: 1;
+  transform: var(--settle);
+  transition-delay: var(--d), var(--d);
 }
-.lift-slot-2 .lift-move {
-  transform:
-    translate3d(calc(min(30vw, 330px) * var(--lift) * 0.98), calc(min(20vh, 210px) * var(--lift) * -0.06), 0)
-    rotateY(calc(var(--lift) * 15deg))
-    scale(calc(0.9 + 0.22 * var(--lift)));
+
+/* Phone widths: the loop alone never brings the cards out — there is no room
+   beside the device and none below it. Only the scroll handoff does. */
+@media (max-width: 767.98px) {
+  .lift-layer[data-pop='yes'][data-latch='no'] .lift-move {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.7);
+    transition-delay: 0ms, 0ms;
+  }
 }
-.lift-slot-3 .lift-move {
-  transform:
-    translate3d(calc(min(30vw, 330px) * var(--lift) * -0.78), calc(min(20vh, 210px) * var(--lift) * 0.4), 0)
-    rotateY(calc(var(--lift) * -11deg))
-    scale(calc(0.9 + 0.22 * var(--lift)));
-}
+
 .lift-fc {
   width: min(54vw, 236px);
   box-shadow: 0 26px 50px -26px rgba(0, 0, 0, 0.9);
@@ -535,6 +558,7 @@
 .lift-fc .fcard-reason { font-size: 10px; white-space: nowrap; }
 .lift-fc .fcard-rank { font-size: 24px; }
 .lift-fc .fcard-score { font-size: 11px; padding: 3px 7px; }
+
 /* The wall's .fcard hides itself until its section resolves; these are the
    same card face, but the MOTION wrapper owns their visibility. */
 .lift-layer .fcard { opacity: 1; transform: none; transition: none; }
@@ -1647,7 +1671,13 @@
   .dev-float,
   .dev-sheen,
   .ps-dots i { animation: none; }
-  .lift-layer { display: none; }
+  /* Cards settled beside the phone, statically; none on phone widths —
+     beside has no room there and "never over the glass" wins. */
+  .lift-move { transition: none; }
+  .lift-layer .lift-move { opacity: 1; transform: var(--settle); }
+  @media (max-width: 767.98px) {
+    .lift-layer { display: none; }
+  }
 
   /* Lines arrive without travel; the form's flourishes become plain cuts. */
   .feat-head,

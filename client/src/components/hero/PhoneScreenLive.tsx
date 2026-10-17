@@ -23,7 +23,7 @@ import { DISHES, SURVIVOR_INDEXES, SURVIVOR_REASONS } from '../../lib/dishes'
  * result) with no timers at all.
  */
 
-type Phase = 'idle' | 'tap' | 'deciding' | 'results' | 'select' | 'hold'
+export type Phase = 'idle' | 'tap' | 'deciding' | 'results' | 'select' | 'hold'
 
 const SEQUENCE: [Phase, number][] = [
   ['idle', 1600],
@@ -36,7 +36,12 @@ const SEQUENCE: [Phase, number][] = [
 
 const CHIPS = ['Quick and cheap', 'Date night', 'Comfort food']
 
-export default function PhoneScreenLive() {
+export default function PhoneScreenLive({
+  onPhase,
+}: {
+  /** Fired on every phase change — the hero syncs its card pop to this. */
+  onPhase?: (phase: Phase) => void
+}) {
   const reduce = useReducedMotion()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [step, setStep] = useState(0)
@@ -81,6 +86,11 @@ export default function PhoneScreenLive() {
   }, [])
 
   const phase: Phase = reduce ? 'select' : SEQUENCE[step][0]
+
+  useEffect(() => {
+    onPhase?.(phase)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
 
   return (
     <div ref={rootRef} className="pscreen" data-phase={phase} aria-hidden="true">
