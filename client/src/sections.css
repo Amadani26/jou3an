@@ -485,6 +485,9 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Written by one rAF scroll listener in HeroLive; every card's transform
+     below is a calc() on it. One style write per frame, ratcheted 0..1. */
+  --lift: 0;
 }
 .lift-slot {
   position: absolute;
@@ -492,8 +495,36 @@
   width: 0;
   display: flex;
   justify-content: center;
+  perspective: 900px;
 }
-.lift-move { will-change: transform, opacity; }
+.lift-slot-1 { top: 36%; }
+.lift-slot-2 { top: 52%; }
+.lift-slot-3 { top: 68%; }
+
+.lift-move {
+  will-change: transform, opacity;
+  opacity: min(1, calc(var(--lift) * 10));
+  transition: transform 180ms var(--ease-out), opacity 180ms linear;
+}
+/* The fan, as pure calc(): x/y spread, a turn, a swell. */
+.lift-slot-1 .lift-move {
+  transform:
+    translate3d(calc(min(30vw, 330px) * var(--lift) * -0.92), calc(min(20vh, 210px) * var(--lift) * -0.38), 0)
+    rotateY(calc(var(--lift) * -14deg))
+    scale(calc(0.9 + 0.22 * var(--lift)));
+}
+.lift-slot-2 .lift-move {
+  transform:
+    translate3d(calc(min(30vw, 330px) * var(--lift) * 0.98), calc(min(20vh, 210px) * var(--lift) * -0.06), 0)
+    rotateY(calc(var(--lift) * 15deg))
+    scale(calc(0.9 + 0.22 * var(--lift)));
+}
+.lift-slot-3 .lift-move {
+  transform:
+    translate3d(calc(min(30vw, 330px) * var(--lift) * -0.78), calc(min(20vh, 210px) * var(--lift) * 0.4), 0)
+    rotateY(calc(var(--lift) * -11deg))
+    scale(calc(0.9 + 0.22 * var(--lift)));
+}
 .lift-fc {
   width: min(54vw, 236px);
   box-shadow: 0 26px 50px -26px rgba(0, 0, 0, 0.9);
@@ -915,6 +946,350 @@
   .wall-set { gap: 14px; padding-right: 14px; }
 }
 
+/* ==================================================================== */
+/* DECIDE -> ACT — the payoff moment                                    */
+/* ==================================================================== */
+
+.act-section {
+  position: relative;
+  padding: clamp(90px, 16svh, 160px) 20px;
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(254, 0, 0, 0.09), transparent 70%),
+    #000;
+}
+
+.act-stage {
+  max-width: 620px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.act-eyebrow {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+
+.act-name {
+  margin: 14px 0 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(11.5vw, 64px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+  text-wrap: balance;
+}
+
+.act-rule {
+  display: block;
+  width: 64px;
+  height: 3px;
+  margin-top: 18px;
+  border-radius: 2px;
+  background: var(--red);
+  transform-origin: 50% 50%;
+}
+
+.act-meta {
+  margin: 14px 0 0;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.act-tiles {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  max-width: 440px;
+  margin-top: 34px;
+}
+.act-tiles > * { flex: 1; min-width: 0; }
+
+.act-tile {
+  position: relative;
+  width: 100%;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 16px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.act-tile svg { color: var(--red); }
+
+/* One-shot ring on release — re-mounted per press, so it always replays. */
+.act-ring {
+  position: absolute;
+  inset: -2px;
+  border: 2px solid var(--red);
+  border-radius: 16px;
+  pointer-events: none;
+  animation: actRing 560ms var(--ease-out) forwards;
+}
+@keyframes actRing {
+  0%   { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.12); }
+}
+
+.act-sub {
+  margin: 30px 0 0;
+  max-width: 40ch;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+/* ==================================================================== */
+/* THE LIVE DEMO — chips morph into a swipeable deck                    */
+/* ==================================================================== */
+
+.demo-section {
+  position: relative;
+  padding: clamp(80px, 14svh, 150px) 20px;
+}
+
+.demo-head {
+  max-width: 620px;
+  margin: 0 auto 34px;
+  text-align: center;
+}
+
+.demo-title {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(10vw, 52px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+}
+
+.demo-sub {
+  margin: 14px auto 0;
+  max-width: 42ch;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.demo-stage {
+  position: relative;
+  max-width: 430px;
+  margin: 0 auto;
+  /* Reserved: chips, the beat and the deck all live inside the same box, so
+     switching states never moves the page below (CLS 0). */
+  min-height: 430px;
+}
+
+.demo-chips {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 6px;
+}
+
+.demo-chip {
+  display: block;
+  width: 100%;
+  padding: 16px 20px;
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 16px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 200ms linear;
+}
+@media (hover: hover) and (pointer: fine) {
+  .demo-chip:hover { border-color: rgba(254, 0, 0, 0.5); }
+}
+
+.demo-chip-active {
+  border-color: var(--red);
+  background: rgba(254, 0, 0, 0.14);
+  color: #fff;
+  text-align: center;
+}
+
+.demo-deciding {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+}
+.demo-dots i { width: 9px; height: 9px; margin: 0 5px; }
+
+.demo-deck {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.demo-card {
+  position: absolute;
+  width: min(84vw, 380px);
+  aspect-ratio: 380 / 300;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #121212;
+  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.95);
+  cursor: grab;
+}
+.demo-card:active { cursor: grabbing; }
+
+.demo-card-photo,
+.demo-card-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.demo-card-field { opacity: 0.4; }
+
+.demo-card-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.12) 22%, rgba(0, 0, 0, 0.84) 100%);
+}
+
+.demo-card-rank {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 34px;
+  line-height: 1;
+  color: var(--red);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+}
+
+.demo-card-score {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.72);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-card-body {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 16px 18px;
+}
+.demo-card-body h3 {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.demo-card-body p {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: rgba(242, 237, 232, 0.82);
+}
+.demo-card-body em {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: rgba(254, 0, 0, 0.16);
+  color: var(--red);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-style: normal;
+}
+
+.demo-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+.demo-done p {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--text-primary);
+}
+
+.demo-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  min-height: 44px;
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 999px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 200ms linear, transform var(--dur-press) var(--ease-out);
+}
+.demo-reset:active { transform: scale(0.96); }
+.demo-reset svg { color: var(--red); }
+
+.demo-footrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 26px;
+}
+.demo-hint { margin: 0; font-size: 13px; color: var(--text-muted); }
+.demo-reset-quiet { padding: 8px 14px; min-height: 40px; font-size: 13px; }
+
+.demo-card-static {
+  position: relative;
+  width: min(84vw, 380px);
+  margin-bottom: 12px;
+}
+
+@media (min-width: 768px) {
+  .demo-stage { min-height: 470px; }
+}
+
 /* -------------------------------------------------------------------- */
 /* Reduced motion — keep every composition, drop every journey            */
 /* -------------------------------------------------------------------- */
@@ -925,6 +1300,7 @@
   .dev-float,
   .dev-sheen,
   .ps-dots i { animation: none; }
+  .lift-layer { display: none; }
 
   /* The wall holds still: composition kept, drift and tilt dropped. The
      collapse still TELLS its story stage by stage — cards leave and the three

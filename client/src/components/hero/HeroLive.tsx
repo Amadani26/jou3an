@@ -1,110 +1,72 @@
-import { useMemo, useRef } from 'react'
-import {
-  motion,
-  useMotionValue,
-  useMotionValueEvent,
-  useReducedMotion,
-  useScroll,
-  useTransform,
-  type MotionValue,
-} from 'motion/react'
+import { useEffect, useRef } from 'react'
 import WaitlistCount from '../WaitlistCount'
 import PhoneScreenLive from './PhoneScreenLive'
-import DeviceGL from './DeviceGL'
 import { scrollToWaitlist } from '../../lib/scroll'
 import { DISHES, SURVIVOR_INDEXES, SURVIVOR_REASONS } from '../../lib/dishes'
-import type { HeroVariant } from '../../lib/variants'
+import { prefersReducedMotion } from '../../lib/reveal'
 
 /**
- * The hero: copy, the device, and the handoff.
+ * The hero: copy, the CSS device, and the handoff. (The WebGL variant was
+ * reviewed against this one and cut — this is the keeper.)
  *
- * ALIVE FROM FIRST PAINT. The device is a CSS composition (body, bevel, red
- * rim, sheen, contact shadow, float) around a LIVE HTML screen that plays the
- * app's core flow on a loop — none of it waits for WebGL, a chunk, or a
- * gesture. ?hero=1 layers a worker-rendered WebGL body on top (real metal,
- * moving light) that fades in when its first frame lands; ?hero=2 stays pure
- * CSS. Nothing is draggable and nothing orbits: the motion is scripted —
- * a slow float, a fixed cinematic tilt, light doing the living.
+ * ALIVE FROM FIRST PAINT, and deliberately MOTION-LIBRARY-FREE: everything
+ * here is either a CSS animation (float, sheen, the screen's loop, the
+ * entrance) or one scroll-driven CSS custom property. That keeps the
+ * animation library out of the ENTRY CHUNK entirely — it had pulled the entry
+ * from 105 to 151 KB gzip when this section imported it, and the hero is the
+ * LCP, so it pays for every byte. The below-the-fold sections load motion in
+ * their own lazy chunks, where it costs the first paint nothing.
  *
- * THE HANDOFF. As you start scrolling, the three result cards lift off the
- * glass into the page in 3D and lead into the problem section. The lift is a
- * RATCHET: it plays once, forward — scrolling back up does not re-dock the
- * cards, per the play-once rule for every scroll-scrubbed sequence.
+ * THE HANDOFF: as scrolling starts, the three result cards lift off the
+ * glass into the page. One rAF-coalesced scroll listener writes a single
+ * custom property (--lift, 0..1) on the layer; each card's transform is a
+ * calc() on that variable, so the whole choreography is one style write per
+ * frame. The value is a RATCHET — it only ever rises — so the lift plays
+ * once, forward, and scrolling back up never re-docks the cards.
  *
  * Reduced motion: static final frame — screen on its selected state, float
- * and sheen off, cards docked.
+ * and sheen off (CSS), no scroll listener, cards docked.
  */
 
-function canWebGL(): boolean {
-  try {
-    const c = document.createElement('canvas')
-    return Boolean(c.getContext('webgl2') || c.getContext('webgl'))
-  } catch {
-    return false
-  }
-}
+const LIFT_START = 0.03
+const LIFT_SPAN = 0.47
 
-const LIFTS = [
-  // fy on card 1 kept modest so it never climbs into the nav wordmark.
-  { fx: -0.92, fy: -0.38, rot: -14, top: '36%' },
-  { fx: 0.98, fy: -0.06, rot: 15, top: '52%' },
-  { fx: -0.78, fy: 0.4, rot: -11, top: '68%' },
-] as const
-
-function LiftCard({ lift, index }: { lift: MotionValue<number>; index: number }) {
-  const cfg = LIFTS[index]
-  const d = DISHES[SURVIVOR_INDEXES[index]]
-  const x = useTransform(lift, (v) => `calc(min(30vw, 330px) * ${(cfg.fx * v).toFixed(4)})`)
-  const y = useTransform(lift, (v) => `calc(min(20vh, 210px) * ${(cfg.fy * v).toFixed(4)})`)
-  const rotateY = useTransform(lift, (v) => cfg.rot * v)
-  const scale = useTransform(lift, (v) => 0.9 + 0.22 * v)
-  const opacity = useTransform(lift, [0, 0.1, 1], [0, 1, 1])
-
-  return (
-    <div className="lift-slot" style={{ top: cfg.top }}>
-      <motion.div
-        className="lift-move"
-        style={{ x, y, rotateY, scale, opacity, transformPerspective: 900 }}
-      >
-        <article className="fcard lift-fc">
-          <span className="fcard-rank">{index + 1}</span>
-          <div className="fcard-body">
-            <h3 className="fcard-name">{d.dish}</h3>
-            <p className="fcard-meta">
-              {d.cuisine} · {d.area} · {d.price}
-            </p>
-            <span className="fcard-reason">{SURVIVOR_REASONS[index]}</span>
-          </div>
-          <span className="fcard-score">{d.score.toFixed(1)}</span>
-        </article>
-      </motion.div>
-    </div>
-  )
-}
-
-export default function HeroLive({ variant }: { variant: HeroVariant }) {
+export default function HeroLive() {
   const ref = useRef<HTMLElement | null>(null)
-  const reduce = useReducedMotion()
+  const liftLayerRef = useRef<HTMLDivElement | null>(null)
 
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
+  useEffect(() => {
+    const section = ref.current
+    const layer = liftLayerRef.current
+    if (!section || !layer || prefersReducedMotion()) return
 
-  // ⚠️ PLAY ONCE: the lift only ever moves forward. Scrolling back up leaves
-  // the cards where the story put them.
-  const ratchet = useMotionValue(0)
-  useMotionValueEvent(scrollYProgress, 'change', (v) => {
-    if (v > ratchet.get()) ratchet.set(v)
-  })
-  const lift = useTransform(ratchet, [0.03, 0.5], [0, 1], { clamp: true })
+    let frame = 0
+    let max = 0
 
-  const gl = useMemo(
-    () =>
-      variant === '1' &&
-      !reduce &&
-      typeof window !== 'undefined' &&
-      (navigator.hardwareConcurrency || 8) > 3 &&
-      canWebGL(),
-    [variant, reduce],
-  )
+    const apply = () => {
+      frame = 0
+      // Progress 0..1 across the hero's own height (it starts at page top).
+      const p = window.scrollY / Math.max(1, section.offsetHeight)
+      const lift = Math.min(1, Math.max(0, (p - LIFT_START) / LIFT_SPAN))
+      // ⚠️ PLAY ONCE: the ratchet. Only ever forward.
+      if (lift > max) {
+        max = lift
+        layer.style.setProperty('--lift', max.toFixed(4))
+      }
+    }
+
+    const onScroll = () => {
+      if (frame) return
+      frame = window.requestAnimationFrame(apply)
+    }
+
+    apply()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
+  }, [])
 
   return (
     <section
@@ -135,7 +97,6 @@ export default function HeroLive({ variant }: { variant: HeroVariant }) {
             <div className="dev-tilt">
               <div className="dev-stage">
                 <span className="dev-body" aria-hidden="true" />
-                {gl ? <DeviceGL /> : null}
                 <div className="dev-face">
                   <PhoneScreenLive />
                   <span className="dev-sheen" aria-hidden="true" />
@@ -146,13 +107,28 @@ export default function HeroLive({ variant }: { variant: HeroVariant }) {
           <span className="dev-shadow" aria-hidden="true" />
         </div>
 
-        {reduce ? null : (
-          <div className="lift-layer" aria-hidden="true">
-            {LIFTS.map((_, i) => (
-              <LiftCard key={i} lift={lift} index={i} />
-            ))}
-          </div>
-        )}
+        <div ref={liftLayerRef} className="lift-layer" aria-hidden="true">
+          {SURVIVOR_INDEXES.map((di, i) => {
+            const d = DISHES[di]
+            return (
+              <div key={di} className={`lift-slot lift-slot-${i + 1}`}>
+                <div className="lift-move">
+                  <article className="fcard lift-fc">
+                    <span className="fcard-rank">{i + 1}</span>
+                    <div className="fcard-body">
+                      <h3 className="fcard-name">{d.dish}</h3>
+                      <p className="fcard-meta">
+                        {d.cuisine} · {d.area} · {d.price}
+                      </p>
+                      <span className="fcard-reason">{SURVIVOR_REASONS[i]}</span>
+                    </div>
+                    <span className="fcard-score">{d.score.toFixed(1)}</span>
+                  </article>
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       <div className="product-cta">

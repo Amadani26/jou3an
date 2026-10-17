@@ -1,8 +1,6 @@
 import { Suspense, lazy } from 'react'
 import { Link } from 'react-router-dom'
-import AppPreview from '../components/AppPreview'
 import HeroLive from '../components/hero/HeroLive'
-import { useHeroVariant } from '../lib/variants'
 
 /*
  * Section variants, chosen by URL (?hero=a|b&problem=a|b) so both can be
@@ -13,6 +11,8 @@ import { useHeroVariant } from '../lib/variants'
  * must not shift the page under the reader (CLS stays 0).
  */
 const ProblemWall = lazy(() => import('../components/problem/ProblemWall'))
+const DecideAct = lazy(() => import('../components/DecideAct'))
+const DemoSection = lazy(() => import('../components/DemoSection'))
 import FAQ from '../components/FAQ'
 import Logo from '../components/Logo'
 import PhoneMockup from '../components/PhoneMockup'
@@ -87,14 +87,12 @@ function StepRow({
 }
 
 export default function Landing() {
-  const hero = useHeroVariant()
-
   return (
     <div className="relative overflow-x-clip">
       {/* ============================================================ */}
-      {/* SECTION 1 — HERO  (?hero=1 WebGL body · ?hero=2 CSS body)    */}
+      {/* SECTION 1 — HERO (CSS device, locked)                        */}
       {/* ============================================================ */}
-      <HeroLive variant={hero} />
+      <HeroLive />
 
       {/* ============================================================ */}
       {/* SECTION 1b — PROBLEM (the wall that collapses, locked)       */}
@@ -165,9 +163,18 @@ export default function Landing() {
       </section>
 
       {/* ============================================================ */}
-      {/* SECTION 4 — INTERACTIVE APP PREVIEW (+ its own waitlist CTA) */}
+      {/* SECTION 3b — DECIDE -> ACT (the payoff moment)               */}
       {/* ============================================================ */}
-      <AppPreview />
+      <Suspense fallback={<div style={{ minHeight: '70svh' }} aria-hidden="true" />}>
+        <DecideAct />
+      </Suspense>
+
+      {/* ============================================================ */}
+      {/* SECTION 4 — THE LIVE DEMO (chips -> swipeable deck)          */}
+      {/* ============================================================ */}
+      <Suspense fallback={<div style={{ minHeight: '80svh' }} aria-hidden="true" />}>
+        <DemoSection />
+      </Suspense>
 
       {/* ============================================================ */}
       {/* SECTION 5 — WAITLIST (+ phone mockup alongside the form)     */}

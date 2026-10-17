@@ -10,6 +10,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 const url = import.meta.env.VITE_SUPABASE_URL
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+/**
+ * Vercel PREVIEW deployments never write to the real waitlist: the form plays
+ * its success state against a mock instead, so a reviewer poking the branch
+ * cannot insert rows. The count stays read-only (the RPC reads nothing back
+ * that anon could not already see) and falls back to the baseline as always.
+ * Production and local builds are unchanged ('' and 'production' both pass).
+ */
+const IS_PREVIEW = import.meta.env.VITE_VERCEL_ENV === 'preview'
+
 /** Baseline so the counter reads as a real community from day one. */
 export const WAITLIST_BASE_COUNT = 731
 
@@ -73,6 +82,11 @@ export async function joinWaitlist(
   email: string,
   source = 'landing',
 ): Promise<WaitlistResult> {
+  if (IS_PREVIEW) {
+    // Mocked write: same latency shape, same success path, zero rows.
+    await new Promise((r) => setTimeout(r, 450))
+    return 'joined'
+  }
   const supabase = await getClient()
   if (!supabase) return 'error'
 
