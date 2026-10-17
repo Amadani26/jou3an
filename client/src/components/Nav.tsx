@@ -1,31 +1,45 @@
+import { useEffect, useState } from 'react'
 import Logo from './Logo'
 
 /**
- * Wordmark only.
+ * Wordmark only — the hero's full-width CTA is the page's one action, and the
+ * legal links live in the footer.
  *
- * Two things left this bar deliberately:
- *
- * - THE GLASS. It carried backdrop-filter: blur(20px) across a full-width
- *   fixed element, which is one of the most expensive things you can ask an
- *   iPhone to repaint on every scroll frame, and "floating pill nav over
- *   frosted glass" is the most generic chrome on the web.
- *
- * - THE "JOIN WAITLIST" PILL. The hero's own full-width CTA is the page's one
- *   action, and a second one in the corner sat directly on top of the giant 3.
- *   Legal links are unaffected: Privacy and Terms have always lived in the
- *   footer, and still do.
- *
- * The bar is transparent so the 3 passes behind it and is cropped by the top
- * edge of the SCREEN rather than by a bar 56px down.
+ * TWO STATES, no glass. Transparent over the hero (so the composition runs to
+ * the top edge of the screen), then a SOLID near-black bar once the page has
+ * scrolled past ~70% of the first viewport — which is what stops the white
+ * wordmark lying illegibly over whatever section happens to be passing under
+ * it. Deliberately not backdrop-filter: a full-width fixed blur is one of the
+ * most expensive repaints an iPhone can be asked for on every scroll frame.
+ * A rAF-coalesced scroll listener flips one data attribute; CSS does the rest.
  */
 export default function Nav() {
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    let frame = 0
+    const read = () => {
+      frame = 0
+      setScrolled(window.scrollY > window.innerHeight * 0.7)
+    }
+    const onScroll = () => {
+      if (frame) return
+      frame = window.requestAnimationFrame(read)
+    }
+    read()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
+  }, [])
+
   return (
-    <header className="fixed top-0 inset-x-0 z-50 h-[calc(56px_+_env(safe-area-inset-top))] md:h-[62px] pt-[env(safe-area-inset-top)] md:pt-0 flex items-center px-4 md:px-8 pointer-events-none">
-      <a
-        href="/"
-        aria-label="Jou3an — home"
-        className="flex items-center pointer-events-auto"
-      >
+    <header
+      className="nav-bar fixed top-0 inset-x-0 z-50 h-[calc(56px_+_env(safe-area-inset-top))] md:h-[62px] pt-[env(safe-area-inset-top)] md:pt-0 flex items-center px-4 md:px-8"
+      data-scrolled={scrolled ? 'yes' : 'no'}
+    >
+      <a href="/" aria-label="Jou3an — home" className="flex items-center">
         <Logo height={26} />
       </a>
     </header>

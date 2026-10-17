@@ -1,7 +1,8 @@
 import { Suspense, lazy } from 'react'
 import { Link } from 'react-router-dom'
 import AppPreview from '../components/AppPreview'
-import Hero3D from '../components/hero/Hero3D'
+import HeroLive from '../components/hero/HeroLive'
+import { useHeroVariant } from '../lib/variants'
 
 /*
  * Section variants, chosen by URL (?hero=a|b&problem=a|b) so both can be
@@ -86,12 +87,14 @@ function StepRow({
 }
 
 export default function Landing() {
+  const hero = useHeroVariant()
+
   return (
     <div className="relative overflow-x-clip">
       {/* ============================================================ */}
-      {/* SECTION 1 — HERO (3D device, locked)                         */}
+      {/* SECTION 1 — HERO  (?hero=1 WebGL body · ?hero=2 CSS body)    */}
       {/* ============================================================ */}
-      <Hero3D />
+      <HeroLive variant={hero} />
 
       {/* ============================================================ */}
       {/* SECTION 1b — PROBLEM (the wall that collapses, locked)       */}

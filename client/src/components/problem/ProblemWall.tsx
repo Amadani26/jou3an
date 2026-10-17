@@ -155,6 +155,8 @@ export default function ProblemWall() {
   const ref = useRef<HTMLElement | null>(null)
   const reduce = useReducedMotion()
   const [stage, setStage] = useState<Stage>('wall')
+  const lockedRef = useRef(false)
+  const [locked, setLocked] = useState(false)
 
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -163,8 +165,36 @@ export default function ProblemWall() {
 
   // Discrete stages, not a per-frame binding: the waves are choreography, and
   // every transition below runs on the compositor from one class flip.
+  //
+  // ⚠️ PLAY ONCE. The first time the collapse resolves, the section LOCKS:
+  // the 320svh pin distance is removed in the same frame as a compensating
+  // scrollTo, so the viewport does not move a pixel, and from then on the
+  // resolved wall is an ordinary 100svh block the user scrolls past in either
+  // direction. No replay, no reverse, no re-pin. A reload starts fresh —
+  // nothing is persisted, by design.
   useMotionValueEvent(scrollYProgress, 'change', (p) => {
+    if (lockedRef.current) return
     const next = stageOf(p)
+    if (next === 'resolved') {
+      lockedRef.current = true
+      const sec = ref.current
+      if (sec) {
+        const rect = sec.getBoundingClientRect()
+        const top = window.scrollY + rect.top
+        const oldH = rect.height
+        sec.style.height = '100svh'
+        const newH = sec.getBoundingClientRect().height
+        const dH = oldH - newH
+        const S = window.scrollY
+        // Keep exactly the same pixels on screen: while the sticky was pinned
+        // the right anchor is the section top; past the pin range, everything
+        // below simply moved up by dH, so the viewport follows it.
+        window.scrollTo(0, S >= top + dH ? S - dH : top)
+      }
+      setStage('resolved')
+      setLocked(true)
+      return
+    }
     setStage((prev) => (prev === next ? prev : next))
   })
 
@@ -183,7 +213,11 @@ export default function ProblemWall() {
         <div className="wall-perspective">
           <motion.div
             className="wall-plane"
-            style={reduce ? undefined : { rotateX, y: planeY, scale: planeScale }}
+            style={
+              locked || reduce
+                ? undefined
+                : { rotateX, y: planeY, scale: planeScale }
+            }
           >
             {ROWS.map((row, r) => (
               <div key={r} className="wall-row" data-dir={r % 2 ? 'rtl' : 'ltr'}>
@@ -206,7 +240,11 @@ export default function ProblemWall() {
 
         <motion.div
           className="wall-copy"
-          style={reduce ? undefined : { opacity: introOpacity, y: introY }}
+          style={
+            locked || reduce
+              ? { opacity: 0 }
+              : { opacity: introOpacity, y: introY }
+          }
         >
           <h2 className="wall-line">Too many options.</h2>
           <p className="wall-sub">

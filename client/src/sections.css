@@ -135,7 +135,7 @@
 /* HERO — 3D device (locked)                                            */
 /* ==================================================================== */
 
-.hero3d {
+.hero-live {
   justify-content: flex-start;
   padding-top: calc(66px + env(safe-area-inset-top));
 }
@@ -156,29 +156,6 @@
 .product-h { font-size: min(10vw, 60px); }
 .product-sub { font-size: 14.5px; max-width: 34ch; text-align: center; }
 
-/*
- * The WebGL stage. Fixed proportion, poster underneath: the scene and its
- * fallback occupy the SAME box, so WebGL arriving (or never arriving) cannot
- * move a single pixel of layout.
- */
-.hero3d-stage {
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  min-height: 300px;
-  margin-top: 6px;
-}
-
-.hero3d-poster {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  transition: opacity 600ms var(--ease-out);
-}
-.hero3d-poster[data-hidden='yes'] { opacity: 0; }
-
 .product-cta {
   position: relative;
   z-index: 2;
@@ -188,6 +165,359 @@
   padding: 14px 18px calc(22px + env(safe-area-inset-bottom));
 }
 
+
+/* ==================================================================== */
+/* The live device (both hero variants)                                 */
+/* ==================================================================== */
+
+.hero-live-stage {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 300px;
+  margin-top: 12px;
+  display: grid;
+  place-items: center;
+}
+
+.dev-wrap { position: relative; width: min(60vw, 258px); }
+
+/* The float: slow, scripted, interruptible by nothing. */
+.dev-float {
+  animation: devFloat 8s var(--ease-in-out) infinite;
+  will-change: transform;
+}
+@keyframes devFloat {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, -10px, 0); }
+}
+
+/* One perspective parent, one fixed cinematic tilt. The canvas and the DOM
+   screen share this transform, so they can never drift apart. */
+.dev-tilt { perspective: 1200px; }
+.dev-stage {
+  position: relative;
+  aspect-ratio: 1.08 / 2.26;
+  transform: rotateY(-7deg) rotateX(2.5deg);
+  transform-style: preserve-3d;
+}
+
+/*
+ * The body. Gradient metal, a bevel ring, and the red key light catching the
+ * top-right edge — all inset shadows, no blur filters. The GL canvas paints a
+ * richer version of this same body over it when it is live.
+ */
+.dev-body {
+  position: absolute;
+  inset: 4%;
+  border-radius: 11% / 5.3%;
+  background: linear-gradient(145deg, #262626, #101010 52%, #1b1b1b);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset -5px 5px 10px -5px rgba(254, 0, 0, 0.55),
+    inset 5px -5px 12px -8px rgba(255, 255, 255, 0.07),
+    0 44px 80px -38px rgba(0, 0, 0, 0.9);
+}
+
+.dev-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 700ms var(--ease-out);
+}
+.dev-canvas[data-live='yes'] { opacity: 1; }
+
+/* The screen opening — geometry shared exactly with the GL slab's face. */
+.dev-face {
+  position: absolute;
+  left: 9.97%;
+  top: 10.31%;
+  width: 80.07%;
+  height: 79.38%;
+  border-radius: 7.5% / 3.6%;
+  overflow: hidden;
+  background: #070707;
+  container-type: size;
+}
+
+/* Glass: a soft highlight strip sweeping across on a long loop. */
+.dev-sheen {
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: -70%;
+  width: 55%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.055), transparent);
+  transform: skewX(-16deg) translateX(0);
+  animation: devSheen 7s var(--ease-in-out) infinite;
+  pointer-events: none;
+}
+@keyframes devSheen {
+  0%, 52%   { transform: skewX(-16deg) translateX(-30%); }
+  86%, 100% { transform: skewX(-16deg) translateX(470%); }
+}
+
+.dev-shadow {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: -6.5%;
+  height: 7%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.7), transparent 68%);
+  pointer-events: none;
+}
+
+/* ---- the live screen ---- */
+
+.pscreen {
+  position: absolute;
+  inset: 0;
+  color: var(--text-primary);
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+.ps-top {
+  position: absolute;
+  top: 3.4cqh;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+}
+.ps-brand {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 6cqw;
+  letter-spacing: -0.03em;
+}
+.ps-brand b { color: var(--red); }
+
+.ps-view {
+  position: absolute;
+  inset: 0;
+  /* Centred: the face is tall and a top-anchored stack left a dead third at
+     the bottom of the glass. The brand strip stays absolute above. */
+  padding: 10cqh 6cqw 6cqh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 380ms var(--ease-out);
+  pointer-events: none;
+}
+.pscreen[data-phase='idle'] .ps-home,
+.pscreen[data-phase='tap'] .ps-home { opacity: 1; }
+.pscreen[data-phase='deciding'] .ps-deciding { opacity: 1; }
+.pscreen[data-phase='results'] .ps-results,
+.pscreen[data-phase='select'] .ps-results,
+.pscreen[data-phase='hold'] .ps-results { opacity: 1; }
+
+.ps-ask {
+  margin: 0 0 4.4cqh;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 7.6cqw;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.ps-chip {
+  position: relative;
+  display: block;
+  margin-bottom: 3.4cqw;
+  padding: 4.6cqw 5cqw;
+  background: #151515;
+  border: 1px solid #242424;
+  border-radius: 4.4cqw;
+  font-size: 4.9cqw;
+  font-weight: 600;
+  transition: background 220ms linear, border-color 220ms linear;
+}
+.pscreen[data-phase='tap'] .ps-chip:first-child {
+  background: rgba(254, 0, 0, 0.16);
+  border-color: var(--red);
+}
+
+.ps-ring {
+  position: absolute;
+  right: 5cqw;
+  top: 50%;
+  width: 9cqw;
+  height: 9cqw;
+  margin-top: -4.5cqw;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  opacity: 0;
+}
+.pscreen[data-phase='tap'] .ps-chip:first-child .ps-ring { animation: psTap 760ms var(--ease-out) both; }
+.pscreen[data-phase='select'] .ps-ring-card { animation: psTap 760ms var(--ease-out) both; }
+@keyframes psTap {
+  0%   { opacity: 0; transform: scale(1.7); }
+  35%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(0.72); }
+}
+
+.ps-deciding {
+  align-items: center;
+  justify-content: center;
+  gap: 2.6cqh;
+}
+.ps-deciding::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 42%, rgba(254, 0, 0, 0.16), transparent 70%);
+}
+.ps-deciding p {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 7.6cqw;
+  letter-spacing: -0.02em;
+  color: var(--red);
+}
+.ps-dots i {
+  display: inline-block;
+  width: 3cqw;
+  height: 3cqw;
+  margin: 0 1.3cqw;
+  border-radius: 50%;
+  background: var(--red);
+  animation: psDot 900ms ease-in-out infinite;
+}
+.ps-dots i:nth-child(2) { animation-delay: 150ms; }
+.ps-dots i:nth-child(3) { animation-delay: 300ms; }
+@keyframes psDot {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50%      { opacity: 1; transform: translateY(-1.2cqh); }
+}
+
+.ps-eyebrow {
+  margin: 0 0 2.2cqh;
+  text-align: center;
+  font-size: 3.4cqw;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+
+.ps-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 3.4cqw;
+  margin-bottom: 3.2cqw;
+  padding: 3.8cqw;
+  background: #121212;
+  border-radius: 4.2cqw;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  opacity: 0;
+  transform: translate3d(0, 4.5cqh, 0);
+  transition:
+    opacity 400ms var(--ease-out) calc(var(--i) * 130ms),
+    transform 540ms var(--ease-spring) calc(var(--i) * 130ms),
+    outline-color 240ms linear,
+    background-color 240ms linear;
+}
+.pscreen[data-phase='results'] .ps-card,
+.pscreen[data-phase='select'] .ps-card,
+.pscreen[data-phase='hold'] .ps-card { opacity: 1; transform: none; }
+.pscreen[data-phase='select'] .ps-card:first-child,
+.pscreen[data-phase='hold'] .ps-card:first-child {
+  outline-color: var(--red);
+  background: #1a0d0d;
+}
+
+.ps-rank {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 6.6cqw;
+  line-height: 1;
+  color: var(--red);
+}
+.ps-cardbody { display: flex; flex-direction: column; min-width: 0; }
+.ps-cardbody strong {
+  font-size: 4.6cqw;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ps-cardbody small {
+  margin-top: 0.8cqw;
+  font-size: 3.3cqw;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ps-cardbody em {
+  margin-top: 1.6cqw;
+  align-self: flex-start;
+  font-style: normal;
+  font-size: 3cqw;
+  font-weight: 600;
+  color: var(--red);
+  background: rgba(254, 0, 0, 0.13);
+  border-radius: 999px;
+  padding: 0.9cqw 2.8cqw;
+  white-space: nowrap;
+}
+.ps-score {
+  margin-left: auto;
+  flex: none;
+  font-size: 3.4cqw;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: #1d1d1d;
+  border-radius: 999px;
+  padding: 1.1cqw 2.6cqw;
+}
+
+/* ---- the handoff: cards lifting off the glass ---- */
+
+.lift-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.lift-slot {
+  position: absolute;
+  left: 50%;
+  width: 0;
+  display: flex;
+  justify-content: center;
+}
+.lift-move { will-change: transform, opacity; }
+.lift-fc {
+  width: min(54vw, 236px);
+  box-shadow: 0 26px 50px -26px rgba(0, 0, 0, 0.9);
+}
+/* Compact type so nothing wraps at the lift size. */
+.lift-fc .fcard-name { font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lift-fc .fcard-meta { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lift-fc .fcard-reason { font-size: 10px; white-space: nowrap; }
+.lift-fc .fcard-rank { font-size: 24px; }
+.lift-fc .fcard-score { font-size: 11px; padding: 3px 7px; }
+/* The wall's .fcard hides itself until its section resolves; these are the
+   same card face, but the MOTION wrapper owns their visibility. */
+.lift-layer .fcard { opacity: 1; transform: none; transition: none; }
+
+/* ---- nav states ---- */
+
+.nav-bar {
+  background: transparent;
+  transition: background-color 320ms var(--ease-out), box-shadow 320ms var(--ease-out);
+}
+.nav-bar[data-scrolled='yes'] {
+  background: rgba(8, 8, 8, 0.97);
+  box-shadow: 0 1px 0 0 #1c1c1c;
+}
 
 /* ==================================================================== */
 /* PROBLEM — the wall of appetite                                       */
@@ -590,6 +920,12 @@
 /* -------------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
+  /* The device holds still on its final frame: no float, no sheen, no dots.
+     The screen renders its selected state statically (the component side). */
+  .dev-float,
+  .dev-sheen,
+  .ps-dots i { animation: none; }
+
   /* The wall holds still: composition kept, drift and tilt dropped. The
      collapse still TELLS its story stage by stage — cards leave and the three
      arrive — but as instant cuts, not journeys. */

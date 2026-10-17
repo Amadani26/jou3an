@@ -42,9 +42,12 @@ renders in the system Arabic font (no Arabic webfont is shipped).
 ## 3D
 
 Everything in the WebGL scene is modelled in code from Three.js geometry
-primitives (rounded boxes, planes) with canvas-drawn textures generated at
-runtime from our own design system. No downloaded models, no scanned assets,
-no Apple hardware likeness: the device is an original generic rounded slab.
+primitives (a rounded slab and its glass ring), lit by generated lights and a
+generated RoomEnvironment — no downloaded models, no HDR files, no scanned
+assets, no Apple hardware likeness: the device is an original generic rounded
+slab, and its screen is live HTML in our own design language. There are no
+raster posters any more: every fallback (reduced motion, no WebGL, low-core
+devices) is the same DOM composition rendered statically.
 
 ## JavaScript dependencies added by the redesign
 
@@ -53,7 +56,6 @@ no Apple hardware likeness: the device is an original generic rounded slab.
 | three | MIT |
 | @react-three/fiber | MIT |
 | three-stdlib | MIT |
-| maath | MIT |
 | motion | MIT |
 
 ## Explicitly NOT used
