@@ -1011,110 +1011,208 @@
   color: var(--red);
 }
 
-/* ---- the split-flap board ---- */
+/* ---- the chosen dish ---- */
 
-.act-meta-board,
-.act-name-board {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  column-gap: 0.9ch;
-  row-gap: 6px;
-  perspective: 600px;
-}
-
-/* A word is an unbreakable run of cells — wrapping happens between words. */
-.flap-word {
-  display: inline-flex;
-  gap: 3px;
-  white-space: nowrap;
-}
-
-.act-meta-board { margin-bottom: 14px; }
-
-.flap-c {
-  display: inline-grid;
-  place-items: center;
-  background: #151515;
-  border-radius: 4px;
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06);
-  color: var(--text-muted);
-  transform-style: preserve-3d;
-}
-
-.act-meta-board .flap-c {
-  min-width: 1.5ch;
-  padding: 3px 2px;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.act-name-board .flap-c {
-  min-width: 1.25ch;
-  padding: 4px 3px;
+.story-name {
+  margin: 0 0 clamp(20px, 3.5svh, 30px);
   font-family: 'Syne', system-ui, sans-serif;
   font-weight: 800;
-  font-size: min(6.6vw, 38px);
-  line-height: 1.1;
-  letter-spacing: -0.01em;
-}
-
-/* A cell LANDING: one mechanical quarter-flip the instant it locks. The
-   attribute flip re-matches the selector, which restarts the animation. */
-.flap-c[data-locked='yes'] {
+  font-size: min(11vw, 58px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
   color: var(--text-primary);
-  animation: flapLock 170ms var(--ease-out) both;
-}
-@keyframes flapLock {
-  from { transform: rotateX(-82deg); }
-  to   { transform: rotateX(0deg); }
+  text-wrap: balance;
 }
 
-/* ---- the route ---- */
+/* ---- the panel: card -> map, one shared element ---- */
 
-.route-svg {
-  width: min(100%, 440px);
-  height: auto;
-  margin-top: clamp(22px, 4svh, 36px);
+.story-panel {
+  position: relative;
+  width: min(100%, 560px);
+  aspect-ratio: 44 / 30; /* fixed: no stage can move layout */
+  border-radius: 20px;
+  overflow: hidden;
+  background: #0d0d0d;
+  box-shadow: 0 34px 70px -34px rgba(0, 0, 0, 0.95);
 }
 
-.route-label {
-  font-size: 11px;
+.story-maplayer,
+.story-cardlayer {
+  position: absolute;
+  inset: 0;
+}
+
+.story-map { width: 100%; height: 100%; display: block; }
+
+.story-you {
+  font-size: 12px;
   font-weight: 600;
   fill: var(--text-muted);
 }
 
-.route-path {
-  stroke-dasharray: 100;
-  stroke-dashoffset: 0; /* drawn by default: no-JS and prerender see it */
+/* The map waits small and dim under the photo, then scales in as the photo
+   morphs away above it. Default (no JS / reduced motion) is the final map. */
+.story-maplayer { transform: scale(1); opacity: 1; }
+html.js .act-section:is([data-stage='wait'], [data-stage='card'], [data-stage='tap']) .story-maplayer {
+  transform: scale(0.94);
+  opacity: 0;
 }
-.route-dest { opacity: 1; }
-.route-pulse {
+.story-maplayer {
+  transition: transform 700ms var(--ease-in-out), opacity 450ms linear;
+}
+
+/* The card layer: present through card/tap, morphs out into the map. */
+.story-cardlayer {
+  opacity: 0;
+  pointer-events: none;
+}
+html.js .act-section:is([data-stage='card'], [data-stage='tap']) .story-cardlayer {
+  opacity: 1;
+}
+html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-cardlayer .story-photo {
+  transform: scale(1.12);
+  opacity: 0;
+}
+html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-cardlayer .story-info {
+  transform: translate3d(0, 24px, 0);
+  opacity: 0;
+}
+html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-cardlayer {
+  opacity: 0;
+  transition: opacity 500ms linear 250ms;
+}
+html.js .act-section[data-stage='wait'] .story-cardlayer {
+  opacity: 0;
+}
+.story-cardlayer { transition: opacity 400ms var(--ease-out); }
+
+.story-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1);
+  opacity: 1;
+  transition: transform 750ms var(--ease-in-out), opacity 500ms linear 120ms;
+  will-change: transform, opacity;
+}
+
+.story-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.18) 30%, rgba(0, 0, 0, 0.86) 100%);
+}
+
+.story-info {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 16px;
+  transition: transform 450ms var(--ease-in-out), opacity 350ms linear;
+}
+
+.story-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  color: rgba(242, 237, 232, 0.85);
+}
+.story-score {
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.72);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.story-actions {
+  display: flex;
+  gap: 8px;
+}
+.story-btn {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  background: rgba(20, 20, 20, 0.92);
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  overflow: hidden;
+}
+.story-btn svg { color: var(--red); flex: none; }
+
+/* The simulated tap: Directions presses and a ripple blooms, on cue. */
+html.js .act-section:is([data-stage='tap'], [data-stage='map'], [data-stage='arrived']) .story-btn-dir {
+  animation: storyPress 420ms var(--ease-out);
+  border-color: var(--red);
+}
+@keyframes storyPress {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+.story-ripple {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: rgba(254, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+}
+html.js .act-section:is([data-stage='tap'], [data-stage='map'], [data-stage='arrived']) .story-ripple {
+  animation: storyRipple 550ms var(--ease-out) both;
+}
+@keyframes storyRipple {
+  0%   { opacity: 0.9; transform: scale(0.6); }
+  100% { opacity: 0; transform: scale(9); }
+}
+
+/* ---- the route, the pulse, the arrival chip ---- */
+
+.story-route {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0; /* drawn by default: final state everywhere JS-less */
+}
+.story-dest { opacity: 1; }
+.story-pulse {
   fill: rgba(254, 0, 0, 0.45);
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
 }
 
-/* JS present: the route waits for its stage, then draws; the pin arrives at
-   the line's end and pulses red ONCE. Final states persist (play once). */
-html.js .act-section[data-stage='wait'] .route-path,
-html.js .act-section[data-stage='board'] .route-path {
+html.js .act-section:not([data-stage='map'], [data-stage='arrived']) .story-route {
   stroke-dashoffset: 100;
 }
-html.js .act-section[data-stage='wait'] .route-dest,
-html.js .act-section[data-stage='board'] .route-dest {
+html.js .act-section:not([data-stage='map'], [data-stage='arrived']) .story-dest {
   opacity: 0;
 }
-html.js .act-section:is([data-stage='route'], [data-stage='tiles']) .route-path {
-  animation: routeDraw 900ms var(--ease-in-out) both;
+html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-route {
+  animation: routeDraw 950ms var(--ease-in-out) 350ms both;
 }
-html.js .act-section:is([data-stage='route'], [data-stage='tiles']) .route-dest {
-  animation: routeArrive 200ms linear 820ms both;
+html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-dest {
+  animation: routeArrive 200ms linear 1180ms both;
 }
-html.js .act-section:is([data-stage='route'], [data-stage='tiles']) .route-pulse {
-  animation: routePulse 700ms var(--ease-out) 900ms both;
+html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-pulse {
+  animation: routePulse 700ms var(--ease-out) 1260ms both;
 }
 
 @keyframes routeDraw {
@@ -1127,94 +1225,33 @@ html.js .act-section:is([data-stage='route'], [data-stage='tiles']) .route-pulse
 }
 @keyframes routePulse {
   0%   { opacity: 0.8; transform: scale(1); }
-  100% { opacity: 0; transform: scale(3.4); }
+  100% { opacity: 0; transform: scale(3.2); }
 }
 
-/* ---- the action tiles ---- */
-
-.act-tiles {
-  display: flex;
-  gap: 10px;
-  width: 100%;
-  max-width: 440px;
-  margin-top: clamp(26px, 5svh, 40px);
-}
-.act-tile-slot { flex: 1; min-width: 0; }
-
-/* Spring entrance, 90ms stagger, gated on the board reaching its tiles
-   stage. No-JS and prerender see them in place. */
-html.js .act-tiles[data-shown='no'] .act-tile-slot {
-  opacity: 0;
-  transform: translate3d(0, 26px, 0) scale(0.95);
-}
-.act-tile-slot {
+.story-chip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.85);
+  border: 1px solid rgba(254, 0, 0, 0.5);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
   opacity: 1;
   transform: none;
-  transition:
-    transform 560ms var(--ease-spring) var(--d, 0ms),
-    opacity 360ms var(--ease-out) var(--d, 0ms);
 }
-
-.act-tile {
-  position: relative;
-  width: 100%;
-  min-height: 68px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  background: #141414;
-  border: 1px solid #242424;
-  border-radius: 16px;
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: transform var(--dur-press) var(--ease-out);
+.story-chip svg { color: var(--red); }
+html.js .act-section:not([data-stage='arrived']) .story-chip {
+  opacity: 0;
+  transform: translate3d(0, -8px, 0);
 }
-.act-tile:active { transform: scale(0.94); }
-.act-tile svg { color: var(--red); }
-
-/* Signature icon moves — played on appear (mount) and replayed per tap via
-   a keyed remount. Directions traces forward; Call rings; Order drops in. */
-.act-ico { display: grid; place-items: center; }
-.act-ico-dir { animation: icoDir 480ms var(--ease-out) both; }
-.act-ico-call { animation: icoCall 560ms var(--ease-out) both; }
-.act-ico-order { animation: icoOrder 560ms var(--ease-spring) both; }
-
-@keyframes icoDir {
-  from { transform: translate3d(-7px, 7px, 0); opacity: 0; }
-  60%  { opacity: 1; }
-  to   { transform: translate3d(0, 0, 0); opacity: 1; }
-}
-@keyframes icoCall {
-  0%   { transform: rotate(0deg); }
-  25%  { transform: rotate(-14deg); }
-  50%  { transform: rotate(10deg); }
-  75%  { transform: rotate(-5deg); }
-  100% { transform: rotate(0deg); }
-}
-@keyframes icoOrder {
-  from { transform: translate3d(0, -12px, 0); opacity: 0; }
-  to   { transform: translate3d(0, 0, 0); opacity: 1; }
-}
-
-/* One-shot ring on release — re-mounted per press, so it always replays. */
-.act-ring {
-  position: absolute;
-  inset: -2px;
-  border: 2px solid var(--red);
-  border-radius: 16px;
-  pointer-events: none;
-  animation: actRing 560ms var(--ease-out) forwards;
-}
-@keyframes actRing {
-  0%   { opacity: 0.9; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.12); }
+.story-chip {
+  transition: opacity 400ms var(--ease-out), transform 500ms var(--ease-spring);
 }
 
 .act-sub {
@@ -1825,19 +1862,23 @@ html.js .act-tiles[data-shown='no'] .act-tile-slot {
     transform: scale(0.93) translate3d(0, -2.5%, 0);
   }
 
-  /* The departure board shows its final frame: name set, line drawn, pin
-     lit, tiles in place. No flips, no draw, no icon moves. */
-  .flap-c[data-locked='yes'],
-  html.js .act-section .route-path,
-  html.js .act-section .route-dest,
-  html.js .act-section .route-pulse,
-  .act-ico-dir,
-  .act-ico-call,
-  .act-ico-order,
-  .act-ring { animation: none; }
-  html.js .act-section .route-path { stroke-dashoffset: 0; }
-  html.js .act-section .route-dest { opacity: 1; }
-  html.js .act-tiles[data-shown='no'] .act-tile-slot { opacity: 1; transform: none; transition: none; }
+  /* The story rests on its final frame: the map, route drawn, pin lit,
+     arrival chip in place. No morph, no draw, no ripple. */
+  html.js .act-section .story-route,
+  html.js .act-section .story-dest,
+  html.js .act-section .story-pulse,
+  html.js .act-section .story-btn-dir,
+  html.js .act-section .story-ripple { animation: none; }
+  .story-maplayer,
+  .story-cardlayer,
+  .story-photo,
+  .story-info,
+  .story-chip { transition: none; }
+  html.js .act-section .story-route { stroke-dashoffset: 0; }
+  html.js .act-section .story-dest { opacity: 1; }
+  html.js .act-section .story-maplayer { opacity: 1; transform: none; }
+  html.js .act-section .story-cardlayer { opacity: 0; }
+  html.js .act-section .story-chip { opacity: 1; transform: none; }
 
   /* Lines arrive without travel; the form's flourishes become plain cuts. */
   .feat-head,
