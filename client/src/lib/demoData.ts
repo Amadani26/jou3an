@@ -36,140 +36,120 @@ export type DemoRestaurant = {
   distanceKm: number
   /** Reasoning pill copy — the "why this one" line. */
   reason: string
-  /** 3 photos each, cross-faded like the mobile Tinder card. */
+  /** Local, licensed dish imagery — see client/ASSET_CREDITS.md. */
   photos: string[]
 }
 
-const u = (id: string) => `https://images.unsplash.com/${id}?w=900&q=80&auto=format&fit=crop`
+/*
+ * ⚠️ ZERO-RISK: the demo's sample pool is GENERIC DISHES, not businesses.
+ * It used to be eight REAL Dubai restaurants with Unsplash photos implicitly
+ * presented as their food — a real identity plus a photo that is not theirs,
+ * which is exactly the pattern the rule forbids. The live API demo may show
+ * real venues; THIS file is baked sample data, so it may not.
+ *
+ * Photos are our licensed Pexels set (client/ASSET_CREDITS.md), served
+ * locally — the demo no longer fetches anything from Unsplash. `rating` is
+ * our own 0-10 score and is used by the scorer only (never rendered as a
+ * third-party badge).
+ */
+const dish = (photo: string) => `/brand/dishes/${photo}.webp`
 
 export const DEMO_RESTAURANTS: DemoRestaurant[] = [
   {
-    id: 'op-falafel',
-    name: 'Operation Falafel',
+    id: 'shawarma',
+    name: 'Chicken shawarma',
     cuisine: 'Lebanese',
     area: 'JBR',
-    priceMin: 30,
-    priceMax: 55,
-    rating: 4.4,
+    priceMin: 20,
+    priceMax: 35,
+    rating: 9.1,
     distanceKm: 1.2,
     reason: 'Quick · Cheap',
-    photos: [
-      u('photo-1540189549336-e6e99c3679fe'),
-      u('photo-1504674900247-0877df9cc836'),
-      u('photo-1432139555190-58524dae6a55'),
-    ],
+    photos: [dish('shawarma')],
   },
   {
-    id: 'salt',
-    name: 'Salt',
+    id: 'burger',
+    name: 'Smash burger',
     cuisine: 'American Burgers',
     area: 'Marina',
     priceMin: 45,
-    priceMax: 70,
-    rating: 4.5,
+    priceMax: 65,
+    rating: 8.8,
     distanceKm: 2.1,
-    reason: 'Comfort · High protein',
-    photos: [
-      u('photo-1555939594-58d7cb561ad1'),
-      u('photo-1550547660-d9450f859349'),
-      u('photo-1571091718767-18b5b1457add'),
-    ],
+    reason: 'Comfort · Close by',
+    photos: [dish('burger')],
   },
   {
-    id: 'sushi-art',
-    name: 'Sushi Art',
+    id: 'sushi',
+    name: 'Salmon nigiri set',
     cuisine: 'Japanese',
     area: 'DIFC',
-    priceMin: 60,
-    priceMax: 110,
-    rating: 4.3,
-    distanceKm: 3.4,
-    reason: 'Healthy · Date night',
-    photos: [
-      u('photo-1579871494447-9811cf80d66c'),
-      u('photo-1553621042-f6e147245754'),
-      u('photo-1476224203421-9ac39bcb3327'),
-    ],
+    priceMin: 120,
+    priceMax: 180,
+    rating: 9.4,
+    distanceKm: 4.4,
+    reason: 'Date night',
+    photos: [dish('sushi')],
   },
   {
-    id: 'ravi',
-    name: 'Ravi Restaurant',
+    id: 'biryani',
+    name: 'Chicken biryani',
     cuisine: 'Pakistani',
-    area: 'Satwa',
-    priceMin: 20,
+    area: 'Downtown',
+    priceMin: 25,
     priceMax: 40,
-    rating: 4.2,
-    distanceKm: 4.6,
-    reason: 'Cheap · Late night',
-    photos: [
-      u('photo-1585937421612-70a008356fbe'),
-      u('photo-1514326640560-7d063ef2aed5'),
-      u('photo-1559847844-5315695dadae'),
-    ],
+    rating: 9.0,
+    distanceKm: 3.0,
+    reason: 'Big portions',
+    photos: [dish('biryani')],
   },
   {
-    id: 'pitfire',
-    name: 'Pitfire Pizza',
+    id: 'pizza',
+    name: 'Margherita pizza',
     cuisine: 'Pizza',
     area: 'JLT',
-    priceMin: 50,
+    priceMin: 55,
     priceMax: 75,
-    rating: 4.4,
-    distanceKm: 0.8,
-    reason: 'Comfort · Quick',
-    photos: [
-      u('photo-1565299624946-b28f40a0ae38'),
-      u('photo-1513104890138-7c749659a591'),
-      u('photo-1473093295043-cdd812d0e601'),
-    ],
+    rating: 8.9,
+    distanceKm: 1.8,
+    reason: 'Wood-fired',
+    photos: [dish('pizza')],
   },
   {
-    id: 'arabian-tea-house',
-    name: 'Arabian Tea House',
-    cuisine: 'Emirati',
-    area: 'Al Fahidi',
-    priceMin: 35,
-    priceMax: 60,
-    rating: 4.5,
-    distanceKm: 6.2,
-    reason: 'Local · Sit-down',
-    photos: [
-      u('photo-1512058564366-18510be2db19'),
-      u('photo-1567620905732-2d1ec7ab7445'),
-      u('photo-1504674900247-0877df9cc836'),
-    ],
-  },
-  {
-    id: 'comptoir-102',
-    name: 'Comptoir 102',
+    id: 'poke',
+    name: 'Poke bowl',
     cuisine: 'Healthy',
     area: 'Jumeirah',
-    priceMin: 60,
-    priceMax: 90,
-    rating: 4.4,
-    distanceKm: 5.1,
-    reason: 'Healthy · Light',
-    photos: [
-      u('photo-1546069901-ba9599a7e63c'),
-      u('photo-1512621776951-a57141f2eefd'),
-      u('photo-1540189549336-e6e99c3679fe'),
-    ],
+    priceMin: 55,
+    priceMax: 80,
+    rating: 8.6,
+    distanceKm: 2.6,
+    reason: 'Clean & light',
+    photos: [dish('salad')],
   },
   {
-    id: 'zaroob',
-    name: 'Zaroob',
-    cuisine: 'Levantine Street Food',
-    area: 'Sheikh Zayed Rd',
-    priceMin: 25,
-    priceMax: 50,
-    rating: 4.3,
-    distanceKm: 3.9,
-    reason: 'Cheap · Late night',
-    photos: [
-      u('photo-1529006557810-274b9b2fc783'),
-      u('photo-1482049016688-2d3e1b311543'),
-      u('photo-1432139555190-58524dae6a55'),
-    ],
+    id: 'ramen',
+    name: 'Tonkotsu ramen',
+    cuisine: 'Japanese',
+    area: 'Downtown',
+    priceMin: 60,
+    priceMax: 85,
+    rating: 9.2,
+    distanceKm: 3.4,
+    reason: 'Late night',
+    photos: [dish('ramen')],
+  },
+  {
+    id: 'skewers',
+    name: 'Lamb kebab skewers',
+    cuisine: 'Emirati & Grills',
+    area: 'Jumeirah',
+    priceMin: 70,
+    priceMax: 110,
+    rating: 8.7,
+    distanceKm: 3.8,
+    reason: 'For the table',
+    photos: [dish('skewers')],
   },
 ]
 
@@ -209,7 +189,7 @@ export function decideThree(filters: DecisionFilters): DemoRestaurant[] {
     n += vibe === 'Fancy' ? r.priceMax / 40 : (120 - r.priceMax) / 40
     // Delivery favours the quick, close options.
     if (format === 'Delivery') n += (8 - r.distanceKm) / 4
-    return n + r.rating / 2
+    return n + r.rating / 4
   }
 
   return [...DEMO_RESTAURANTS].sort((a, b) => score(b) - score(a)).slice(0, 3)

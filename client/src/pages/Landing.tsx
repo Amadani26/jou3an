@@ -199,8 +199,11 @@ export default function Landing() {
 
           <Reveal delay={120} className="flex justify-center">
             <PhoneMockup
-              src="/brand/app-screens/home-daily-top-3.webp"
-              alt="The Jou3an app showing today's Daily Top 3 picks in Dubai"
+              /* A render of the app's results screen with GENERIC dishes —
+                 the real capture it replaces carried Google Places photos and
+                 real venue names, which the zero-risk rule keeps out. */
+              src="/brand/app-screens/results-generic.webp"
+              alt="The Jou3an app returning exactly three dishes to decide between"
             />
           </Reveal>
         </div>

@@ -191,3 +191,4 @@ export function drawGlow(): HTMLCanvasElement {
   ctx.fillRect(0, 0, S, S)
   return c
 }
+
