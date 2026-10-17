@@ -53,3 +53,6 @@ server/imports/
 
 # scratch assets for review artifacts
 client/.artifact-assets/
+
+# artifact review builds (published to claude.ai, never deployed)
+client/dist-artifact/
