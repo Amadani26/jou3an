@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useMotionValueEvent, useReducedMotion, useScroll } from 'motion/react'
 import ResultCardMini from '../ResultCardMini'
-import { CATALOGUE_CARDS } from '../../lib/restaurantCards'
+import { DISHES } from '../../lib/dishes'
 
 /**
  * PROBLEM B — the grid collapses.
@@ -37,6 +37,12 @@ const TOTAL = COLS * ROWS
 /** Middle of the grid, so the three that survive are the ones under your eye. */
 const KEEP = [8, 10, 12]
 
+/** Generic dish rows — the zero-risk rule keeps real venues out of marketing. */
+function dishCard(i: number) {
+  const d = DISHES[i]
+  return { n: d.dish, c: d.cuisine, a: d.area }
+}
+
 type Stage = 'dense' | 'collapsing' | 'resolved'
 
 export default function ProblemGrid() {
@@ -65,7 +71,7 @@ export default function ProblemGrid() {
     const keepIndex = KEEP.indexOf(i)
     return {
       i,
-      card: CATALOGUE_CARDS[(i * 7) % CATALOGUE_CARDS.length],
+      card: dishCard((i * 7) % DISHES.length),
       keep: keepIndex >= 0,
       keepIndex,
       // Outermost cards leave first, so the collapse reads as a wave arriving

@@ -1,8 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { Link } from 'react-router-dom'
 import AppPreview from '../components/AppPreview'
-import HeroMorph from '../components/hero/HeroMorph'
-import { useVariant } from '../lib/variants'
+import Hero3D from '../components/hero/Hero3D'
 
 /*
  * Section variants, chosen by URL (?hero=a|b&problem=a|b) so both can be
@@ -12,14 +11,6 @@ import { useVariant } from '../lib/variants'
  * The fallbacks reserve each section's exact height: a chunk that arrives late
  * must not shift the page under the reader (CLS stays 0).
  */
-/*
- * Hero A is imported STATICALLY and everything else is lazy. The hero is the
- * LCP element: behind a dynamic import it cost a second round trip and pushed
- * LCP from 2.8s to 3.3s. Variant B and both problem variants stay lazy — they
- * are either below the fold or not the default.
- */
-const HeroProduct = lazy(() => import('../components/hero/HeroProduct'))
-const ProblemChaos = lazy(() => import('../components/problem/ProblemChaos'))
 const ProblemGrid = lazy(() => import('../components/problem/ProblemGrid'))
 import FAQ from '../components/FAQ'
 import Logo from '../components/Logo'
@@ -95,39 +86,18 @@ function StepRow({
 }
 
 export default function Landing() {
-  const hero = useVariant('hero')
-  const problem = useVariant('problem')
-
   return (
     <div className="relative overflow-x-clip">
       {/* ============================================================ */}
-      {/* SECTION 1 — HERO  (?hero=a morph · ?hero=b product)          */}
+      {/* SECTION 1 — HERO (3D device, locked)                         */}
       {/* ============================================================ */}
-      {/* The fallback carries hero-bleed too. Without it the placeholder sits
-          56px lower than the real hero and everything below jumps when the
-          chunk lands — worth 0.068 of CLS under throttling, and invisible on a
-          fast local load, which is why it took Lighthouse to find it. */}
-      {hero === 'b' ? (
-        <Suspense
-          fallback={
-            <div className="hero-bleed" style={{ minHeight: '100svh' }} aria-hidden="true" />
-          }
-        >
-          <HeroProduct />
-        </Suspense>
-      ) : (
-        <HeroMorph />
-      )}
+      <Hero3D />
 
       {/* ============================================================ */}
-      {/* SECTION 1b — PROBLEM  (?problem=a chaos · ?problem=b grid)   */}
+      {/* SECTION 1b — PROBLEM (the wall that collapses, locked)       */}
       {/* ============================================================ */}
-      <Suspense
-        fallback={
-          <div style={{ height: problem === 'b' ? '250svh' : '230svh' }} aria-hidden="true" />
-        }
-      >
-        {problem === 'b' ? <ProblemGrid /> : <ProblemChaos />}
+      <Suspense fallback={<div style={{ height: '250svh' }} aria-hidden="true" />}>
+        <ProblemGrid />
       </Suspense>
 
       {/* ============================================================ */}
