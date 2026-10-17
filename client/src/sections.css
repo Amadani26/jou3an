@@ -971,7 +971,7 @@
 }
 
 /* ==================================================================== */
-/* DECIDE -> ACT — the payoff moment                                    */
+/* DECIDE -> ACT — the departure board                                  */
 /* ==================================================================== */
 
 .act-section {
@@ -983,7 +983,7 @@
 }
 
 .act-stage {
-  max-width: 620px;
+  max-width: 640px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -992,7 +992,7 @@
 }
 
 .act-eyebrow {
-  margin: 0;
+  margin: 0 0 18px;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.22em;
@@ -1000,41 +1000,149 @@
   color: var(--red);
 }
 
-.act-name {
-  margin: 14px 0 0;
+/* ---- the split-flap board ---- */
+
+.act-meta-board,
+.act-name-board {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 0.9ch;
+  row-gap: 6px;
+  perspective: 600px;
+}
+
+/* A word is an unbreakable run of cells — wrapping happens between words. */
+.flap-word {
+  display: inline-flex;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.act-meta-board { margin-bottom: 14px; }
+
+.flap-c {
+  display: inline-grid;
+  place-items: center;
+  background: #151515;
+  border-radius: 4px;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  transform-style: preserve-3d;
+}
+
+.act-meta-board .flap-c {
+  min-width: 1.5ch;
+  padding: 3px 2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.act-name-board .flap-c {
+  min-width: 1.25ch;
+  padding: 4px 3px;
   font-family: 'Syne', system-ui, sans-serif;
   font-weight: 800;
-  font-size: min(11.5vw, 64px);
-  line-height: 0.98;
-  letter-spacing: -0.04em;
+  font-size: min(6.6vw, 38px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+/* A cell LANDING: one mechanical quarter-flip the instant it locks. The
+   attribute flip re-matches the selector, which restarts the animation. */
+.flap-c[data-locked='yes'] {
   color: var(--text-primary);
-  text-wrap: balance;
+  animation: flapLock 170ms var(--ease-out) both;
+}
+@keyframes flapLock {
+  from { transform: rotateX(-82deg); }
+  to   { transform: rotateX(0deg); }
 }
 
-.act-rule {
-  display: block;
-  width: 64px;
-  height: 3px;
-  margin-top: 18px;
-  border-radius: 2px;
-  background: var(--red);
-  transform-origin: 50% 50%;
+/* ---- the route ---- */
+
+.route-svg {
+  width: min(100%, 440px);
+  height: auto;
+  margin-top: clamp(22px, 4svh, 36px);
 }
 
-.act-meta {
-  margin: 14px 0 0;
-  font-size: 15px;
-  color: var(--text-secondary);
+.route-label {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--text-muted);
 }
+
+.route-path {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0; /* drawn by default: no-JS and prerender see it */
+}
+.route-dest { opacity: 1; }
+.route-pulse {
+  fill: rgba(254, 0, 0, 0.45);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* JS present: the route waits for its stage, then draws; the pin arrives at
+   the line's end and pulses red ONCE. Final states persist (play once). */
+html.js .act-section[data-stage='wait'] .route-path,
+html.js .act-section[data-stage='board'] .route-path {
+  stroke-dashoffset: 100;
+}
+html.js .act-section[data-stage='wait'] .route-dest,
+html.js .act-section[data-stage='board'] .route-dest {
+  opacity: 0;
+}
+html.js .act-section:is([data-stage='route'], [data-stage='tiles']) .route-path {
+  animation: routeDraw 900ms var(--ease-in-out) both;
+}
+html.js .act-section:is([data-stage='route'], [data-stage='tiles']) .route-dest {
+  animation: routeArrive 200ms linear 820ms both;
+}
+html.js .act-section:is([data-stage='route'], [data-stage='tiles']) .route-pulse {
+  animation: routePulse 700ms var(--ease-out) 900ms both;
+}
+
+@keyframes routeDraw {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes routeArrive {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes routePulse {
+  0%   { opacity: 0.8; transform: scale(1); }
+  100% { opacity: 0; transform: scale(3.4); }
+}
+
+/* ---- the action tiles ---- */
 
 .act-tiles {
   display: flex;
   gap: 10px;
   width: 100%;
   max-width: 440px;
-  margin-top: 34px;
+  margin-top: clamp(26px, 5svh, 40px);
 }
-.act-tiles > * { flex: 1; min-width: 0; }
+.act-tile-slot { flex: 1; min-width: 0; }
+
+/* Spring entrance, 90ms stagger, gated on the board reaching its tiles
+   stage. No-JS and prerender see them in place. */
+html.js .act-tiles[data-shown='no'] .act-tile-slot {
+  opacity: 0;
+  transform: translate3d(0, 26px, 0) scale(0.95);
+}
+.act-tile-slot {
+  opacity: 1;
+  transform: none;
+  transition:
+    transform 560ms var(--ease-spring) var(--d, 0ms),
+    opacity 360ms var(--ease-out) var(--d, 0ms);
+}
 
 .act-tile {
   position: relative;
@@ -1055,8 +1163,34 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out);
 }
+.act-tile:active { transform: scale(0.94); }
 .act-tile svg { color: var(--red); }
+
+/* Signature icon moves — played on appear (mount) and replayed per tap via
+   a keyed remount. Directions traces forward; Call rings; Order drops in. */
+.act-ico { display: grid; place-items: center; }
+.act-ico-dir { animation: icoDir 480ms var(--ease-out) both; }
+.act-ico-call { animation: icoCall 560ms var(--ease-out) both; }
+.act-ico-order { animation: icoOrder 560ms var(--ease-spring) both; }
+
+@keyframes icoDir {
+  from { transform: translate3d(-7px, 7px, 0); opacity: 0; }
+  60%  { opacity: 1; }
+  to   { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+@keyframes icoCall {
+  0%   { transform: rotate(0deg); }
+  25%  { transform: rotate(-14deg); }
+  50%  { transform: rotate(10deg); }
+  75%  { transform: rotate(-5deg); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes icoOrder {
+  from { transform: translate3d(0, -12px, 0); opacity: 0; }
+  to   { transform: translate3d(0, 0, 0); opacity: 1; }
+}
 
 /* One-shot ring on release — re-mounted per press, so it always replays. */
 .act-ring {
@@ -1678,6 +1812,20 @@
   @media (max-width: 767.98px) {
     .lift-layer { display: none; }
   }
+
+  /* The departure board shows its final frame: name set, line drawn, pin
+     lit, tiles in place. No flips, no draw, no icon moves. */
+  .flap-c[data-locked='yes'],
+  html.js .act-section .route-path,
+  html.js .act-section .route-dest,
+  html.js .act-section .route-pulse,
+  .act-ico-dir,
+  .act-ico-call,
+  .act-ico-order,
+  .act-ring { animation: none; }
+  html.js .act-section .route-path { stroke-dashoffset: 0; }
+  html.js .act-section .route-dest { opacity: 1; }
+  html.js .act-tiles[data-shown='no'] .act-tile-slot { opacity: 1; transform: none; transition: none; }
 
   /* Lines arrive without travel; the form's flourishes become plain cuts. */
   .feat-head,
