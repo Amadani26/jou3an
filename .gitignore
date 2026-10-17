@@ -56,3 +56,4 @@ client/.artifact-assets/
 
 # artifact review builds (published to claude.ai, never deployed)
 client/dist-artifact/
+client/dist-ssr/
