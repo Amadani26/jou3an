@@ -259,6 +259,18 @@
   86%, 100% { transform: skewX(-16deg) translateX(470%); }
 }
 
+/* Dim wash over the glass while the payoff is out — the story is finished
+   and the cards are the subject now. */
+.dev-dim {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 500ms var(--ease-out);
+  pointer-events: none;
+}
+.dev-wrap[data-back='yes'] .dev-dim { opacity: 0.45; }
+
 .dev-shadow {
   position: absolute;
   left: 6%;
@@ -518,8 +530,8 @@
 /* ---- phone widths: the cards settle as a readable stack over the lower
    half of the eased-back device. --ox/--oy are the OUT offsets. ---- */
 .lift-slot-1 { top: 42%; --d: 0ms; --ox: 0px; --oy: 0px; --rot: 0deg; }
-.lift-slot-2 { top: 58%; --d: 60ms; --ox: 0px; --oy: 0px; --rot: 0deg; }
-.lift-slot-3 { top: 74%; --d: 120ms; --ox: 0px; --oy: 0px; --rot: 0deg; }
+.lift-slot-2 { top: 58%; --d: 80ms; --ox: 0px; --oy: 0px; --rot: 0deg; }
+.lift-slot-3 { top: 74%; --d: 160ms; --ox: 0px; --oy: 0px; --rot: 0deg; }
 
 /* Desktop: room beside the phone — fan out around it. */
 @media (min-width: 768px) {
@@ -538,11 +550,17 @@
     )
     rotateY(var(--rot));
   opacity: 0;
-  /* Hidden = INSIDE the screen: small, flat, centred on the glass. */
-  transform: translate3d(0, -6%, 0) scale(0.42);
+  /* Hidden = ON THE GLASS: the slot's --fx/--fy/--fs are MEASURED from the
+     matching result row on the screen (HeroLive.measureFrom), so the card's
+     start state is exactly where its pixels are, at exactly their size, with
+     a slight screen-plane tilt it sheds as it rises. */
+  transform:
+    translate3d(var(--fx, 0px), var(--fy, -6%), 0)
+    scale(var(--fs, 0.45))
+    rotateX(14deg);
   transition:
-    transform 640ms var(--ease-spring) 0ms,
-    opacity 260ms var(--ease-out) 0ms;
+    transform 680ms var(--ease-spring) 0ms,
+    opacity 220ms var(--ease-out) 0ms;
   will-change: transform, opacity;
 }
 
@@ -550,6 +568,11 @@
   opacity: 1;
   transform: var(--settle);
   transition-delay: var(--d), var(--d);
+}
+.lift-layer[data-out='yes'] .lift-fc {
+  box-shadow:
+    0 26px 50px -22px rgba(0, 0, 0, 0.95),
+    0 22px 48px -14px rgba(254, 0, 0, 0.32);
 }
 
 .lift-fc {
@@ -573,6 +596,25 @@
 /* The wall's .fcard hides itself until its section resolves; these are the
    same card face, but the MOTION wrapper owns their visibility. */
 .lift-layer .fcard { opacity: 1; transform: none; transition: none; }
+
+/* ---- ?debug=1 overlay ---- */
+
+.hero-debug {
+  position: fixed;
+  left: 10px;
+  bottom: 10px;
+  z-index: 99;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid #333;
+  border-radius: 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #9f9;
+}
 
 /* ---- nav states ---- */
 
