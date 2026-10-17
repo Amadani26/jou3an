@@ -1290,6 +1290,353 @@
   .demo-stage { min-height: 470px; }
 }
 
+/* ==================================================================== */
+/* FEATURES — five lines of display type, mask reveals                 */
+/* ==================================================================== */
+
+.feat-section {
+  padding: clamp(90px, 15svh, 160px) 20px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.feat-head[data-shown='no'] { opacity: 0; transform: translate3d(0, 20px, 0); }
+.feat-head {
+  transition: opacity 600ms var(--ease-out), transform 600ms var(--ease-out);
+}
+
+.feat-title {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(10vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+  text-wrap: balance;
+}
+
+.feat-lede {
+  margin: 18px 0 0;
+  max-width: 56ch;
+  font-size: 17px;
+  line-height: 1.6;
+  font-weight: 600;
+  color: #fff;
+}
+
+.feat-list {
+  margin: clamp(44px, 7svh, 72px) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(26px, 4.5svh, 44px);
+}
+
+.feat-line { min-width: 0; }
+
+/* The mask: the line slides up from under its own baseline. */
+.feat-mask { display: block; overflow: hidden; }
+.feat-text {
+  display: block;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(8.6vw, 58px);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  color: var(--text-primary);
+  transform: translate3d(0, 110%, 0);
+  transition: transform 640ms var(--ease-out);
+  will-change: transform;
+}
+.feat-line[data-shown='yes'] .feat-text { transform: translate3d(0, 0, 0); }
+
+.feat-accent { font-style: normal; color: var(--red); }
+
+.feat-note {
+  display: block;
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
+  transition: opacity 480ms var(--ease-out), transform 480ms var(--ease-out);
+}
+.feat-line[data-shown='yes'] .feat-note { opacity: 1; transform: none; }
+
+/* ==================================================================== */
+/* FAQ — large questions, answers always open                           */
+/* ==================================================================== */
+
+.faq-section {
+  padding: clamp(80px, 13svh, 150px) 20px;
+  max-width: 1020px;
+  margin: 0 auto;
+}
+
+.faq-title {
+  margin: 0 0 clamp(36px, 6svh, 64px);
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(9.4vw, 48px);
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+}
+
+.faq-rows {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(34px, 6svh, 64px);
+}
+
+.faq-row {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition: opacity 540ms var(--ease-out), transform 540ms var(--ease-out);
+}
+.faq-row[data-shown='yes'] { opacity: 1; transform: none; }
+
+.faq-q {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(6.6vw, 30px);
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+.faq-a {
+  margin: 10px 0 0;
+  max-width: 58ch;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+@media (min-width: 900px) {
+  .faq-row {
+    display: grid;
+    grid-template-columns: 5fr 6fr;
+    gap: 40px;
+    align-items: start;
+  }
+  .faq-a { margin-top: 6px; }
+}
+
+/* ==================================================================== */
+/* CTA BAND — the whole band is the form                                */
+/* ==================================================================== */
+
+.cta-band {
+  background: var(--red);
+  color: #000;
+  padding: clamp(70px, 12svh, 130px) 22px;
+  scroll-margin-top: 20px;
+}
+
+.cta-form,
+.cta-done {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.cta-line {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(12vw, 76px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  color: #000;
+}
+
+.cta-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  margin-top: clamp(26px, 5svh, 44px);
+}
+
+.cta-field { position: relative; flex: 1; min-width: 0; }
+
+.cta-field input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 10px 2px 12px;
+  font-family: inherit;
+  /* 17px: above iOS Safari's 16px auto-zoom floor. */
+  font-size: 17px;
+  font-weight: 600;
+  color: #000;
+  caret-color: #000;
+  border-radius: 0;
+}
+.cta-field input::placeholder { color: rgba(0, 0, 0, 0.45); }
+
+/* The underline draws itself on focus — the band's focus animation. */
+.cta-field::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.35);
+}
+.cta-underline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: #000;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform 420ms var(--ease-out);
+}
+.cta-field:focus-within .cta-underline { transform: scaleX(1); }
+
+/* "Join" — the sentence's last word, in the display face. */
+.cta-join {
+  flex: none;
+  background: none;
+  border: none;
+  padding: 0 2px 6px;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(8vw, 40px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #000;
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out), opacity 200ms linear;
+}
+.cta-join:active { transform: scale(0.95); }
+.cta-band[data-status='submitting'] .cta-join { opacity: 0.45; }
+
+.cta-note {
+  margin: 18px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.72);
+}
+.cta-band[data-status='invalid'] .cta-note,
+.cta-band[data-status='error'] .cta-note { color: #000; }
+
+/* Our counter renders muted-on-black elsewhere; on red it goes ink. */
+.cta-count,
+.cta-count span { color: rgba(0, 0, 0, 0.72) !important; }
+.cta-count { margin-top: 6px; }
+
+/* Success: the check pops with a spring curve, the line lands after it. */
+.cta-check {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 20px;
+  border-radius: 50%;
+  background: #000;
+  color: var(--red);
+  animation: ctaPop 520ms var(--ease-spring) both;
+}
+.cta-done .cta-line { animation: ctaRise 480ms var(--ease-out) 120ms both; }
+.cta-done .cta-note { animation: ctaRise 480ms var(--ease-out) 220ms both; }
+
+@keyframes ctaPop {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes ctaRise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ==================================================================== */
+/* FOOTER — the name returns at full width                              */
+/* ==================================================================== */
+
+.site-footer {
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  padding-top: clamp(60px, 10svh, 110px);
+  /* Written by the footer's rAF scroll listener: 0 arriving, 1 fully in. */
+  --fp: 1;
+}
+
+.foot-top {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.foot-tag { margin: 0; font-size: 14px; color: var(--text-secondary); }
+
+.foot-links {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.foot-links a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 6px 2px; /* comfortable tap targets */
+  transition: color 200ms linear;
+}
+.foot-links a:hover,
+.foot-links a:focus-visible { color: var(--text-primary); }
+.foot-links span { color: var(--text-muted); }
+
+.foot-legal { margin: 0 0 6px; font-size: 12.5px; color: var(--text-muted); }
+
+/* The monument returns: edge-to-edge type, rising its last 44px as the
+   footer scrolls in. Fitted to the word, MEASURED: "Jou3an" in Syne 800 at
+   -0.045em tracking is 5.864em wide (document.fonts.ready, WebKit), so
+   96vw / 5.864 = 16.37vw fills the width with a 2vw margin each side. The
+   first guess (26.4vw) was an estimate, and the word ran off the screen. */
+.foot-mark {
+  position: relative;
+  margin-top: clamp(28px, 5svh, 56px);
+  text-align: center;
+  line-height: 0.82;
+  transform: translate3d(0, calc((1 - var(--fp)) * 44px), 0);
+  will-change: transform;
+}
+
+.foot-ar {
+  display: block;
+  font-size: clamp(18px, 4.6vw, 44px);
+  color: var(--red);
+  margin-bottom: 1.2vw;
+}
+
+.foot-word {
+  display: block;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 16.37vw;
+  letter-spacing: -0.045em;
+  color: var(--text-primary);
+  white-space: nowrap;
+  transform: translateY(0.1em); /* feet cropped by the page edge, on purpose */
+}
+.foot-word b { color: var(--red); font-weight: 800; }
+
 /* -------------------------------------------------------------------- */
 /* Reduced motion — keep every composition, drop every journey            */
 /* -------------------------------------------------------------------- */
@@ -1301,6 +1648,17 @@
   .dev-sheen,
   .ps-dots i { animation: none; }
   .lift-layer { display: none; }
+
+  /* Lines arrive without travel; the form's flourishes become plain cuts. */
+  .feat-head,
+  .feat-text,
+  .feat-note,
+  .faq-row { transition: none; opacity: 1; transform: none; }
+  .cta-check,
+  .cta-done .cta-line,
+  .cta-done .cta-note { animation: none; }
+  .cta-underline { transition: none; }
+  .foot-mark { transform: none; }
 
   /* The wall holds still: composition kept, drift and tilt dropped. The
      collapse still TELLS its story stage by stage — cards leave and the three
