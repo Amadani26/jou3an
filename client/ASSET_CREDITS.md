@@ -39,15 +39,15 @@ committed.
 The OFL permits web embedding and commercial use. The Arabic wordmark جوعان
 renders in the system Arabic font (no Arabic webfont is shipped).
 
-## 3D
+## The device and all page graphics
 
-Everything in the WebGL scene is modelled in code from Three.js geometry
-primitives (a rounded slab and its glass ring), lit by generated lights and a
-generated RoomEnvironment — no downloaded models, no HDR files, no scanned
-assets, no Apple hardware likeness: the device is an original generic rounded
-slab, and its screen is live HTML in our own design language. There are no
-raster posters any more: every fallback (reduced motion, no WebGL, low-core
-devices) is the same DOM composition rendered statically.
+The hero device is pure CSS (gradient metal, inset-shadow bevel and rim, a
+sheen sweep) around a screen that is live HTML in our own design language —
+no WebGL, no downloaded models, no device-maker likeness. Every other visual
+on the page is CSS, inline SVG from lucide-react (ISC), or type. There are no
+raster posters: every fallback (reduced motion and otherwise) is the same DOM
+rendered statically, and the landing route is prerendered at build time from
+our own components.
 
 ## JavaScript dependencies added by the redesign
 
@@ -66,3 +66,11 @@ devices) is the same DOM composition rendered statically.
 - Google rating badges or third-party marks outside the live demo.
 - Stock from any source other than Pexels/Unsplash, marketplace 3D models,
   and any font not licensed for web embedding.
+
+## Known third-party content OUTSIDE this page (listed, not touched)
+
+The MOBILE app still ships `mobile/lib/placeholderImages.ts` — 10 hardcoded
+Unsplash food-photo URLs used as placeholders wherever a restaurant has no
+synced Places photos (DailyCard, ResultCard, the Swipe card, the detail
+sheet, and the Home screen's FALLBACK_PICKS). Out of scope for the web
+branch; tracked here so it is not forgotten.
