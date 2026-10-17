@@ -1,6 +1,12 @@
-import { useRef } from 'react'
-import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
-import { DISHES, type Dish } from '../../lib/dishes'
+import { useRef, useState } from 'react'
+import {
+  motion,
+  useMotionValueEvent,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+} from 'motion/react'
+import { DISHES, SURVIVOR_INDEXES, SURVIVOR_REASONS, type Dish } from '../../lib/dishes'
 
 /**
  * THE PROBLEM — a wall of appetite.
@@ -28,6 +34,48 @@ export type WallCard = {
   dish: Dish
   /** lg = photo poster, md = colour field, sm = compact line card. */
   size: 'lg' | 'md' | 'sm'
+}
+
+/**
+ * THE COLLAPSE tells the engine's real story: each elimination wave is one of
+ * the filters the app actually applies, in the order a brief narrows.
+ *
+ *   Budget     — out-of-bracket dishes dim and FALL
+ *   Nearby     — far neighbourhoods SWEEP out the side their row drifts
+ *   Your taste — what the profile would skip SHRINKS away in place
+ *
+ * then a red scan passes over what is left and exactly three rise forward.
+ * The flags are derived from the dish data itself (price bracket, area), so
+ * the story and the cards can never disagree.
+ */
+type Flag = 'keep' | 'budget' | 'nearby' | 'taste'
+type Stage = 'wall' | 'budget' | 'nearby' | 'taste' | 'scan' | 'resolved'
+
+const FAR_AREAS = new Set(['Deira', 'Mirdif', 'Barsha', 'Karama', 'Kite Beach'])
+const SURVIVORS = new Set<Dish>(SURVIVOR_INDEXES.map((i) => DISHES[i]))
+
+function flagFor(d: Dish): Flag {
+  if (SURVIVORS.has(d)) return 'keep'
+  const max = Number(d.price.match(/(\d+)\s*$/)?.[1] ?? 0)
+  if (max >= 80) return 'budget'
+  if (FAR_AREAS.has(d.area)) return 'nearby'
+  return 'taste'
+}
+
+const STAGE_LABEL: Partial<Record<Stage, string>> = {
+  budget: 'Budget',
+  nearby: 'Nearby',
+  taste: 'Your taste',
+  scan: 'Deciding',
+}
+
+function stageOf(p: number): Stage {
+  if (p < 0.26) return 'wall'
+  if (p < 0.42) return 'budget'
+  if (p < 0.56) return 'nearby'
+  if (p < 0.68) return 'taste'
+  if (p < 0.78) return 'scan'
+  return 'resolved'
 }
 
 /** Rows are authored, not random: each row mixes sizes so the wall reads as a
@@ -70,10 +118,13 @@ const ROWS: WallCard[][] = [
   ],
 ]
 
-function PosterCard({ card }: { card: WallCard }) {
+function PosterCard({ card, delay }: { card: WallCard; delay: number }) {
   const d = card.dish
   return (
-    <article className={`wcard wcard-${card.size}`}>
+    <article
+      className={`wcard wcard-${card.size} f-${flagFor(d)}`}
+      style={{ ['--wd' as string]: `${delay}ms` }}
+    >
       {card.size === 'lg' && d.photo ? (
         <img
           src={`/brand/dishes/${d.photo}.webp`}
@@ -103,10 +154,18 @@ function PosterCard({ card }: { card: WallCard }) {
 export default function ProblemWall() {
   const ref = useRef<HTMLElement | null>(null)
   const reduce = useReducedMotion()
+  const [stage, setStage] = useState<Stage>('wall')
 
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ['start start', 'end end'],
+  })
+
+  // Discrete stages, not a per-frame binding: the waves are choreography, and
+  // every transition below runs on the compositor from one class flip.
+  useMotionValueEvent(scrollYProgress, 'change', (p) => {
+    const next = stageOf(p)
+    setStage((prev) => (prev === next ? prev : next))
   })
 
   // The plane arrives: tilted away and sunk at the top of the section,
@@ -120,7 +179,7 @@ export default function ProblemWall() {
 
   return (
     <section ref={ref} className="wall-section">
-      <div className="wall-sticky">
+      <div className="wall-sticky" data-stage={stage}>
         <div className="wall-perspective">
           <motion.div
             className="wall-plane"
@@ -133,7 +192,7 @@ export default function ProblemWall() {
                   {[0, 1].map((dup) => (
                     <div key={dup} className="wall-set" aria-hidden={dup === 1}>
                       {row.map((card, i) => (
-                        <PosterCard key={`${r}-${dup}-${i}`} card={card} />
+                        <PosterCard key={`${r}-${dup}-${i}`} card={card} delay={(r * 5 + i) * 40} />
                       ))}
                     </div>
                   ))}
@@ -154,6 +213,43 @@ export default function ProblemWall() {
             Every one of them open, rated and plausible. That is the problem.
           </p>
         </motion.div>
+
+        {/* The filter being applied right now — the engine narrating itself. */}
+        {STAGE_LABEL[stage] ? (
+          <div key={stage} className="wall-wavechip" data-deciding={stage === 'scan' ? 'yes' : 'no'}>
+            {STAGE_LABEL[stage]}
+          </div>
+        ) : null}
+
+        {/* The scan: one red light passing over what survived. */}
+        <span aria-hidden="true" className="wall-scanline" />
+
+        {/* What the engine hands back. A separate layer so three cards can sit
+            centred at full size without fighting the marquee's layout. */}
+        <div className="wall-final" aria-hidden={stage !== 'resolved'}>
+          <h2 className="wall-line wall-line-final">Exactly 3 answers.</h2>
+          <div className="wall-final-cards">
+            {SURVIVOR_INDEXES.map((di, i) => {
+              const d = DISHES[di]
+              return (
+                <article key={di} className="fcard" style={{ ['--fd' as string]: `${i * 90}ms` }}>
+                  <span className="fcard-rank">{i + 1}</span>
+                  <div className="fcard-body">
+                    <h3 className="fcard-name">{d.dish}</h3>
+                    <p className="fcard-meta">
+                      {d.cuisine} · {d.area} · {d.price}
+                    </p>
+                    <span className="fcard-reason">{SURVIVOR_REASONS[i]}</span>
+                  </div>
+                  <span className="fcard-score">{d.score.toFixed(1)}</span>
+                </article>
+              )
+            })}
+          </div>
+          <p className="wall-sub wall-sub-final">
+            Chosen for where you are, what you feel like, and what you usually spend.
+          </p>
+        </div>
       </div>
     </section>
   )

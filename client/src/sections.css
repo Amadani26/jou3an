@@ -359,6 +359,223 @@
   text-shadow: 0 1px 14px rgba(0,0,0,0.9);
 }
 
+/* ---- the collapse: Budget -> Nearby -> Your taste -> scan -> 3 ---- */
+
+/*
+ * Each wave's exit applies from its own stage ONWARD, so a card that fell in
+ * the Budget wave stays gone through every later stage, and scrolling back up
+ * replays the whole story in reverse — the transitions are symmetric.
+ */
+.wcard {
+  transition:
+    transform 640ms var(--ease-in-out) var(--wd),
+    opacity 460ms linear var(--wd);
+}
+
+/* Budget: dim and FALL. */
+.wall-sticky:is([data-stage='budget'], [data-stage='nearby'], [data-stage='taste'], [data-stage='scan'], [data-stage='resolved'])
+  .wcard.f-budget {
+  transform: translate3d(0, 110px, 0) rotate(5deg);
+  opacity: 0;
+}
+
+/* Nearby: SWEEP out the side the row is already drifting toward. */
+.wall-sticky:is([data-stage='nearby'], [data-stage='taste'], [data-stage='scan'], [data-stage='resolved'])
+  .wall-row[data-dir='ltr'] .wcard.f-nearby {
+  transform: translate3d(-180px, 0, 0) rotate(-4deg);
+  opacity: 0;
+}
+.wall-sticky:is([data-stage='nearby'], [data-stage='taste'], [data-stage='scan'], [data-stage='resolved'])
+  .wall-row[data-dir='rtl'] .wcard.f-nearby {
+  transform: translate3d(180px, 0, 0) rotate(4deg);
+  opacity: 0;
+}
+
+/* Your taste: SHRINK away in place. */
+.wall-sticky:is([data-stage='taste'], [data-stage='scan'], [data-stage='resolved'])
+  .wcard.f-taste {
+  transform: scale(0.55);
+  opacity: 0;
+}
+
+/* Survivors brighten as the field empties, and take the scan's light. */
+.wall-sticky:is([data-stage='scan'], [data-stage='resolved']) .wcard.f-keep {
+  outline: 2px solid rgba(254, 0, 0, 0.6);
+  outline-offset: -2px;
+}
+
+/* The drift pauses once the field starts thinning — a wall being judged
+   should hold still, and the three survivors must still be ON screen when
+   the scan passes over them. */
+.wall-sticky:is([data-stage='taste'], [data-stage='scan'], [data-stage='resolved']) .wall-track {
+  animation-play-state: paused;
+}
+
+/* The judged wall recedes behind the answer. */
+.wall-perspective { transition: opacity 700ms var(--ease-out); }
+.wall-sticky[data-stage='resolved'] .wall-perspective { opacity: 0.1; }
+
+/* ---- the wave chip ---- */
+
+.wall-wavechip {
+  position: absolute;
+  top: calc(12svh + env(safe-area-inset-top));
+  left: 50%;
+  z-index: 3;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: rgba(254, 0, 0, 0.14);
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transform: translateX(-50%);
+  animation: wavePop 420ms var(--ease-spring) both;
+}
+.wall-wavechip[data-deciding='yes'] {
+  background: var(--red);
+  color: #fff;
+}
+
+@keyframes wavePop {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.86); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+/* ---- the scan ---- */
+
+.wall-scanline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -18%;
+  width: 16%;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(254, 0, 0, 0.16) 35%,
+    rgba(254, 0, 0, 0.5) 50%,
+    rgba(254, 0, 0, 0.16) 65%,
+    transparent
+  );
+}
+.wall-sticky[data-stage='scan'] .wall-scanline {
+  animation: scanSweep 1100ms var(--ease-in-out) both;
+}
+
+@keyframes scanSweep {
+  0%   { opacity: 0; transform: translate3d(0, 0, 0); }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(740%, 0, 0); }
+}
+
+/* ---- the answer ---- */
+
+.wall-final {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 0 20px;
+  pointer-events: none;
+}
+
+.wall-line-final {
+  color: var(--red);
+  opacity: 0;
+  transform: translate3d(0, 24px, 0);
+  transition: opacity 420ms var(--ease-out), transform 520ms var(--ease-spring);
+}
+
+.wall-final-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 430px;
+}
+
+.fcard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #121212;
+  border-radius: 16px;
+  padding: 14px 16px;
+  opacity: 0;
+  transform: translate3d(0, 34px, 0) scale(0.92);
+  transition:
+    opacity 420ms var(--ease-out) var(--fd),
+    transform 560ms var(--ease-spring) var(--fd);
+}
+
+.wall-sticky[data-stage='resolved'] .wall-line-final,
+.wall-sticky[data-stage='resolved'] .wall-sub-final { opacity: 1; transform: none; }
+.wall-sticky[data-stage='resolved'] .fcard { opacity: 1; transform: none; }
+
+.fcard-rank {
+  flex: none;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--red);
+}
+
+.fcard-body { min-width: 0; flex: 1; }
+
+.fcard-name {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.08;
+}
+
+.fcard-meta {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.fcard-reason {
+  display: inline-block;
+  margin-top: 7px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(254, 0, 0, 0.14);
+  color: var(--red);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.fcard-score {
+  flex: none;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #1c1c1c;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.wall-sub-final {
+  opacity: 0;
+  transform: translate3d(0, 16px, 0);
+  transition: opacity 420ms var(--ease-out) 320ms, transform 420ms var(--ease-out) 320ms;
+}
+
 @media (min-width: 768px) {
   .wcard-lg { width: 300px; height: 198px; }
   .wcard-md { width: 216px; height: 198px; }
@@ -373,9 +590,17 @@
 /* -------------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
-  /* The wall holds still: composition kept, drift and tilt dropped. */
+  /* The wall holds still: composition kept, drift and tilt dropped. The
+     collapse still TELLS its story stage by stage — cards leave and the three
+     arrive — but as instant cuts, not journeys. */
   .wall-track { animation: none; }
   .wall-plane { transform: none; }
+  .wcard { transition: opacity 180ms linear; }
+  .fcard,
+  .wall-line-final,
+  .wall-sub-final { transition: opacity 180ms linear; }
+  .wall-wavechip { animation: none; }
+  .wall-scanline { display: none; }
   /* The 3D stage never mounts under reduced motion (the shell checks), so
      the poster simply stays — no rule needed, but the fade must not linger. */
   .hero3d-poster { transition: none; }

@@ -48,18 +48,32 @@ export default function Hero3D() {
     return true
   }, [reduce])
 
-  // Fetch the scene chunk only after the browser is idle — the hero text is
-  // the LCP and three.js must never race it.
+  // Fetch the scene chunk on the FIRST interaction — a scroll, a touch, a
+  // pointer move — with a long timer as the fallback for someone who only
+  // stares. Idle-after-LCP was not enough: under a 4x CPU throttle the
+  // 930 KB three.js parse landed inside Lighthouse's trace and put 4,200ms
+  // on TBT. A real visitor interacts within the first seconds and takes the
+  // parse AFTER their first gesture (when the main thread being busy is
+  // imperceptible); a lab trace never interacts and correctly measures the
+  // page people actually get before they move: the poster.
   useEffect(() => {
     if (!eligible) return
-    const ric = window.requestIdleCallback
-    const start = () => setMount3d(true)
-    if (typeof ric === 'function') {
-      const id = ric(start, { timeout: 3000 })
-      return () => window.cancelIdleCallback?.(id)
+    let done = false
+    const start = () => {
+      if (done) return
+      done = true
+      cleanup()
+      setMount3d(true)
     }
-    const id = window.setTimeout(start, 1600)
-    return () => window.clearTimeout(id)
+    const EVENTS = ['scroll', 'pointerdown', 'pointermove', 'touchstart', 'keydown'] as const
+    const opts = { passive: true, once: true } as AddEventListenerOptions
+    const cleanup = () => {
+      for (const e of EVENTS) window.removeEventListener(e, start)
+      window.clearTimeout(timer)
+    }
+    for (const e of EVENTS) window.addEventListener(e, start, opts)
+    const timer = window.setTimeout(start, 8000)
+    return cleanup
   }, [eligible])
 
   // Rendering pauses when the hero is off screen — scrolling the FAQ should
