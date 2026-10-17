@@ -191,7 +191,7 @@ export default function DecideAct() {
         </div>
 
         <p className="act-sub">
-          Decided, saved, and on your way. The whole thing took three taps.
+          Three taps, start to table.
         </p>
       </div>
     </section>

@@ -810,11 +810,12 @@
     opacity 460ms linear var(--wd);
 }
 
-/* Budget: dim and FALL. */
+/* Spend: DIM AND DROP BACK — not removed. In the engine spend is a soft
+   score, never a filter, so the wall shows these receding, still there. */
 .wall-sticky:is([data-stage='budget'], [data-stage='nearby'], [data-stage='taste'], [data-stage='scan'], [data-stage='resolved'])
   .wcard.f-budget {
-  transform: translate3d(0, 110px, 0) rotate(5deg);
-  opacity: 0;
+  transform: translate3d(0, 16px, 0) scale(0.95);
+  opacity: 0.16;
 }
 
 /* Nearby: SWEEP out the side the row is already drifting toward. */
@@ -1539,19 +1540,16 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
 }
 
 /* ==================================================================== */
-/* FEATURES — five lines of display type, mask reveals                 */
+/* FEATURES — the vignette rail                                         */
 /* ==================================================================== */
 
 .feat-section {
-  padding: clamp(90px, 15svh, 160px) 20px;
-  max-width: 980px;
+  padding: clamp(90px, 15svh, 160px) 0;
+  max-width: 1100px;
   margin: 0 auto;
 }
 
-.feat-head[data-shown='no'] { opacity: 0; transform: translate3d(0, 20px, 0); }
-.feat-head {
-  transition: opacity 600ms var(--ease-out), transform 600ms var(--ease-out);
-}
+.feat-head { padding: 0 20px; }
 
 .feat-title {
   margin: 0;
@@ -1565,67 +1563,284 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
 }
 
 .feat-lede {
-  margin: 18px 0 0;
-  max-width: 56ch;
-  font-size: 17px;
-  line-height: 1.6;
+  margin: 12px 0 0;
+  font-size: 18px;
   font-weight: 600;
-  color: #fff;
+  color: var(--red);
 }
 
-.feat-list {
-  margin: clamp(44px, 7svh, 72px) 0 0;
-  padding: 0;
-  list-style: none;
+/* The rail: swipeable snap row with a peeking next card on phones; a grid
+   from 900px up. Scrollbar hidden but scrolling untouched. */
+.feat-rail {
   display: flex;
-  flex-direction: column;
-  gap: clamp(26px, 4.5svh, 44px);
+  gap: 12px;
+  margin-top: clamp(30px, 5svh, 48px);
+  padding: 0 20px 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.feat-rail::-webkit-scrollbar { display: none; }
+
+.feat-card {
+  flex: 0 0 76%;
+  max-width: 330px;
+  scroll-snap-align: center;
+  background: #111111;
+  border-radius: 18px;
+  padding: 14px 14px 16px;
 }
 
-.feat-line { min-width: 0; }
+@media (min-width: 900px) {
+  .feat-rail {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: visible;
+    padding-bottom: 0;
+  }
+  .feat-card { max-width: none; }
+}
 
-/* The mask: the line slides up from under its own baseline. */
-.feat-mask { display: block; overflow: hidden; }
-.feat-text {
-  display: block;
+.feat-label {
+  margin: 12px 0 0;
   font-family: 'Syne', system-ui, sans-serif;
   font-weight: 800;
-  font-size: min(8.6vw, 58px);
-  line-height: 1.04;
-  letter-spacing: -0.035em;
+  font-size: 17px;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
-  transform: translate3d(0, 110%, 0);
-  transition: transform 640ms var(--ease-out);
-  will-change: transform;
 }
-.feat-line[data-shown='yes'] .feat-text { transform: translate3d(0, 0, 0); }
 
-.feat-accent { font-style: normal; color: var(--red); }
+.feat-caption {
+  margin: clamp(22px, 4svh, 34px) 20px 0;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
 
-.feat-note {
+/* ---- the vignette stages ---- */
+/* Every loop's 0% frame is a complete scene: the reduced-motion still. All
+   animations gate on the section's data-play, so off-screen costs nothing. */
+
+.vig-stage {
+  position: relative;
+  height: 150px;
+  border-radius: 12px;
+  background: #0b0b0b;
+  overflow: hidden;
+}
+
+.feat-section[data-play='no'] .vig-stage *,
+.feat-section[data-play='no'] .vig-stage *::after {
+  animation-play-state: paused;
+}
+
+/* V1 — tell it your vibe: ring taps the chip, chip lights, dots think. */
+.vg-chip {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  padding: 11px 13px;
+  background: #161616;
+  border: 1px solid #242424;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.vg-chip-1 { top: 16px; animation: vgChipOn 4.4s infinite; }
+.vg-chip-2 { top: 62px; opacity: 0.55; }
+
+@keyframes vgChipOn {
+  0%, 18%  { background: #161616; border-color: #242424; }
+  28%, 72% { background: rgba(254, 0, 0, 0.15); border-color: var(--red); }
+  82%, 100% { background: #161616; border-color: #242424; }
+}
+
+.vg-ring {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  opacity: 0;
+  animation: vgTap 4.4s infinite;
+}
+@keyframes vgTap {
+  0%, 14%  { opacity: 0; transform: scale(1.6); }
+  22%      { opacity: 1; transform: scale(1); }
+  30%, 100% { opacity: 0; transform: scale(0.7); }
+}
+
+.vg-dots {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+}
+.vg-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  opacity: 0.25;
+  animation: vgDot 4.4s infinite;
+}
+.vg-dots i:nth-child(2) { animation-delay: 140ms; }
+.vg-dots i:nth-child(3) { animation-delay: 280ms; }
+@keyframes vgDot {
+  0%, 30%   { opacity: 0.25; transform: none; }
+  40%       { opacity: 1; transform: translateY(-4px); }
+  52%, 100% { opacity: 0.25; transform: none; }
+}
+
+/* V2 — exactly 3: rows land staggered, rest, leave. */
+.vg-row {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #151515;
+  border-radius: 10px;
+}
+.vg-row b {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--red);
+}
+.vg-line {
+  flex: 1;
+  height: 7px;
+  border-radius: 4px;
+  background: #2b2b2b;
+}
+.vg-row em {
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--red);
+  background: rgba(254, 0, 0, 0.13);
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.vig-three .vg-row-1 { top: 14px; }
+.vig-three .vg-row-2 { top: 60px; }
+.vig-three .vg-row-3 { top: 106px; }
+.vig-three .vg-row { animation: vgLand 4.6s infinite both; }
+.vig-three .vg-row-2 { animation-delay: 120ms; }
+.vig-three .vg-row-3 { animation-delay: 240ms; }
+@keyframes vgLand {
+  0%        { opacity: 1; transform: none; }
+  74%, 82%  { opacity: 1; transform: none; }
+  90%       { opacity: 0; transform: translateY(10px); }
+  92%       { opacity: 0; transform: translateY(14px); }
+  100%      { opacity: 1; transform: none; }
+}
+
+/* V3 — swipe to teach: the card slides off right; a taste note pops. */
+.vg-deckcard {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  width: 110px;
+  height: 104px;
+  margin-left: -55px;
+  border-radius: 12px;
+  background: #171717;
+  border: 1px solid #262626;
+}
+.vg-under { transform: scale(0.92) translateY(6px); opacity: 0.6; }
+.vg-mover {
+  padding: 8px;
+  animation: vgSwipe 4.2s var(--ease-in-out) infinite;
+}
+.vg-photo {
+  display: block;
+  height: 58px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3a2a20, #24180f);
+}
+.vg-bar {
   display: block;
   margin-top: 8px;
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--text-secondary);
-  opacity: 0;
-  transform: translate3d(0, 10px, 0);
-  transition: opacity 480ms var(--ease-out), transform 480ms var(--ease-out);
+  height: 7px;
+  width: 70%;
+  border-radius: 4px;
+  background: #2b2b2b;
 }
-.feat-line[data-shown='yes'] .feat-note { opacity: 1; transform: none; }
+@keyframes vgSwipe {
+  0%, 30%   { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+  55%, 70%  { transform: translate3d(90px, -8px, 0) rotate(10deg); opacity: 0; }
+  71%       { transform: translate3d(0, 10px, 0) scale(0.95); opacity: 0; }
+  85%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+}
+.vg-learn {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--red);
+  background: rgba(254, 0, 0, 0.13);
+  padding: 4px 10px;
+  border-radius: 999px;
+  opacity: 0;
+  animation: vgLearn 4.2s infinite;
+}
+@keyframes vgLearn {
+  0%, 48%   { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  58%, 80%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+  92%, 100% { opacity: 0; transform: translateX(-50%) translateY(6px); }
+}
+
+/* V4 — Daily Top 3: the list refreshes. No freshness claim in copy. */
+.vg-date {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+.vig-daily .vg-drow-1 { top: 34px; }
+.vig-daily .vg-drow-2 { top: 76px; }
+.vig-daily .vg-drow-3 { top: 118px; }
+.vig-daily .vg-drow { padding: 8px 12px; animation: vgRefresh 5s infinite both; }
+.vig-daily .vg-drow-2 { animation-delay: 110ms; }
+.vig-daily .vg-drow-3 { animation-delay: 220ms; }
+@keyframes vgRefresh {
+  0%, 68%   { opacity: 1; transform: none; }
+  76%       { opacity: 0; transform: translateX(-12px); }
+  78%       { opacity: 0; transform: translateX(12px); }
+  86%, 100% { opacity: 1; transform: none; }
+}
 
 /* ==================================================================== */
-/* FAQ — large questions, answers always open                           */
+/* FAQ — compact accordion                                              */
 /* ==================================================================== */
 
 .faq-section {
   padding: clamp(80px, 13svh, 150px) 20px;
-  max-width: 1020px;
+  max-width: 760px;
   margin: 0 auto;
 }
 
 .faq-title {
-  margin: 0 0 clamp(36px, 6svh, 64px);
+  margin: 0 0 clamp(26px, 4svh, 40px);
   font-family: 'Syne', system-ui, sans-serif;
   font-weight: 800;
   font-size: min(9.4vw, 48px);
@@ -1633,45 +1848,54 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
   color: var(--text-primary);
 }
 
-.faq-rows {
+.faq-item {
+  background: #101010;
+  border-radius: 14px;
+  margin-bottom: 8px;
+}
+.faq-item[data-open='yes'] { background: #141414; }
+
+.faq-btn {
   display: flex;
-  flex-direction: column;
-  gap: clamp(34px, 6svh, 64px);
-}
-
-.faq-row {
-  opacity: 0;
-  transform: translate3d(0, 18px, 0);
-  transition: opacity 540ms var(--ease-out), transform 540ms var(--ease-out);
-}
-.faq-row[data-shown='yes'] { opacity: 1; transform: none; }
-
-.faq-q {
-  margin: 0;
-  font-family: 'Syne', system-ui, sans-serif;
-  font-weight: 800;
-  font-size: min(6.6vw, 30px);
-  line-height: 1.12;
-  letter-spacing: -0.03em;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 56px;
+  padding: 15px 18px;
+  background: none;
+  border: none;
   color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16.5px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
 }
-
-.faq-a {
-  margin: 10px 0 0;
-  max-width: 58ch;
-  font-size: 16px;
-  line-height: 1.6;
+.faq-btn svg {
+  flex: none;
   color: var(--text-secondary);
+  transition: transform 280ms var(--ease-out);
+}
+.faq-item[data-open='yes'] .faq-btn svg {
+  transform: rotate(45deg);
+  color: var(--red);
 }
 
-@media (min-width: 900px) {
-  .faq-row {
-    display: grid;
-    grid-template-columns: 5fr 6fr;
-    gap: 40px;
-    align-items: start;
-  }
-  .faq-a { margin-top: 6px; }
+/* Height without measuring: 0fr -> 1fr. */
+.faq-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 320ms var(--ease-in-out);
+}
+.faq-item[data-open='yes'] .faq-fold { grid-template-rows: 1fr; }
+.faq-fold-in { overflow: hidden; }
+.faq-fold-in p {
+  margin: 0;
+  padding: 0 18px 16px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-secondary);
 }
 
 /* ==================================================================== */
@@ -1922,11 +2146,11 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
   html.js .act-section .story-cardlayer { opacity: 0; }
   html.js .act-section .story-chip { opacity: 1; transform: none; }
 
-  /* Lines arrive without travel; the form's flourishes become plain cuts. */
-  .feat-head,
-  .feat-text,
-  .feat-note,
-  .faq-row { transition: none; opacity: 1; transform: none; }
+  /* Vignettes hold their complete 0% frame; the accordion cuts instantly. */
+  .vig-stage *,
+  .vig-stage *::after { animation: none; }
+  .faq-fold,
+  .faq-btn svg { transition: none; }
   .cta-check,
   .cta-done .cta-line,
   .cta-done .cta-note { animation: none; }

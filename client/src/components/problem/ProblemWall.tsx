@@ -40,7 +40,9 @@ export type WallCard = {
  * THE COLLAPSE tells the engine's real story: each elimination wave is one of
  * the filters the app actually applies, in the order a brief narrows.
  *
- *   Budget     — out-of-bracket dishes dim and FALL
+ *   Spend      — out-of-bracket dishes DIM AND DROP BACK, not away: in the
+ *                engine spend is a soft score, never a filter, so the wall
+ *                must not show it removing anything (review ruling)
  *   Nearby     — far neighbourhoods SWEEP out the side their row drifts
  *   Your taste — what the profile would skip SHRINKS away in place
  *
@@ -63,7 +65,7 @@ function flagFor(d: Dish): Flag {
 }
 
 const STAGE_LABEL: Partial<Record<Stage, string>> = {
-  budget: 'Budget',
+  budget: 'Spend',
   nearby: 'Nearby',
   taste: 'Your taste',
   scan: 'Deciding',
@@ -248,7 +250,7 @@ export default function ProblemWall() {
         >
           <h2 className="wall-line">Too many options.</h2>
           <p className="wall-sub">
-            Every one of them open, rated and plausible. That is the problem.
+            All of them open. All of them plausible.
           </p>
         </motion.div>
 
@@ -285,7 +287,7 @@ export default function ProblemWall() {
             })}
           </div>
           <p className="wall-sub wall-sub-final">
-            Chosen for where you are, what you feel like, and what you usually spend.
+            Where you are. What you feel like. What you spend.
           </p>
         </div>
       </div>

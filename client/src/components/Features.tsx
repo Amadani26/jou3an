@@ -1,87 +1,123 @@
-import { useReveal } from '../lib/reveal'
+import { useEffect, useRef, useState } from 'react'
 
 /**
- * FEATURES — what the app does, as five lines of display type.
+ * FEATURES — show, don't tell.
  *
- * No icon tiles, no cards: each capability is one large line that reveals
- * through a MASK (overflow-hidden parent, the line slides up from below its
- * own baseline) with a short stagger — the signature move here. The reveal
- * uses the page's existing IntersectionObserver hook, which fires ONCE and
- * disconnects, so the sequence plays once by construction. No motion library
- * — this section rides in the entry chunk at near-zero cost.
+ * Four cards, each a looping LIVE HTML VIGNETTE of the feature — a mood chip
+ * being tapped, exactly-3 results landing, a swipe teaching taste, the Daily
+ * Top 3 refreshing — with a 3–5 word label. A swipeable snap rail with a
+ * peeking next card on iPhone; a grid on desktop.
  *
- * The copy carries the claims of the three sections it replaces (How It
- * Works, The 3 Rule, the old feature grid): the brief, the hard 3-answer
- * rule, swipe-to-teach, the Daily Top 3, and no-menus-no-scrolling. Nothing
- * new is claimed; the 10-15-minutes problem line lives in the intro.
+ * The vignettes are pure CSS keyframe loops, all driven by one section-level
+ * IntersectionObserver that flips data-play — they run only while the
+ * section is on screen, and the tab being hidden pauses them for free
+ * (CSS animations stop in background tabs). Reduced motion kills the
+ * animations, and every loop's 0% frame is designed to read as a complete
+ * static scene, so the still is the fallback.
+ *
+ * Copy per the approved cut: one headline, one line, four labels, one
+ * caption. "Daily Top 3" carries no freshness claim (ruling).
  */
 
-const LINES = [
-  { text: 'Tell it your vibe.', note: 'Area, cuisine, budget, dine-in or delivery.' },
-  { text: 'Get exactly 3 answers.', accent: '3', note: 'Never a list. Never a feed. Three, ranked, with reasons.' },
-  { text: 'Swipe to teach it.', note: 'Every swipe tunes your taste profile.' },
-  { text: 'A fresh Daily Top 3.', note: 'What Dubai is eating right now, every day.' },
-  { text: 'No menus. No scrolling.', note: 'Directions, call, or order — straight from the card.' },
-]
+const VIGNETTES = [
+  { key: 'vibe', label: 'Tell it your vibe' },
+  { key: 'three', label: 'Exactly 3, with reasons' },
+  { key: 'swipe', label: 'Swipe to teach it' },
+  { key: 'daily', label: 'Daily Top 3' },
+] as const
 
-function FeatureLine({
-  text,
-  accent,
-  note,
-  index,
-}: {
-  text: string
-  accent?: string
-  note: string
-  index: number
-}) {
-  const { ref, shown } = useReveal<HTMLLIElement>()
-  const parts = accent ? text.split(accent) : null
-
-  return (
-    <li ref={ref} className="feat-line" data-shown={shown ? 'yes' : 'no'}>
-      <span className="feat-mask">
-        <span className="feat-text" style={{ transitionDelay: `${index * 70}ms` }}>
-          {parts ? (
-            <>
-              {parts[0]}
-              <em className="feat-accent">{accent}</em>
-              {parts[1]}
-            </>
-          ) : (
-            text
-          )}
-        </span>
-      </span>
-      <span className="feat-note" style={{ transitionDelay: `${index * 70 + 160}ms` }}>
-        {note}
-      </span>
-    </li>
-  )
+function Vignette({ kind }: { kind: string }) {
+  switch (kind) {
+    case 'vibe':
+      return (
+        <div className="vig-stage vig-vibe" aria-hidden="true">
+          <span className="vg-chip vg-chip-1">
+            Quick and cheap
+            <i className="vg-ring" />
+          </span>
+          <span className="vg-chip vg-chip-2">Date night</span>
+          <span className="vg-dots">
+            <i />
+            <i />
+            <i />
+          </span>
+        </div>
+      )
+    case 'three':
+      return (
+        <div className="vig-stage vig-three" aria-hidden="true">
+          {[1, 2, 3].map((n) => (
+            <span key={n} className={`vg-row vg-row-${n}`}>
+              <b>{n}</b>
+              <span className="vg-line" />
+              {n === 1 ? <em>Close to you</em> : null}
+            </span>
+          ))}
+        </div>
+      )
+    case 'swipe':
+      return (
+        <div className="vig-stage vig-swipe" aria-hidden="true">
+          <span className="vg-deckcard vg-under" />
+          <span className="vg-deckcard vg-mover">
+            <span className="vg-photo" />
+            <span className="vg-bar" />
+          </span>
+          <em className="vg-learn">Taste noted</em>
+        </div>
+      )
+    case 'daily':
+      return (
+        <div className="vig-stage vig-daily" aria-hidden="true">
+          <span className="vg-date">Today</span>
+          {[1, 2, 3].map((n) => (
+            <span key={n} className={`vg-row vg-drow vg-drow-${n}`}>
+              <b>{n}</b>
+              <span className="vg-line" />
+            </span>
+          ))}
+        </div>
+      )
+    default:
+      return null
+  }
 }
 
 export default function Features() {
-  const { ref, shown } = useReveal<HTMLDivElement>()
+  const ref = useRef<HTMLElement | null>(null)
+  const [play, setPlay] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setPlay(true)
+      return
+    }
+    const io = new IntersectionObserver(
+      (e) => setPlay(e[0]?.isIntersecting ?? false),
+      { rootMargin: '10% 0px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
 
   return (
-    <section className="feat-section">
-      <div ref={ref} className="feat-head" data-shown={shown ? 'yes' : 'no'}>
-        <h2 className="feat-title">
-          You already know you&apos;re hungry.
-        </h2>
-        <p className="feat-lede">
-          What you don&apos;t know is where. Ten, fifteen minutes of
-          tab-switching in a city with thousands of restaurants, and you end up
-          where you went last week. Jou3an is the layer that ends it — a
-          decision in under 10 seconds, not a list to browse.
-        </p>
+    <section ref={ref} className="feat-section" data-play={play ? 'yes' : 'no'}>
+      <div className="feat-head">
+        <h2 className="feat-title">You already know you&apos;re hungry.</h2>
+        <p className="feat-lede">Jou3an knows where.</p>
       </div>
 
-      <ul className="feat-list">
-        {LINES.map((l, i) => (
-          <FeatureLine key={l.text} {...l} index={i} />
+      <div className="feat-rail" role="list">
+        {VIGNETTES.map((v) => (
+          <article key={v.key} className="feat-card" role="listitem">
+            <Vignette kind={v.key} />
+            <h3 className="feat-label">{v.label}</h3>
+          </article>
         ))}
-      </ul>
+      </div>
+
+      <p className="feat-caption">No menus. No scrolling.</p>
     </section>
   )
 }

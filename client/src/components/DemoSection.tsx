@@ -97,8 +97,7 @@ export default function DemoSection() {
       <div className="demo-head">
         <h2 className="demo-title">Try it. Tap a mood.</h2>
         <p className="demo-sub">
-          Sample dishes, the real idea: one tap in, exactly 3 out. Swipe the
-          cards away when you&apos;re done with them.
+          One tap in. Exactly 3 out.
         </p>
       </div>
 

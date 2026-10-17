@@ -1,67 +1,71 @@
-import { useReveal } from '../lib/reveal'
+import { useState } from 'react'
+import { Plus } from 'lucide-react'
 
 /**
- * FAQ — large questions, answers ALWAYS OPEN.
+ * FAQ — a compact accordion. One open at a time; height animated with the
+ * grid-template-rows 0fr -> 1fr trick, so nothing needs measuring; rows are
+ * full-width 56px+ tap targets; the plus rotates into a close. Reduced
+ * motion: instant open/close (transitions off in CSS).
  *
- * No accordion anywhere: on a phone every answer is readable without a tap
- * (tapping six chevrons to read six sentences is work the page was asking the
- * visitor to do for it), and on desktop each pair is a two-column row —
- * question left at display size, answer right at text size — with a subtle
- * once-only rise as it enters. The question column reads as an index.
- *
- * Copy unchanged from the accordion it replaces.
+ * Answers shortened to 1–2 sentences per the approved copy cut — meaning
+ * unchanged, including the ruling on pricing ("free" with no forever-claim).
  */
 
 const FAQS = [
   {
     q: 'What is Jou3an?',
-    a: 'A food decision engine for Dubai. Tell it your area and what you feel like, and it returns exactly three places to eat — not a list of five hundred. It is the decision layer, not another directory.',
+    a: 'A decision engine, not a directory. Tell it your area and mood; it returns exactly three places.',
   },
   {
     q: 'When does it launch?',
-    a: 'We are in private testing now and rolling out to the waitlist in batches. Join and you will hear from us the day your invite is ready.',
+    a: "We're in private testing, inviting the waitlist in batches. You'll hear the day your invite is ready.",
   },
   {
     q: 'Which cities?',
-    a: 'Dubai first, and properly — every restaurant verified, mapped and rated before it enters the engine. Other Gulf cities follow once Dubai is covered end to end.',
+    a: 'Dubai first — every restaurant verified before it enters the engine. Other Gulf cities follow.',
   },
   {
     q: 'Is it free?',
-    a: 'Yes. Deciding is free and stays free. A Pro tier will add extras later, but the core three picks are never behind a paywall.',
+    a: 'Deciding is free. A Pro tier adds extras later.',
   },
   {
     q: 'Is this another delivery app?',
-    a: 'No. We do not deliver, we decide. Once you have your three, you tap through to directions, a phone call, or whichever delivery app you already use.',
+    a: "No — we decide, we don't deliver. Your three link out to directions, a call, or your delivery app.",
   },
   {
     q: 'What do waitlist members get?',
-    a: 'First access before public launch, a say in which areas and cuisines we cover next, and founding-member status on anything paid we ship later.',
+    a: 'First access, a say in what we cover next, and founding-member status on anything paid.',
   },
 ]
 
-function Row({ q, a, index }: { q: string; a: string; index: number }) {
-  const { ref, shown } = useReveal<HTMLDivElement>()
-  return (
-    <div
-      ref={ref}
-      className="faq-row"
-      data-shown={shown ? 'yes' : 'no'}
-      style={{ transitionDelay: `${(index % 3) * 60}ms` }}
-    >
-      <h3 className="faq-q">{q}</h3>
-      <p className="faq-a">{a}</p>
-    </div>
-  )
-}
-
 export default function FAQ() {
+  const [open, setOpen] = useState(0)
+
   return (
     <section className="faq-section" id="faq">
       <h2 className="faq-title">Questions, answered.</h2>
-      <div className="faq-rows">
-        {FAQS.map((f, i) => (
-          <Row key={f.q} q={f.q} a={f.a} index={i} />
-        ))}
+      <div className="faq-acc">
+        {FAQS.map((f, i) => {
+          const isOpen = open === i
+          return (
+            <div key={f.q} className="faq-item" data-open={isOpen ? 'yes' : 'no'}>
+              <button
+                type="button"
+                className="faq-btn"
+                aria-expanded={isOpen}
+                onClick={() => setOpen(isOpen ? -1 : i)}
+              >
+                <span>{f.q}</span>
+                <Plus size={18} strokeWidth={2.2} aria-hidden="true" />
+              </button>
+              <div className="faq-fold">
+                <div className="faq-fold-in">
+                  <p>{f.a}</p>
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </section>
   )
