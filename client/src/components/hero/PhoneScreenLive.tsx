@@ -38,9 +38,16 @@ const CHIPS = ['Quick and cheap', 'Date night', 'Comfort food']
 
 export default function PhoneScreenLive({
   onPhase,
+  paused = false,
 }: {
-  /** Fired on every phase change — the hero syncs its card pop to this. */
+  /** Fired on every phase change — the hero syncs its payoff to this. */
   onPhase?: (phase: Phase) => void
+  /**
+   * Externally HOLD the current phase (the hero pauses the loop at `results`
+   * while the payoff cards are out). Unlike the visibility pause, resuming
+   * continues from the held phase rather than restarting the story.
+   */
+  paused?: boolean
 }) {
   const reduce = useReducedMotion()
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -49,13 +56,13 @@ export default function PhoneScreenLive({
 
   // One timeout at a time — the whole machine.
   useEffect(() => {
-    if (reduce || !running) return
+    if (reduce || !running || paused) return
     const id = window.setTimeout(
       () => setStep((s) => (s + 1) % SEQUENCE.length),
       SEQUENCE[step][1],
     )
     return () => window.clearTimeout(id)
-  }, [step, running, reduce])
+  }, [step, running, paused, reduce])
 
   // Off screen or tab hidden: stop burning timers; restart from the top when
   // back, so the viewer always catches the story from its beginning.

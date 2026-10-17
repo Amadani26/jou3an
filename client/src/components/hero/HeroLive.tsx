@@ -17,44 +17,60 @@ import { prefersReducedMotion } from '../../lib/reveal'
  * LCP, so it pays for every byte. The below-the-fold sections load motion in
  * their own lazy chunks, where it costs the first paint nothing.
  *
- * THE CARDS ARE THE LOOP'S PAYOFF, and they live BEHIND the device — the
- * lift layer stacks under the phone, so no geometry can ever put a card over
- * the glass. The first build floated them in front, and the scroll ratchet
- * could strand a half-lifted card on top of the screen's story; both are
- * impossible now by construction.
+ * THE PAYOFF: the screen plays its story uncovered — nothing sits over the
+ * glass while the loop runs. When it reaches the 3 results, the phone EASES
+ * BACK (a small scale-down and rise) and the three cards lift OUT of the
+ * screen toward the viewer — in front of the device now, spring, 60ms
+ * stagger — and settle in clear view: fanned beside the phone on desktop,
+ * stacked over its lower half on phone widths. Overlap is fine here: the
+ * screen's story is finished, and the loop is PAUSED while the cards are
+ * out. Desktop retracts them after a few seconds and lets the loop replay;
+ * iPhone keeps them out (no auto-replay) and hands off to the scroll as
+ * before — the latch and the --lift fan drift are unchanged, play-once.
  *
- *   - Desktop: when the screen's loop reaches its 3 results, the three cards
- *     spring out from behind the glass and settle BESIDE the phone (60ms
- *     stagger); when the loop restarts they ease back in behind it. It reads
- *     as "the app just produced these".
- *   - iPhone widths: no room beside and none below (the device fills the
- *     stage), so the cards stay out of the hero entirely until the SCROLL
- *     HANDOFF — then they slide out from behind the device as the hero
- *     leaves. Never over the glass at any width.
- *
- * The scroll handoff is unchanged in spirit: one rAF listener writes --lift
- * (a ratchet, play-once) and LATCHES the cards visible permanently, so the
- * loop can no longer retract them once the story has moved on.
- *
- * Reduced motion: static device on its selected screen; cards shown settled
- * beside the phone on desktop, absent on phone widths (no overlap anywhere);
- * no listeners, no timers.
+ * Reduced motion: the static final state — phone eased back, three cards in
+ * front, no listeners, no timers.
  */
 
 const LIFT_START = 0.03
 const LIFT_SPAN = 0.47
+/** Desktop keeps the payoff on screen this long before replaying the loop. */
+const DESKTOP_HOLD_MS = 3600
+const RETRACT_MS = 550
 
 export default function HeroLive() {
   const ref = useRef<HTMLElement | null>(null)
   const liftLayerRef = useRef<HTMLDivElement | null>(null)
-  // The loop's payoff state: true while the screen is showing its 3 results.
-  const [popped, setPopped] = useState(false)
-  // The scroll latch: once true, the cards stay out forever (play-once).
+  // The payoff: cards out in front, loop held. The scroll latch keeps them
+  // out forever (play-once); desktop otherwise retracts and replays.
+  const [out, setOut] = useState(false)
+  const [paused, setPaused] = useState(false)
   const [latched, setLatched] = useState(false)
   const latchedRef = useRef(false)
+  const timersRef = useRef<number[]>([])
 
   const onPhase = useCallback((phase: Phase) => {
-    setPopped(phase === 'results' || phase === 'select' || phase === 'hold')
+    if (phase !== 'results') return
+    setOut(true)
+    setPaused(true)
+    // Desktop replays; a phone keeps the payoff (and the scroll latch makes
+    // that permanent anyway the moment the visitor moves).
+    const desktop = window.matchMedia('(min-width: 768px)').matches
+    if (desktop) {
+      timersRef.current.push(
+        window.setTimeout(() => {
+          if (latchedRef.current) return // scroll won: stay out
+          setOut(false)
+          timersRef.current.push(
+            window.setTimeout(() => setPaused(false), RETRACT_MS),
+          )
+        }, DESKTOP_HOLD_MS),
+      )
+    }
+  }, [])
+
+  useEffect(() => () => {
+    for (const t of timersRef.current) window.clearTimeout(t)
   }, [])
 
   useEffect(() => {
@@ -77,6 +93,8 @@ export default function HeroLive() {
         if (max > 0.04 && !latchedRef.current) {
           latchedRef.current = true
           setLatched(true)
+          setOut(true)
+          setPaused(true)
         }
       }
     }
@@ -118,13 +136,14 @@ export default function HeroLive() {
       </div>
 
       <div className="hero-live-stage">
-        <div className="dev-wrap">
+        {/* data-back: the phone eases away while the cards are out. */}
+        <div className="dev-wrap" data-back={out || latched ? 'yes' : 'no'}>
           <div className="dev-float">
             <div className="dev-tilt">
               <div className="dev-stage">
                 <span className="dev-body" aria-hidden="true" />
                 <div className="dev-face">
-                  <PhoneScreenLive onPhase={onPhase} />
+                  <PhoneScreenLive onPhase={onPhase} paused={paused} />
                   <span className="dev-sheen" aria-hidden="true" />
                 </div>
               </div>
@@ -136,7 +155,7 @@ export default function HeroLive() {
         <div
           ref={liftLayerRef}
           className="lift-layer"
-          data-pop={popped ? 'yes' : 'no'}
+          data-out={out || latched ? 'yes' : 'no'}
           data-latch={latched ? 'yes' : 'no'}
           aria-hidden="true"
         >
