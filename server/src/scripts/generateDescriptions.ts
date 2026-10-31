@@ -125,7 +125,9 @@ async function generateOne(
 
     const raw = textOf(message)
     const text = sanitizeDescription(raw)
-    const check = validateDescription(text)
+    const check = validateDescription(text, {
+      priceKnown: r.priceMin != null && r.priceMax != null,
+    })
     if (check.ok) {
       return {
         text,
