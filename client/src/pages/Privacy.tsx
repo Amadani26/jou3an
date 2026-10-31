@@ -53,8 +53,19 @@ export default function Privacy() {
       <h3>If you join the waitlist on the website</h3>
       <p>
         Only your <strong>email address</strong>, the date you joined, and which
-        page it came from. Nothing else — the website has no account system, no
-        analytics and no advertising tags.
+        page it came from. Nothing else — the website has no account system and
+        no advertising tags.
+      </p>
+      <h3>If you visit the website</h3>
+      <p>
+        The live site uses <strong>Vercel Web Analytics</strong> to count
+        visits: which pages are viewed, roughly where from (country level) and
+        on what kind of device. It is <strong>cookieless</strong> — it sets no
+        cookies, stores nothing on your device, and does not identify or
+        follow you across other sites. When someone joins the waitlist we also
+        count that it happened — <strong>the count carries no email address
+        and nothing about the person</strong>. None of this runs on preview
+        versions of the site.
       </p>
 
       <h3>Location</h3>
@@ -171,6 +182,11 @@ export default function Privacy() {
           <strong>No user data is sent to it</strong> — only facts about the
           restaurant that we already hold.
         </li>
+        <li>
+          <strong>Vercel</strong> hosts the website and provides its
+          cookieless visit counts, described under &ldquo;If you visit the
+          website&rdquo; above.
+        </li>
       </ul>
 
       <h2>What we do not do</h2>
@@ -181,8 +197,10 @@ export default function Privacy() {
             not in any form.
           </li>
           <li>
-            <strong>We do not show ads</strong> and we carry no advertising or
-            analytics trackers.
+            <strong>We do not show ads</strong> and we carry no advertising
+            trackers. The only analytics anywhere is the cookieless visit
+            counting described above — no cookies, no profiles, no following
+            you around the web.
           </li>
           <li>
             <strong>We do not take money to change your results.</strong> No

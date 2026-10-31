@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Check } from 'lucide-react'
+import { track } from '@vercel/analytics'
 import { isValidEmail, joinWaitlist, preloadSupabase } from '../lib/supabase'
 import { refreshWaitlistCount } from '../lib/waitlistCount'
 import WaitlistCount from './WaitlistCount'
@@ -47,6 +48,12 @@ export default function CTABand() {
     if (result === 'joined') {
       refreshWaitlistCount()
       setStatus('joined')
+      // One custom event, NO properties: the fact a signup happened, never
+      // the email or anything else about the person. Production only — the
+      // Analytics script is not even mounted on previews or local builds.
+      if (import.meta.env.VITE_VERCEL_ENV === 'production') {
+        track('waitlist_join')
+      }
       return
     }
     setStatus(result === 'duplicate' ? 'duplicate' : 'error')

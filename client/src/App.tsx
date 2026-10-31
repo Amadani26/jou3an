@@ -1,4 +1,5 @@
 import { BrowserRouter, HashRouter, Routes, Route } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 import Nav from './components/Nav'
 import Landing from './pages/Landing'
 import Privacy from './pages/Privacy'
@@ -35,6 +36,12 @@ export default function App() {
   return (
     <Router>
       <Shell />
+      {/* Vercel Web Analytics — cookieless, aggregate page counts, no
+          personal data. PRODUCTION ONLY by design: preview deployments are
+          review traffic, not visitors, so the script never loads there
+          (vite.config.ts forwards VERCEL_ENV as VITE_VERCEL_ENV). The
+          privacy policy describes exactly this — keep the two in step. */}
+      {import.meta.env.VITE_VERCEL_ENV === 'production' ? <Analytics /> : null}
     </Router>
   )
 }
