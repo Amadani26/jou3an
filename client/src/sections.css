@@ -165,6 +165,63 @@
   padding: 14px 18px calc(22px + env(safe-area-inset-bottom));
 }
 
+/* The scroll cue — phone widths only, where the first frame is copy alone.
+   A label and a thin pulsing line; fades out as the device beat approaches.
+   --enter defaults to 1 (no JS wrote it), which also hides the cue — a page
+   with no choreography has nothing to prompt for. */
+.hero-scrollcue {
+  display: none;
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  opacity: calc(1 - min(1, var(--enter, 1) * 2.4));
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.hero-scrollcue i {
+  width: 1px;
+  height: 30px;
+  background: linear-gradient(to bottom, var(--text-muted), transparent);
+  transform-origin: top;
+  animation: cuePulse 2.2s var(--ease-in-out) infinite;
+}
+@keyframes cuePulse {
+  0%, 100% { transform: scaleY(0.45); opacity: 0.5; }
+  50%      { transform: scaleY(1); opacity: 1; }
+}
+
+/* ---- phone widths: the hero is TWO BEATS. Beat 1 is the copy alone (the
+   device must not be on the first frame); beat 2 is the device's own
+   viewport, which it floats up into on scroll (--enter, written by
+   HeroLive's rAF listener; default 1 keeps no-JS and reduced motion
+   static-but-complete). The in-flow CTA is replaced by the floating
+   waitlist button mid-journey. ---- */
+@media (max-width: 767.98px) {
+  /* .hero-live-qualified: the stage's base rule sits LATER in this file, so
+     these need the extra specificity to win, not just source order. */
+  .hero-live .product-copy {
+    min-height: calc(100svh - 66px - env(safe-area-inset-top));
+    justify-content: center;
+    padding-bottom: 64px;
+  }
+  .hero-scrollcue { display: flex; }
+  .hero-live .hero-live-stage { min-height: 100svh; flex: none; }
+  .hero-live .product-cta { display: none; }
+  .dev-tilt {
+    transform:
+      translate3d(0, calc((1 - var(--enter, 1)) * 16svh), 0)
+      scale(calc(0.9 + var(--enter, 1) * 0.1));
+    opacity: calc(0.15 + var(--enter, 1) * 0.85);
+  }
+}
+
 
 /* ==================================================================== */
 /* The live device (both hero variants)                                 */
@@ -527,11 +584,13 @@
   perspective: 900px;
 }
 
-/* ---- phone widths: the cards settle as a readable stack over the lower
-   half of the eased-back device. --ox/--oy are the OUT offsets. ---- */
-.lift-slot-1 { top: 42%; --d: 0ms; --ox: 0px; --oy: 0px; --rot: 0deg; }
-.lift-slot-2 { top: 58%; --d: 80ms; --ox: 0px; --oy: 0px; --rot: 0deg; }
-.lift-slot-3 { top: 74%; --d: 160ms; --ox: 0px; --oy: 0px; --rot: 0deg; }
+/* ---- phone widths: the desktop fan, sized for a 375–430 viewport — a
+   staggered, slightly rotated cascade alternating around the device's
+   centre line. The cards may overlap the phone's edges; they must never
+   read as a flat stacked block. --ox/--oy are the OUT offsets. ---- */
+.lift-slot-1 { top: 30%; --d: 0ms; --ox: -10vw; --oy: -1svh; --rot: -9deg; }
+.lift-slot-2 { top: 50%; --d: 90ms; --ox: 11vw; --oy: 0svh; --rot: 10deg; }
+.lift-slot-3 { top: 70%; --d: 180ms; --ox: -8vw; --oy: 1svh; --rot: -7deg; }
 
 /* Desktop: room beside the phone — fan out around it. */
 @media (min-width: 768px) {
@@ -576,18 +635,29 @@
 }
 
 .lift-fc {
-  width: min(88vw, 356px);
+  width: min(76vw, 310px);
   box-shadow: 0 26px 50px -22px rgba(0, 0, 0, 0.95);
 }
-/* Compact type so nothing wraps at the lift size. */
-.lift-fc .fcard-name { font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lift-fc .fcard-meta { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Compact type at the lift size. The NAME is the one line that may not
+   truncate — "Chicken shawa…" reads as a bug — so it wraps to two lines
+   and everything secondary stays single-line. */
+.lift-fc .fcard-name {
+  font-size: 14.5px;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  text-wrap: balance;
+}
+.lift-fc .fcard-meta { font-size: 11.5px; white-space: normal; }
 .lift-fc .fcard-reason { font-size: 10.5px; white-space: nowrap; }
 .lift-fc .fcard-rank { font-size: 24px; }
 .lift-fc .fcard-score { font-size: 11px; padding: 3px 7px; }
 
 @media (min-width: 768px) {
-  .lift-fc { width: min(21vw, 310px); }
+  .lift-fc { width: min(23vw, 330px); }
   .lift-fc .fcard-name { font-size: 16px; }
   .lift-fc .fcard-meta { font-size: 12px; }
   .lift-fc .fcard-reason { font-size: 11px; }

@@ -32,7 +32,18 @@ export default function Logo({
       aria-label="Jou3an"
       role="img"
       className={`inline-block select-none font-display font-extrabold leading-none text-text-primary ${className}`}
-      style={{ fontSize, letterSpacing: '-0.03em' }}
+      style={{
+        fontSize,
+        letterSpacing: '-0.03em',
+        // Syne 800 paints outside its inline box: the J's left bearing is
+        // negative (~0.03em) and the font's ascent+descent exceed the
+        // leading-none line box. Engines that clip a promoted span at its
+        // border box (WebKit, at the nav's top-left) shave the J — so give
+        // the box the overhang and take the same amount back with margin.
+        // Layout is identical; the glyphs just paint inside the box now.
+        padding: '0.14em 0.06em',
+        margin: '-0.14em -0.06em',
+      }}
     >
       Jou<span className="text-red">3</span>an
     </span>

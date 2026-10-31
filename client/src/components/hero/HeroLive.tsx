@@ -31,6 +31,18 @@ import { prefersReducedMotion } from '../../lib/reveal'
 
 const LIFT_START = 0.03
 const LIFT_SPAN = 0.47
+/**
+ * Phone widths run the hero as TWO BEATS — the copy owns the first viewport
+ * (no device on the first frame), the device owns the second — so the lift
+ * ratchet and the scroll latch both wait until the user is LEAVING the phone
+ * beat. Latching at the desktop threshold would fan the cards out on the very
+ * first scroll, before the screen's story has played in view.
+ */
+const LIFT_START_MOBILE = 0.52
+const LIFT_SPAN_MOBILE = 0.38
+/** How much of the section's height the phone's float-up entrance spans. */
+const ENTER_SPAN = 0.4
+const DESKTOP_MQ = '(min-width: 768px)'
 /** Desktop keeps the payoff on screen this long before replaying the loop. */
 const DESKTOP_HOLD_MS = 3800
 const RETRACT_MS = 600
@@ -116,20 +128,31 @@ export default function HeroLive() {
     [],
   )
 
-  // The scroll handoff: one rAF listener writing the --lift ratchet, and the
-  // permanent latch (play-once).
+  // The scroll handoff: one rAF listener writing the --lift ratchet, the
+  // phone-beat entrance (--enter, phone widths only), and the permanent
+  // latch (play-once).
   useEffect(() => {
     const section = ref.current
     const layer = liftLayerRef.current
     if (!section || !layer || prefersReducedMotion()) return
 
+    const desktopMQ = window.matchMedia(DESKTOP_MQ)
     let frame = 0
     let max = 0
 
     const apply = () => {
       frame = 0
       const p = window.scrollY / Math.max(1, section.offsetHeight)
-      const lift = Math.min(1, Math.max(0, (p - LIFT_START) / LIFT_SPAN))
+      // The entrance ratchet, 0..1: the device floats up into its beat as the
+      // user scrolls toward it. Only the phone-width CSS reads it; the CSS
+      // default is 1 so no-JS and reduced-motion render the phone in place.
+      section.style.setProperty(
+        '--enter',
+        Math.min(1, Math.max(0, p / ENTER_SPAN)).toFixed(4),
+      )
+      const start = desktopMQ.matches ? LIFT_START : LIFT_START_MOBILE
+      const span = desktopMQ.matches ? LIFT_SPAN : LIFT_SPAN_MOBILE
+      const lift = Math.min(1, Math.max(0, (p - start) / span))
       if (lift > max) {
         max = lift
         layer.style.setProperty('--lift', max.toFixed(4))
@@ -178,6 +201,14 @@ export default function HeroLive() {
           <b>A food decision engine for Dubai.</b> Exactly 3 places — no menus,
           no scrolling, just a decision.
         </p>
+
+        {/* Phone widths only (CSS): the first frame is copy alone, so the cue
+            is what says the story continues below. Fades as the device beat
+            approaches; hidden whenever --enter stays at its no-JS default. */}
+        <div className="hero-scrollcue" aria-hidden="true">
+          <span>Scroll</span>
+          <i />
+        </div>
       </div>
 
       <div className="hero-live-stage">
