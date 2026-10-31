@@ -5,7 +5,7 @@
  * the SAME commit as any substantive edit to either document — a stale date on
  * a policy someone has relied on is its own kind of inaccuracy.
  */
-export const LEGAL_UPDATED = '5 October 2026'
+export const LEGAL_UPDATED = '31 October 2026'
 
 /**
  * ⚠️ PLACEHOLDER — THIS MAILBOX DOES NOT EXIST YET.

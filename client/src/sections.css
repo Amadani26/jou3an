@@ -2226,7 +2226,12 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
   letter-spacing: -0.045em;
   color: var(--text-primary);
   white-space: nowrap;
-  transform: translateY(0.1em); /* feet cropped by the page edge, on purpose */
+  /* LIFTED (ruling): the mark used to translate down 0.1em so the page edge
+     cropped its feet — which cut the red 3 at every width. It now sits
+     whole; line-height 0.9 plus the padding keeps every glyph's bottom
+     inside the footer's overflow:hidden at any viewport width. */
+  line-height: 0.9;
+  padding-bottom: 0.04em;
 }
 .foot-word b { color: var(--red); font-weight: 800; }
 

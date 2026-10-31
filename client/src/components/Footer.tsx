@@ -54,7 +54,7 @@ export default function Footer() {
           <span aria-hidden="true">·</span>
           <a href={`mailto:${PRIVACY_EMAIL}`}>Contact</a>
         </nav>
-        <p className="foot-legal">© 2026 Jou3an FZ-LLC · Dubai, UAE</p>
+        <p className="foot-legal">© 2026 Jou3an · Dubai, UAE</p>
       </div>
 
       <div className="foot-mark" aria-hidden="true">

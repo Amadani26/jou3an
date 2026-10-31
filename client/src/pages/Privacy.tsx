@@ -19,8 +19,8 @@ export default function Privacy() {
       <p>
         This policy explains what Jou3an collects, why, and what you can do
         about it. &ldquo;Jou3an&rdquo;, &ldquo;we&rdquo; and &ldquo;us&rdquo;
-        mean Jou3an FZ-LLC, Dubai, United Arab Emirates. It covers the Jou3an
-        mobile app and the website at jou3an.me.
+        mean the Jou3an project, Dubai, United Arab Emirates. It covers the
+        Jou3an mobile app and the website at jou3an.me.
       </p>
       <p>
         We have tried to write this in plain English and to describe what the

@@ -5,7 +5,7 @@ export default function Terms() {
   return (
     <LegalPage title="Terms of Service" updated={LEGAL_UPDATED}>
       <p>
-        These terms are the agreement between you and Jou3an FZ-LLC, Dubai,
+        These terms are the agreement between you and Jou3an, Dubai,
         United Arab Emirates (&ldquo;Jou3an&rdquo;, &ldquo;we&rdquo;,
         &ldquo;us&rdquo;) for the Jou3an mobile app and the website at
         jou3an.me (together, the &ldquo;Service&rdquo;). By using the Service
