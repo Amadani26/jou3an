@@ -49,6 +49,14 @@ raster posters: every fallback (reduced motion and otherwise) is the same DOM
 rendered statically, and the landing route is prerendered at build time from
 our own components.
 
+## The link-preview card (public/og-image.png)
+
+Made in-house: a 1200×630 scriptless HTML card set in the site's own
+licensed fonts (Syne, Instrument Serif, DM Sans — all OFL) over CSS shapes
+(the red 3, the radial glow), screenshotted and optimised. No stock, no
+photography, no third-party marks. Referenced by the og:image / twitter:image
+tags in index.html.
+
 ## JavaScript dependencies added by the redesign
 
 | Package | Licence |
@@ -57,6 +65,7 @@ our own components.
 | @react-three/fiber | MIT |
 | three-stdlib | MIT |
 | motion | MIT |
+| @vercel/analytics | MIT (cookieless visit counts, production only) |
 
 ## Explicitly NOT used
 
