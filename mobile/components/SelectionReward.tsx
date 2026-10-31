@@ -29,12 +29,13 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import {
+  aedRange,
   callablePhone,
   displayArea,
+  highlightTags,
   photoUrls,
   prettyDistance,
-  prettyTag,
-  visibleTags,
+  tagLabel,
   type Restaurant,
 } from '../lib/api'
 import { getPlaceholderImage } from '../lib/placeholderImages'
@@ -372,7 +373,7 @@ export default function SelectionReward({
 
   if (!restaurant) return null
 
-  const tags = visibleTags(restaurant.tags)
+  const tags = highlightTags(restaurant.tags)
   const distance = prettyDistance(restaurant.distanceKm)
 
   return (
@@ -587,20 +588,56 @@ export default function SelectionReward({
                 </MetaRow>
               ) : null}
 
+              {/* Highlight chips — at most 3, directly under the rating.
+                  Hidden entirely when the row has none: no placeholders. */}
+              {tags.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {tags.map((t) => (
+                    <View
+                      key={t}
+                      style={{
+                        backgroundColor: '#1a0d0d',
+                        borderWidth: 1,
+                        borderColor: 'rgba(232,39,42,0.30)',
+                        borderRadius: 999,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: 'DMSans_600SemiBold',
+                          fontSize: 12,
+                          color: '#E8272A',
+                        }}
+                      >
+                        {tagLabel(t)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
               <MetaRow icon="pricetag-outline">
-                <Text
-                  style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 15, color: '#FFB547' }}
-                >
-                  AED {restaurant.priceMin}–{restaurant.priceMax}
-                </Text>
-                <View
-                  style={{
-                    width: 3,
-                    height: 3,
-                    borderRadius: 1.5,
-                    backgroundColor: '#3a3a3a',
-                  }}
-                />
+                {/* Unknown price: the AED text and its separator disappear and
+                    the row carries the cuisine alone — never a dash. */}
+                {aedRange(restaurant) ? (
+                  <>
+                    <Text
+                      style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 15, color: '#FFB547' }}
+                    >
+                      {aedRange(restaurant)}
+                    </Text>
+                    <View
+                      style={{
+                        width: 3,
+                        height: 3,
+                        borderRadius: 1.5,
+                        backgroundColor: '#3a3a3a',
+                      }}
+                    />
+                  </>
+                ) : null}
                 <Text
                   style={{ fontFamily: 'DMSans_400Regular', fontSize: 15, color: '#8A847E' }}
                 >
@@ -623,34 +660,6 @@ export default function SelectionReward({
                 >
                   {restaurant.description}
                 </Text>
-              ) : null}
-
-              {tags.length > 0 ? (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {tags.map((t) => (
-                    <View
-                      key={t}
-                      style={{
-                        backgroundColor: '#1a0d0d',
-                        borderWidth: 1,
-                        borderColor: 'rgba(232,39,42,0.30)',
-                        borderRadius: 999,
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: 'DMSans_600SemiBold',
-                          fontSize: 12,
-                          color: '#E8272A',
-                        }}
-                      >
-                        {prettyTag(t)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
               ) : null}
 
               {typeof restaurant.averageCalories === 'number' ? (

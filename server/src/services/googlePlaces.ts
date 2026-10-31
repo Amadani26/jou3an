@@ -69,6 +69,12 @@ export interface PlaceDetails {
   primaryType?: string
   types?: string[]
   /**
+   * Google's coarse price bucket ("PRICE_LEVEL_MODERATE"). Absent when Google
+   * has no price signal — a real answer the price backfill stores as NULL.
+   * Billed on the Places "Pro" SKU.
+   */
+  priceLevel?: string
+  /**
    * Google's own one-or-two-sentence blurb for the place, when it has one.
    * ⚠️ Billed on the Places "Enterprise + Atmosphere" SKU — the most expensive
    * band — so it rides along only where the call is already being made, and
@@ -382,6 +388,20 @@ export async function getPlacePhone(placeId: string): Promise<PlaceDetails> {
   return placesFetch<PlaceDetails>(
     `/places/${encodeURIComponent(placeId)}`,
     'id,displayName,internationalPhoneNumber',
+    { method: 'GET' },
+  )
+}
+
+/**
+ * Price-only Place Details — the narrow call for the price backfill
+ * (`npm run sync:prices`). `priceLevel` sits on the Places "Pro" SKU
+ * (~$17/1,000), cheaper than the Advanced band the phone/hours calls pay but
+ * not Essentials; the mask stays narrow so nothing already stored is re-billed.
+ */
+export async function getPlacePrice(placeId: string): Promise<PlaceDetails> {
+  return placesFetch<PlaceDetails>(
+    `/places/${encodeURIComponent(placeId)}`,
+    'id,displayName,priceLevel',
     { method: 'GET' },
   )
 }

@@ -12,6 +12,7 @@ import RestaurantDetailSheet from '../components/RestaurantDetailSheet'
 import { openCallFor, openDirectionsFor, openOrderFor } from '../lib/actions'
 import { accumulateShown, dismissDetail, openDetail } from '../lib/resultsFlow'
 import {
+  aedRange,
   callablePhone,
   getDecision,
   tinderSuggest,
@@ -465,7 +466,7 @@ export default function ResultsScreen() {
                 rank={i + 1}
                 name={r.name}
                 cuisine={r.cuisineType}
-                priceRange={`AED ${r.priceMin}–${r.priceMax}`}
+                priceRange={aedRange(r)}
                 area={displayArea(r)}
                 distanceKm={r.distanceKm}
                 reason={r.reason}
@@ -526,7 +527,7 @@ export default function ResultsScreen() {
       showClose
       name={preview?.name ?? ''}
       cuisine={preview?.cuisineType ?? ''}
-      priceRange={preview ? `AED ${preview.priceMin}–${preview.priceMax}` : ''}
+      priceRange={preview ? aedRange(preview) : null}
       area={preview ? displayArea(preview) : ''}
       tags={preview?.tags}
       googleRating={preview?.googleRating}

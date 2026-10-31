@@ -101,8 +101,13 @@ model Restaurant {
   name            String
   cuisineType     String
   area            LocationArea
-  priceMin        Int
-  priceMax        Int
+  /// AED-per-head estimate derived from Google's coarse price bucket (or hand-
+  /// seeded). ⚠️ NULLABLE (migration `price_optional`): NULL means Google has
+  /// no price signal for this place — a REAL answer the UI acts on by hiding
+  /// the AED segment, never by inventing a band. The old import default
+  /// (45–100) is what this replaces; nothing may write a guessed range again.
+  priceMin        Int?
+  priceMax        Int?
   /// ⚠️ DEPRECATED in favour of `phoneNumber`. Hand-authored seed data only
   /// (10 rows); nothing writes it any more. Still READ, as the fallback when
   /// Google has no number — same relationship as `area` -> `areaName`.

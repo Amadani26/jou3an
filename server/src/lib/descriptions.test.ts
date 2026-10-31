@@ -36,6 +36,12 @@ describe('describeFacts', () => {
     expect(facts).toContain('pakistani restaurant')
   })
 
+  it('omits the spend line for an unknown price (migration price_optional)', () => {
+    const facts = describeFacts(source({ priceMin: null, priceMax: null }))
+    expect(facts).not.toContain('Typical spend')
+    expect(facts.toLowerCase()).not.toContain('unknown')
+  })
+
   // A prompt that mentions a gap invites the model to fill it.
   it('omits unknown fields entirely rather than saying "unknown"', () => {
     const facts = describeFacts(

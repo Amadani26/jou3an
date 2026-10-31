@@ -38,6 +38,7 @@ import AreaSearchSheet from '../../components/AreaSearchSheet'
 import RatingBadge from '../../components/RatingBadge'
 import {
   getNearbyRestaurants,
+  aedRange,
   callablePhone,
   displayArea,
   prettyDistance,
@@ -1382,10 +1383,19 @@ export default function TinderScreen() {
                   <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 15, color: '#8A847E' }}>
                     {current.cuisineType}
                   </Text>
-                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A' }} />
-                  <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 15, color: '#FFB547' }}>
-                    AED {current.priceMin}–{current.priceMax}
-                  </Text>
+                  {/* Unknown price: segment and separator both disappear. */}
+                  {aedRange(current) ? (
+                    <>
+                      <View
+                        style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A' }}
+                      />
+                      <Text
+                        style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 15, color: '#FFB547' }}
+                      >
+                        {aedRange(current)}
+                      </Text>
+                    </>
+                  ) : null}
                   {/* Google's rating — a badge rather than another dot-separated
                       number, so the score doesn't read as part of the price. */}
                   <RatingBadge
@@ -1612,7 +1622,7 @@ export default function TinderScreen() {
           onClose={() => setSheetOpen(false)}
           name={sheetRestaurant.name}
           cuisine={sheetRestaurant.cuisineType}
-          priceRange={`AED ${sheetRestaurant.priceMin}–${sheetRestaurant.priceMax}`}
+          priceRange={aedRange(sheetRestaurant)}
           area={displayArea(sheetRestaurant)}
           tags={sheetRestaurant.tags}
           googleRating={sheetRestaurant.googleRating}

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import RedButton from '../../components/RedButton'
 import {
+  aedRange,
   callablePhone,
   getRestaurant,
   displayArea,
@@ -154,9 +155,12 @@ export default function RestaurantScreen() {
             </Text>
           </View>
 
-          <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 16, color: '#FFB547' }}>
-            AED {r.priceMin}–{r.priceMax}
-          </Text>
+          {/* Hidden entirely when the price is unknown — never a dash. */}
+          {aedRange(r) ? (
+            <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 16, color: '#FFB547' }}>
+              {aedRange(r)}
+            </Text>
+          ) : null}
 
           {/* Google rating (0–5) — hidden entirely when not synced. The stars
               are meaningful now that the value is on a 5-point scale. */}

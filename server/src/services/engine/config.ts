@@ -73,11 +73,41 @@ export const QUALITY_FALLBACK_MAX = 10
  *
  * These do NOT need to sum to 1: the taste term re-normalises over whichever
  * namespaces the candidate actually has evidence for.
+ *
+ * ⚠️ PRICE WAS CUT 0.15 → 0.05 (the "saturation knob" the Taste Vector v2
+ * rollout named): `price:LOW` covers ~91% of the servable catalogue, so nearly
+ * every swipe credits the same band and the dimension pins at the +10 ceiling
+ * within ~10 swipes — at which point it is a constant offset, not a signal.
+ * Tag took the difference (0.30 → 0.35) in the same change because
+ * `generate:tags` filled the tag namespace across the catalogue, where it had
+ * been inert on all but 8 hand-seeded rows.
  */
 export const TASTE_NAMESPACE_WEIGHTS: Record<Namespace, number> = {
-  cuisine: 0.55,
-  tag: 0.3,
-  price: 0.15,
+  cuisine: 0.6,
+  tag: 0.35,
+  price: 0.05,
+}
+
+/**
+ * Per-DIMENSION dampening inside a namespace, applied at scoring time.
+ *
+ * ⚠️ `tag:late-night` saturates the same way `price:LOW` does, at half the
+ * rate: `generate:tags` marks ~52% of the servable catalogue "Open late"
+ * (Dubai eats late), ingestion credits every matching dimension equally, so
+ * the weight climbs with roughly every second swipe and pins at the +10
+ * ceiling for any active user. Averaged into the tag-namespace mean of half
+ * the candidate pool, a pinned late-night then drowns the distinctive tags
+ * (a +8 next to a steakhouse +2 reads as "loves steakhouses AND late nights"
+ * when it mostly means "uses the app"). Halving it at scoring time keeps the
+ * genuine signal — a true night owl still leans late-night — without letting
+ * the catalogue's most common tag impersonate a preference.
+ *
+ * Scoring-time on purpose: ingestion deliberately credits every dimension at
+ * the same strength (see applyEventToVector), so the correction lives here,
+ * where it can be read and re-tuned, not baked into stored profiles.
+ */
+export const TASTE_DIMENSION_DAMP: Record<string, number> = {
+  'tag:late-night': 0.5,
 }
 
 /**

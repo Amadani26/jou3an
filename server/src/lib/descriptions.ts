@@ -18,8 +18,9 @@ export interface DescriptionSource {
   name: string
   cuisineType: string
   tags: string[]
-  priceMin: number
-  priceMax: number
+  /** Null = Google has no price signal; the spend line is then OMITTED. */
+  priceMin: number | null
+  priceMax: number | null
   /** Real neighbourhood; falls back to the coarse enum label. */
   areaName?: string | null
   area?: string | null
@@ -97,11 +98,12 @@ export function describeFacts(r: DescriptionSource): string {
   const area = r.areaName?.trim() || prettyEnumArea(r.area ?? '')
   const tags = r.tags.map((t) => t.trim()).filter(Boolean)
 
-  const facts: string[] = [
-    `Name: ${r.name}`,
-    `Cuisine: ${r.cuisineType}`,
-    `Typical spend per person: AED ${r.priceMin}–${r.priceMax}`,
-  ]
+  const facts: string[] = [`Name: ${r.name}`, `Cuisine: ${r.cuisineType}`]
+  // Unknown price is omitted, not written as "unknown" — same rule as every
+  // other gap in this list: a prompt that mentions a gap invites filling it.
+  if (r.priceMin != null && r.priceMax != null) {
+    facts.push(`Typical spend per person: AED ${r.priceMin}–${r.priceMax}`)
+  }
   if (area) facts.push(`Neighbourhood: ${area}, Dubai`)
   if (tags.length) facts.push(`Tags: ${tags.join(', ')}`)
   if (typeof r.googleRating === 'number') {
