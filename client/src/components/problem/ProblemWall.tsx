@@ -267,7 +267,9 @@ export default function ProblemWall() {
         {/* What the engine hands back. A separate layer so three cards can sit
             centred at full size without fighting the marquee's layout. */}
         <div className="wall-final" aria-hidden={stage !== 'resolved'}>
-          <h2 className="wall-line wall-line-final">Exactly 3 answers.</h2>
+          <h2 className="wall-line wall-line-final">
+            Exactly <b>3</b> answers.
+          </h2>
           <div className="wall-final-cards">
             {SURVIVOR_INDEXES.map((di, i) => {
               const d = DISHES[di]

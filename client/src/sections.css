@@ -863,7 +863,9 @@
   max-width: 36ch;
   font-size: 15px;
   line-height: 1.55;
-  color: var(--text-secondary);
+  /* White, not secondary — "All of them open. All of them plausible." and
+     the line under the 3 results both read at full strength (ruling). */
+  color: var(--text-primary);
   text-shadow: 0 1px 14px rgba(0,0,0,0.9);
 }
 
@@ -997,12 +999,15 @@
   pointer-events: none;
 }
 
+/* White with ONLY the 3 in red (ruling) — the number is the brand beat,
+   the sentence is not a warning sign. */
 .wall-line-final {
-  color: var(--red);
+  color: var(--text-primary);
   opacity: 0;
   transform: translate3d(0, 24px, 0);
   transition: opacity 420ms var(--ease-out), transform 520ms var(--ease-spring);
 }
+.wall-line-final b { color: var(--red); font-weight: inherit; }
 
 .wall-final-cards {
   display: flex;

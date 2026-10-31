@@ -569,7 +569,9 @@ a,
   max-width: 34ch;
   font-size: 16px;
   line-height: 1.55;
-  color: var(--text-secondary);
+  /* The WHOLE subtitle reads in primary white (approved copy ruling), not
+     secondary grey with a white first sentence. */
+  color: var(--text-primary);
 }
 .hero-sub b { color: var(--text-primary); font-weight: 500; }
 @media (min-width: 768px) {
