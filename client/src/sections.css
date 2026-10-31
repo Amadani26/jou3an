@@ -2082,6 +2082,52 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
 .cta-count span { color: rgba(0, 0, 0, 0.72) !important; }
 .cta-count { margin-top: 6px; }
 
+/* -------------------------------------------------------------------- */
+/* The floating waitlist button — phone widths only                      */
+/* -------------------------------------------------------------------- */
+
+/* 19px/700 so white-on-#FE0000 (4.03:1) qualifies as LARGE text under AA —
+   the same ruling as the hero CTA. 48px min height clears the 44pt tap
+   floor; the bottom offset rides the home indicator's safe area. */
+.float-cta {
+  position: fixed;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 60;
+  display: none;
+  min-height: 48px;
+  padding: 13px 28px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-family: inherit;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    0 10px 28px -8px rgba(254, 0, 0, 0.5),
+    0 16px 34px -14px rgba(0, 0, 0, 0.75);
+  opacity: 0;
+  transform: translate3d(-50%, calc(100% + 28px + env(safe-area-inset-bottom)), 0);
+  pointer-events: none;
+  transition: transform 460ms var(--ease-spring), opacity 280ms var(--ease-out);
+}
+.float-cta[data-show='yes'] {
+  opacity: 1;
+  transform: translate3d(-50%, 0, 0);
+  pointer-events: auto;
+}
+.float-cta:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+}
+@media (max-width: 767.98px) {
+  .float-cta { display: block; }
+}
+
 /* Success: the check pops with a spring curve, the line lands after it. */
 .cta-check {
   display: grid;
@@ -2202,6 +2248,10 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
     transition: none;
     transform: scale(0.93) translate3d(0, -2.5%, 0);
   }
+  /* The scroll cue has no journey to prompt and the floating button appears
+     and disappears without travelling. */
+  .hero-scrollcue i { animation: none; }
+  .float-cta { transition: opacity 180ms linear; }
 
   /* The story rests on its final frame: the map, route drawn, pin lit,
      arrival chip in place. No morph, no draw, no ripple. */

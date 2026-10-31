@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react'
 import CTABand from '../components/CTABand'
 import FAQ from '../components/FAQ'
 import Features from '../components/Features'
+import FloatingCTA from '../components/FloatingCTA'
 import Footer from '../components/Footer'
 import HeroLive from '../components/hero/HeroLive'
 
@@ -71,6 +72,9 @@ export default function Landing() {
       {/* SECTION 8 — FOOTER (the name, full width)                    */}
       {/* ============================================================ */}
       <Footer />
+
+      {/* Phone widths: the fixed join button that follows the journey. */}
+      <FloatingCTA />
     </div>
   )
 }
