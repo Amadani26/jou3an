@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from 'react'
  * FEATURES — show, don't tell.
  *
  * Four cards, each a looping LIVE HTML VIGNETTE of the feature — a mood chip
- * being tapped, exactly-3 results landing, a swipe teaching taste, the Daily
- * Top 3 refreshing — with a 3–5 word label. A swipeable snap rail with a
- * peeking next card on iPhone; a grid on desktop.
+ * being tapped, exactly-3 results landing, a swipe teaching taste, the three
+ * action buttons each taking their tap — with a short label. A swipeable
+ * snap rail with a peeking next card on iPhone; a grid on desktop.
  *
  * The vignettes are pure CSS keyframe loops, all driven by one section-level
  * IntersectionObserver that flips data-play — they run only while the
@@ -16,14 +16,16 @@ import { useEffect, useRef, useState } from 'react'
  * static scene, so the still is the fallback.
  *
  * Copy per the approved cut: one headline, one line, four labels, one
- * caption. "Daily Top 3" carries no freshness claim (ruling).
+ * caption. The fourth card is the ACTIONS vignette (ruling: it replaced
+ * "Daily Top 3" on the website) — Directions, Call or Order in one tap,
+ * which is also exactly what the app's three buttons do.
  */
 
 const VIGNETTES = [
   { key: 'vibe', label: 'Tell it your vibe' },
   { key: 'three', label: 'Exactly 3, with reasons' },
   { key: 'swipe', label: 'Swipe to teach it' },
-  { key: 'daily', label: 'Daily Top 3' },
+  { key: 'act', label: 'Directions, Call or Order in one tap' },
 ] as const
 
 function Vignette({ kind }: { kind: string }) {
@@ -66,14 +68,12 @@ function Vignette({ kind }: { kind: string }) {
           <em className="vg-learn">Taste noted</em>
         </div>
       )
-    case 'daily':
+    case 'act':
       return (
-        <div className="vig-stage vig-daily" aria-hidden="true">
-          <span className="vg-date">Today</span>
-          {[1, 2, 3].map((n) => (
-            <span key={n} className={`vg-row vg-drow vg-drow-${n}`}>
-              <b>{n}</b>
-              <span className="vg-line" />
+        <div className="vig-stage vig-act" aria-hidden="true">
+          {['Directions', 'Call', 'Order'].map((a, i) => (
+            <span key={a} className={`vg-action vg-action-${i + 1}`}>
+              {a}
             </span>
           ))}
         </div>

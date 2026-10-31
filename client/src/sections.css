@@ -1880,28 +1880,47 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
   92%, 100% { opacity: 0; transform: translateX(-50%) translateY(6px); }
 }
 
-/* V4 — Daily Top 3: the list refreshes. No freshness claim in copy. */
-.vg-date {
+/* V4 — the three action buttons, each taking its tap in turn. The 0% frame
+   is a complete scene (all three pills, the first one lit), which is the
+   reduced-motion still. */
+.vg-action {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  font-size: 9.5px;
+  left: 18px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 12px;
+  border-radius: 999px;
+  background: #151515;
+  border: 1px solid #262626;
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--red);
+  color: var(--text-secondary);
+  animation: vgActTap 6s infinite;
 }
-.vig-daily .vg-drow-1 { top: 34px; }
-.vig-daily .vg-drow-2 { top: 76px; }
-.vig-daily .vg-drow-3 { top: 118px; }
-.vig-daily .vg-drow { padding: 8px 12px; animation: vgRefresh 5s infinite both; }
-.vig-daily .vg-drow-2 { animation-delay: 110ms; }
-.vig-daily .vg-drow-3 { animation-delay: 220ms; }
-@keyframes vgRefresh {
-  0%, 68%   { opacity: 1; transform: none; }
-  76%       { opacity: 0; transform: translateX(-12px); }
-  78%       { opacity: 0; transform: translateX(12px); }
-  86%, 100% { opacity: 1; transform: none; }
+/* Negative delays: every pill is mid-cycle from the first frame, so exactly
+   ONE is lit at any moment (a positive delay holds the 0% lit frame while
+   waiting, which lit all three at once). */
+.vig-act .vg-action-1 { top: 26px; animation-delay: 0s; }
+.vig-act .vg-action-2 { top: 72px; animation-delay: -4s; }
+.vig-act .vg-action-3 { top: 118px; animation-delay: -2s; }
+@keyframes vgActTap {
+  /* lit for this pill's third of the loop, quiet for the rest */
+  0%, 26% {
+    background: rgba(254, 0, 0, 0.16);
+    border-color: var(--red);
+    color: var(--text-primary);
+    transform: scale(1.02);
+  }
+  33%, 100% {
+    background: #151515;
+    border-color: #262626;
+    color: var(--text-secondary);
+    transform: none;
+  }
 }
 
 /* ==================================================================== */
