@@ -407,6 +407,29 @@ export async function getPlacePrice(placeId: string): Promise<PlaceDetails> {
 }
 
 /**
+ * Photos-only Place Details — the FREE call.
+ *
+ * `photos` sits in the Place Details "Essentials (IDs Only)" SKU, which is
+ * free with an unlimited cap (verified against Google's pricing + field-mask
+ * docs on 2026-11-02). ⚠️ That holds ONLY while the mask stays exactly
+ * `id,photos` — adding `displayName` (Pro, $17/1k) or anything richer bills
+ * the whole request at that band. This is what the photo-name re-sync and the
+ * proxy's self-heal path call, so both must stay on this mask.
+ *
+ * Photo resource names EXPIRE (Google says to re-retrieve them rather than
+ * cache long-term — the Sep 2026 batch died with "The photo resource in the
+ * request is invalid"), so treat stored photoRefs as a short-lived cache that
+ * this call refreshes.
+ */
+export async function getPlacePhotos(placeId: string): Promise<PlaceDetails> {
+  return placesFetch<PlaceDetails>(
+    `/places/${encodeURIComponent(placeId)}`,
+    'id,photos',
+    { method: 'GET' },
+  )
+}
+
+/**
  * A dialable number, or null when Google lists none.
  *
  * International first: `tel:+97143317778` connects from any network, while the

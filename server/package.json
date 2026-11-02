@@ -19,6 +19,7 @@
     "sync:areas": "ts-node src/scripts/syncAreaNames.ts",
     "sync:phones": "ts-node src/scripts/syncPhones.ts",
     "sync:prices": "ts-node src/scripts/syncPrices.ts",
+    "sync:photorefs": "ts-node src/scripts/syncPhotoRefs.ts",
     "sync:types": "ts-node src/scripts/syncVenueTypes.ts",
     "sync:descriptions": "ts-node src/scripts/syncDescriptions.ts",
     "generate:descriptions": "ts-node src/scripts/generateDescriptions.ts",
