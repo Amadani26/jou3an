@@ -237,7 +237,7 @@
   place-items: center;
 }
 
-.dev-wrap { position: relative; width: min(60vw, 258px); }
+.dev-wrap { position: relative; width: var(--pw, min(60vw, 258px)); }
 
 /* The float: slow, scripted, interruptible by nothing. */
 .dev-float {
@@ -255,7 +255,9 @@
 .dev-stage {
   position: relative;
   aspect-ratio: 1.08 / 2.26;
-  transform: rotateY(-7deg) rotateX(2.5deg);
+  /* --seq-turn: the sequence turns the device a few degrees with the orbit
+     (written per-frame by HeroLive), returning to 0 as the cards lock. */
+  transform: rotateY(calc(-7deg + var(--seq-turn, 0deg))) rotateX(2.5deg);
   transform-style: preserve-3d;
 }
 
@@ -316,17 +318,20 @@
   86%, 100% { transform: skewX(-16deg) translateX(470%); }
 }
 
-/* Dim wash over the glass while the payoff is out — the story is finished
-   and the cards are the subject now. */
-.dev-dim {
+/* The screen brightening as the streaks arrive — a red bloom over the glass
+   that swells through the 'in' beat and lets go once the cards deal. */
+.dev-glowup {
   position: absolute;
   inset: 0;
-  background: #000;
+  background: radial-gradient(circle at 50% 46%, rgba(254, 0, 0, 0.38), rgba(254, 0, 0, 0.08) 58%, transparent 76%);
   opacity: 0;
-  transition: opacity 500ms var(--ease-out);
+  transition: opacity 600ms var(--ease-out);
   pointer-events: none;
 }
-.dev-wrap[data-back='yes'] .dev-dim { opacity: 0.45; }
+.hero-live-stage[data-seq='in'] .dev-glowup {
+  opacity: 1;
+  transition: opacity 1300ms var(--ease-in-out);
+}
 
 .dev-shadow {
   position: absolute;
@@ -548,124 +553,237 @@
   padding: 1.1cqw 2.6cqw;
 }
 
-/* ---- the handoff: cards lifting off the glass ---- */
-
-/*
- * THE PAYOFF LAYER. The cards sit IN FRONT of the device (the story's screen
- * phase is over when they appear) and visually come OUT of the glass: hidden
- * state is small, transparent and centred on the face; the out state springs
- * them to clear view with a 60ms stagger while the phone eases back.
+/* ---- THE SEQUENCE: streaks in → deal → flip → orbit → settle ----
+ *
+ * Geometry is fractions of the device width, published here as --pw and
+ * mirrored by HeroLive's timeline constants — the JS final frame and the
+ * CSS static pose (reduced motion / no-JS / remount) are the same numbers.
+ * The stage (z-index 1, line above) is the one stacking context: the clip
+ * sits at 10, the device at 50, and each card's per-frame z-index swings
+ * around 50 so it genuinely passes in front of and behind the phone.
  */
-.hero-live-stage .dev-wrap {
-  position: relative;
-  z-index: 1;
-  transition: transform 650ms var(--ease-spring);
-}
-.hero-live-stage .dev-wrap[data-back='yes'] {
-  transform: scale(0.93) translate3d(0, -2.5%, 0);
-}
+.hero-live-stage { --pw: min(60vw, 258px); }
+.hero-live-stage .dev-wrap { z-index: 50; }
 
-.lift-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  /* Scroll ratchet, 0..1 — written by HeroLive; drifts the settled cards
-     outward as the hero leaves (the handoff, play-once). */
-  --lift: 0;
-}
-
-.lift-slot {
+/* The Higgsfield clip — behind the device, edge-masked into the black.
+   Visible only through the 'in' beat; "the streaks stop" is this fade. */
+.seq-video {
   position: absolute;
   left: 50%;
-  width: 0;
-  display: flex;
-  justify-content: center;
-  perspective: 900px;
-}
-
-/* ---- phone widths: the desktop fan, sized for a 375–430 viewport — a
-   staggered, slightly rotated cascade alternating around the device's
-   centre line. The cards may overlap the phone's edges; they must never
-   read as a flat stacked block. --ox/--oy are the OUT offsets. ---- */
-.lift-slot-1 { top: 30%; --d: 0ms; --ox: -10vw; --oy: -1svh; --rot: -9deg; }
-.lift-slot-2 { top: 50%; --d: 90ms; --ox: 11vw; --oy: 0svh; --rot: 10deg; }
-.lift-slot-3 { top: 70%; --d: 180ms; --ox: -8vw; --oy: 1svh; --rot: -7deg; }
-
-/* Desktop: room beside the phone — fan out around it. */
-@media (min-width: 768px) {
-  .lift-slot-1 { top: 36%; --ox: calc(min(30vw, 330px) * -0.92); --oy: calc(min(20vh, 210px) * -0.38); --rot: -14deg; }
-  .lift-slot-2 { top: 52%; --ox: calc(min(30vw, 330px) * 0.98); --oy: calc(min(20vh, 210px) * -0.06); --rot: 15deg; }
-  .lift-slot-3 { top: 68%; --ox: calc(min(30vw, 330px) * -0.78); --oy: calc(min(20vh, 210px) * 0.4); --rot: -11deg; }
-}
-
-.lift-move {
-  /* The settled pose. The --lift drift pushes a little further on scroll. */
-  --settle:
-    translate3d(
-      calc(var(--ox) + var(--lift) * var(--ox) * 0.14 + var(--lift) * 0px),
-      var(--oy),
-      0
-    )
-    rotateY(var(--rot));
+  top: 50%;
+  width: min(125vw, 700px);
+  height: min(86svh, 700px);
+  transform: translate(-50%, -50%);
+  z-index: 10;
   opacity: 0;
-  /* Hidden = ON THE GLASS: the slot's --fx/--fy/--fs are MEASURED from the
-     matching result row on the screen (HeroLive.measureFrom), so the card's
-     start state is exactly where its pixels are, at exactly their size, with
-     a slight screen-plane tilt it sheds as it rises. */
-  transform:
-    translate3d(var(--fx, 0px), var(--fy, -6%), 0)
-    scale(var(--fs, 0.45))
-    rotateX(14deg);
-  transition:
-    transform 680ms var(--ease-spring) 0ms,
-    opacity 220ms var(--ease-out) 0ms;
+  transition: opacity 650ms var(--ease-out);
+  pointer-events: none;
+}
+.hero-live-stage[data-seq='in'] .seq-video {
+  opacity: 1;
+  transition: opacity 350ms var(--ease-out);
+}
+.hero-live-stage[data-video='off'] .seq-video { display: none; }
+.seq-video video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-mask-image: radial-gradient(ellipse 48% 48% at center, #000 50%, transparent 76%);
+  mask-image: radial-gradient(ellipse 48% 48% at center, #000 50%, transparent 76%);
+}
+
+/* The clip's stand-in when autoplay is refused (Low Power Mode) or no
+   source decodes: a red bloom swelling behind the glass on the same beat. */
+.seq-bloom {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(120vw, 680px);
+  height: min(120vw, 680px);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0.55);
+  background: radial-gradient(circle, rgba(254, 0, 0, 0.24), rgba(254, 0, 0, 0.06) 46%, transparent 70%);
+  opacity: 0;
+  z-index: 10;
+  pointer-events: none;
+  transition: opacity 500ms var(--ease-out), transform 1400ms var(--ease-in-out);
+}
+.hero-live-stage[data-video='off'][data-seq='in'] .seq-bloom {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* The card layer. ⚠️ No z-index/transform/opacity on the layer itself —
+   it must NOT open a stacking context, or the slots' z-index could never
+   interleave with the device's. */
+.seq-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* A slot is a zero-size anchor at the stage centre; the mover inside it is
+   what the timeline writes transform/opacity to. CSS z-index is the static
+   pose; the per-frame inline value overrides it while the story plays. */
+.seq-slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+.seq-slot-1 { z-index: 64; --sx: 0px;                       --sy: calc(var(--pw) * 0.6);   --ss: 1.04; --so: 1; }
+.seq-slot-2 { z-index: 40; --sx: calc(var(--pw) * -0.3);   --sy: calc(var(--pw) * -1.18); --ss: 0.84; --so: 0.92; }
+.seq-slot-3 { z-index: 40; --sx: calc(var(--pw) * 0.26);   --sy: calc(var(--pw) * 1.18);  --ss: 0.84; --so: 0.92; }
+@media (min-width: 768px) {
+  .seq-slot-1 { --sy: calc(var(--pw) * 0.66); }
+  .seq-slot-2 { --sx: calc(var(--pw) * -1.11); --sy: calc(var(--pw) * -0.08); --ss: 0.86; --so: 0.88; }
+  .seq-slot-3 { --sx: calc(var(--pw) * 1.11);  --sy: calc(var(--pw) * 0.16);  --ss: 0.86; --so: 0.88; }
+}
+
+.seq-move {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
   will-change: transform, opacity;
 }
 
-.lift-layer[data-out='yes'] .lift-move {
-  opacity: 1;
-  transform: var(--settle);
-  transition-delay: var(--d), var(--d);
+/* The static settled pose — reduced motion, no-JS, and remounting after the
+   story has already told itself all land here, lit and readable. */
+.hero-live-stage[data-static='yes'] .seq-move,
+html:not(.js) .seq-move {
+  opacity: var(--so);
+  transform: translate(-50%, -50%) translate3d(var(--sx), var(--sy), 0) scale(var(--ss));
 }
-.lift-layer[data-out='yes'] .lift-fc {
-  box-shadow:
-    0 26px 50px -22px rgba(0, 0, 0, 0.95),
-    0 22px 48px -14px rgba(254, 0, 0, 0.32);
+.hero-live-stage[data-static='yes'] .seq-glow,
+html:not(.js) .seq-glow { opacity: 0.5; }
+
+/* The two faces. The mover owns position/scale; this element owns only the
+   flip, so perspective stays local to each card. */
+.seq-card3d {
+  position: relative;
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
-.lift-fc {
-  width: min(76vw, 310px);
+.seq-fc {
+  display: flex;
+  flex-direction: column;
+  width: calc(var(--pw) * 0.68);
+  padding: 11px 13px 12px;
+  background: #121212;
+  border-radius: 14px;
   box-shadow: 0 26px 50px -22px rgba(0, 0, 0, 0.95);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
-/* Compact type at the lift size. The NAME is the one line that may not
-   truncate — "Chicken shawa…" reads as a bug — so it wraps to two lines
-   and everything secondary stays single-line. */
-.lift-fc .fcard-name {
+
+/* Face-down: black back, the small red 3 — the deck being dealt. */
+.seq-back {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #0b0b0b;
+  border: 1px solid #242424;
+  border-radius: 14px;
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.seq-back span {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 26px;
+  color: var(--red);
+}
+
+/* The red under-glow, lit as each card reveals; rides with the mover. */
+.seq-glow {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  width: 150%;
+  height: 80%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse at center, rgba(254, 0, 0, 0.38), transparent 68%);
+  opacity: 0;
+  transition: opacity 700ms var(--ease-out);
+  pointer-events: none;
+}
+.seq-slot[data-lit='yes'] .seq-glow { opacity: 0.6; }
+
+/* Card type. The NAME may wrap to two lines and may never truncate —
+   "Chicken shawa…" reads as a bug. Everything secondary stays small. */
+.seq-fc-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+.seq-rank {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 21px;
+  line-height: 1;
+  color: var(--red);
+}
+.seq-score {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #1c1c1c;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.seq-name {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
   font-size: 14.5px;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
   white-space: normal;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
   text-wrap: balance;
 }
-.lift-fc .fcard-meta { font-size: 11.5px; white-space: normal; }
-.lift-fc .fcard-reason { font-size: 10.5px; white-space: nowrap; }
-.lift-fc .fcard-rank { font-size: 24px; }
-.lift-fc .fcard-score { font-size: 11px; padding: 3px 7px; }
-
-@media (min-width: 768px) {
-  .lift-fc { width: min(23vw, 330px); }
-  .lift-fc .fcard-name { font-size: 16px; }
-  .lift-fc .fcard-meta { font-size: 12px; }
-  .lift-fc .fcard-reason { font-size: 11px; }
+.seq-meta {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.seq-reason {
+  align-self: flex-start;
+  margin-top: 7px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(254, 0, 0, 0.14);
+  color: var(--red);
+  font-size: 10.5px;
+  font-weight: 600;
 }
 
-/* The wall's .fcard hides itself until its section resolves; these are the
-   same card face, but the MOTION wrapper owns their visibility. */
-.lift-layer .fcard { opacity: 1; transform: none; transition: none; }
+@media (min-width: 768px) {
+  .seq-fc { width: calc(var(--pw) * 0.97); padding: 14px 16px 15px; }
+  .seq-rank { font-size: 25px; }
+  .seq-name { font-size: 17px; }
+  .seq-meta { font-size: 12.5px; }
+  .seq-reason { font-size: 11.5px; }
+  .seq-score { font-size: 12px; }
+
+  /* Settled, desktop only: a whisper of idle drift. Phones hold still. */
+  .hero-live-stage[data-seq='settled'] .seq-slot {
+    animation: seqIdle 16s var(--ease-in-out) infinite alternate;
+  }
+  .hero-live-stage[data-seq='settled'] .seq-slot-2 { animation-delay: -6s; }
+  .hero-live-stage[data-seq='settled'] .seq-slot-3 { animation-delay: -11s; }
+}
+@keyframes seqIdle {
+  from { transform: translate3d(0, 0, 0) rotate(0deg); }
+  to   { transform: translate3d(0, -9px, 0) rotate(0.5deg); }
+}
 
 /* ---- ?debug=1 overlay ---- */
 
@@ -2264,14 +2382,13 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
   .dev-float,
   .dev-sheen,
   .ps-dots i { animation: none; }
-  /* The static final state: phone eased back, the three cards out in front
-     and readable. No springs, no retract, no listeners. */
-  .lift-move { transition: none; }
-  .lift-layer .lift-move { opacity: 1; transform: var(--settle); }
-  .hero-live-stage .dev-wrap {
-    transition: none;
-    transform: scale(0.93) translate3d(0, -2.5%, 0);
-  }
+  /* The sequence rests on its settled frame (HeroLive mounts data-static
+     under reduced motion and never mounts the clip): three cards locked
+     around the device, under-glows lit, the CSS bloom in place of video.
+     No deal, no flip, no orbit, no idle drift. */
+  .seq-move,
+  .seq-glow { transition: none; }
+  .seq-slot { animation: none; }
   /* The scroll cue has no journey to prompt and the floating button appears
      and disappears without travelling. */
   .hero-scrollcue i { animation: none; }

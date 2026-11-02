@@ -83,3 +83,25 @@ Unsplash food-photo URLs used as placeholders wherever a restaurant has no
 synced Places photos (DailyCard, ResultCard, the Swipe card, the detail
 sheet, and the Home screen's FALLBACK_PICKS). Out of scope for the web
 branch; tracked here so it is not forgotten.
+
+## Hero streak clip (`public/hero/`)
+
+AI-generated abstract motion clip (red light streaks converging on black),
+created with **Higgsfield** (model `seedance_2_5`) on 2026-11-02 under the
+account's **Plus plan**, whose terms permit commercial use of generated
+output. Fully abstract by prompt and by eye: no food, people, UI, text,
+logos, or recognisable anything — the zero-risk rule does not apply beyond
+that check. Source generation job `84127cd5-60bb-4b43-a7e5-9e0f67e7acbe`
+(variant 2 of 2; the unused variant 1 was job
+`bbc8ebdd-957b-4e65-94c8-472361358fc0`).
+
+| File | Codec | Size | Role |
+| --- | --- | --- | --- |
+| `streaks-av1.mp4` | AV1 (svt-av1, crf 42) | 269 KB | first source (Chrome/Firefox) |
+| `streaks-hevc.mp4` | H.265 hvc1 (crf 30) | 232 KB | Safari |
+| `streaks-h264.mp4` | H.264 (crf 26) | 414 KB | universal fallback |
+| `streaks-poster.jpg` | JPEG | 23 KB | poster frame |
+
+Processing: audio stripped, scaled to 540×960 from the 720×1280 master,
+faststart. The 1.8 MB master mp4s live in gitignored
+`client/.artifact-assets/hero-streaks/` and are not committed.
