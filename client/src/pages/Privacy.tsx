@@ -67,6 +67,15 @@ export default function Privacy() {
         and nothing about the person</strong>. None of this runs on preview
         versions of the site.
       </p>
+      <p>
+        The website also shows <strong>live restaurant results and, in the
+        demo, live restaurant photos</strong>. Visiting those sections
+        triggers requests to <strong>Google</strong> for that restaurant data
+        and those photos — but the requests are made <em>by our server</em>:
+        your browser talks only to us, and{' '}
+        <strong>no personal data of yours is sent to Google</strong>. These
+        demo requests create no account, no session and no record about you.
+      </p>
 
       <h3>Location</h3>
       <ul>

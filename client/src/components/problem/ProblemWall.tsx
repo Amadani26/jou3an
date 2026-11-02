@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { DISHES, SURVIVOR_INDEXES, SURVIVOR_REASONS, type Dish } from '../../lib/dishes'
 import { prefersReducedMotion } from '../../lib/reveal'
+import { cuisineTone, metaLine, priceLabel, type LivePick } from '../../lib/live'
+import { useShowcase } from '../../lib/useShowcase'
 
 /**
  * THE PROBLEM — a wall of appetite.
@@ -128,8 +130,65 @@ const ROWS: WallCard[][] = [
   ],
 ]
 
-function PosterCard({ card, delay }: { card: WallCard; delay: number }) {
+/** Choreography flags for live rows: a mix for the waves, a few survivors. */
+const LIVE_FLAGS: Flag[] = ['taste', 'budget', 'nearby', 'keep', 'nearby', 'budget', 'taste']
+
+/** Which colour-field (md/sm) slot each ROWS position is — the real-name
+ *  slots, assigned identically across the duplicated track halves. */
+const MDSM_INDEX: Record<string, number> = {}
+{
+  let n = 0
+  ROWS.forEach((row, r) =>
+    row.forEach((c, i) => {
+      if (c.size !== 'lg') MDSM_INDEX[`${r}-${i}`] = n++
+    }),
+  )
+}
+
+function PosterCard({
+  card,
+  delay,
+  live,
+  liveIndex,
+}: {
+  card: WallCard
+  delay: number
+  /** Real restaurant for this slot (md/sm sizes while the API answers). */
+  live?: LivePick | null
+  liveIndex?: number
+  }) {
   const d = card.dish
+
+  if (live) {
+    // ⚠️ A real restaurant: real name, real facts, NO stock photo, NO
+    // invented score — a colour field in its cuisine's tone.
+    return (
+      <article
+        className={`wcard wcard-${card.size} f-${LIVE_FLAGS[(liveIndex ?? 0) % LIVE_FLAGS.length]}`}
+        style={{ ['--wd' as string]: `${delay}ms` }}
+      >
+        <span
+          aria-hidden="true"
+          className="wcard-field"
+          style={{ background: cuisineTone(live.cuisine) }}
+        />
+        <span aria-hidden="true" className="wcard-scrim" />
+        <div className="wcard-body">
+          <h3 className="wcard-name">{live.name}</h3>
+          <p className="wcard-meta">
+            {live.cuisine} · {live.area}
+          </p>
+          {priceLabel(live) ? <p className="wcard-price">{priceLabel(live)}</p> : null}
+        </div>
+      </article>
+    )
+  }
+
+  // ⚠️ `cuisineOnly`: once real names are on the wall, the stock photo
+  // tiles may not read as any venue — they are labelled by CUISINE alone
+  // (no dish name, no price, no score). The full dish label only renders
+  // on the all-generic fallback wall.
+  const cuisineOnly = card.size === 'lg' && liveIndex !== undefined
   return (
     <article
       className={`wcard wcard-${card.size} f-${flagFor(d)}`}
@@ -150,12 +209,18 @@ function PosterCard({ card, delay }: { card: WallCard; delay: number }) {
       )}
       <span aria-hidden="true" className="wcard-scrim" />
       <div className="wcard-body">
-        <span className="wcard-score">{d.score.toFixed(1)}</span>
-        <h3 className="wcard-name">{d.dish}</h3>
-        <p className="wcard-meta">
-          {d.cuisine} · {d.area}
-        </p>
-        <p className="wcard-price">{d.price}</p>
+        {cuisineOnly ? (
+          <h3 className="wcard-name">{d.cuisine}</h3>
+        ) : (
+          <>
+            <span className="wcard-score">{d.score.toFixed(1)}</span>
+            <h3 className="wcard-name">{d.dish}</h3>
+            <p className="wcard-meta">
+              {d.cuisine} · {d.area}
+            </p>
+            <p className="wcard-price">{d.price}</p>
+          </>
+        )}
       </div>
     </article>
   )
@@ -164,6 +229,25 @@ function PosterCard({ card, delay }: { card: WallCard; delay: number }) {
 export default function ProblemWall() {
   const ref = useRef<HTMLElement | null>(null)
   const [reduce] = useState(prefersReducedMotion)
+  const showcase = useShowcase()
+  const liveWall = showcase.status === 'live' ? showcase.data.wall : null
+  const finals =
+    showcase.status === 'live'
+      ? showcase.data.picks.map((p) => ({
+          name: p.name,
+          meta: metaLine(p),
+          reason: p.reason,
+          score: p.rating != null ? `★ ${p.rating.toFixed(1)} · Google` : null,
+        }))
+      : SURVIVOR_INDEXES.map((di, i) => {
+          const d = DISHES[di]
+          return {
+            name: d.dish,
+            meta: `${d.cuisine} · ${d.area} · ${d.price}`,
+            reason: SURVIVOR_REASONS[i],
+            score: d.score.toFixed(1),
+          }
+        })
   const [stage, setStage] = useState<Stage>(() =>
     reduce || wallPlayed ? 'resolved' : 'wall',
   )
@@ -226,7 +310,19 @@ export default function ProblemWall() {
                   {[0, 1].map((dup) => (
                     <div key={dup} className="wall-set" aria-hidden={dup === 1}>
                       {row.map((card, i) => (
-                        <PosterCard key={`${r}-${dup}-${i}`} card={card} delay={(r * 5 + i) * 40} />
+                        <PosterCard
+                          key={`${r}-${dup}-${i}`}
+                          card={card}
+                          delay={(r * 5 + i) * 40}
+                          live={
+                            liveWall && MDSM_INDEX[`${r}-${i}`] !== undefined
+                              ? liveWall[MDSM_INDEX[`${r}-${i}`] % liveWall.length]
+                              : null
+                          }
+                          liveIndex={
+                            liveWall ? (MDSM_INDEX[`${r}-${i}`] ?? r * 5 + i) : undefined
+                          }
+                        />
                       ))}
                     </div>
                   ))}
@@ -263,22 +359,17 @@ export default function ProblemWall() {
             Exactly <b>3</b> answers.
           </h2>
           <div className="wall-final-cards">
-            {SURVIVOR_INDEXES.map((di, i) => {
-              const d = DISHES[di]
-              return (
-                <article key={di} className="fcard" style={{ ['--fd' as string]: `${i * 90}ms` }}>
-                  <span className="fcard-rank">{i + 1}</span>
-                  <div className="fcard-body">
-                    <h3 className="fcard-name">{d.dish}</h3>
-                    <p className="fcard-meta">
-                      {d.cuisine} · {d.area} · {d.price}
-                    </p>
-                    <span className="fcard-reason">{SURVIVOR_REASONS[i]}</span>
-                  </div>
-                  <span className="fcard-score">{d.score.toFixed(1)}</span>
-                </article>
-              )
-            })}
+            {finals.map((f, i) => (
+              <article key={i} className="fcard" style={{ ['--fd' as string]: `${i * 90}ms` }}>
+                <span className="fcard-rank">{i + 1}</span>
+                <div className="fcard-body">
+                  <h3 className="fcard-name">{f.name}</h3>
+                  <p className="fcard-meta">{f.meta}</p>
+                  <span className="fcard-reason">{f.reason}</span>
+                </div>
+                {f.score ? <span className="fcard-score">{f.score}</span> : null}
+              </article>
+            ))}
           </div>
           <p className="wall-sub wall-sub-final">
             Where you are. What you feel like. What you spend.

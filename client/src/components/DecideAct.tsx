@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { MapPin, Navigation, Phone, ShoppingBag } from 'lucide-react'
 import { DISHES, SURVIVOR_INDEXES } from '../lib/dishes'
 import { prefersReducedMotion } from '../lib/reveal'
+import { cuisineTone, metaLine } from '../lib/live'
+import { useShowcase } from '../lib/useShowcase'
+import VenueNote from './VenueNote'
 
 /**
  * DECIDE → ACT — the mini story of what happens after you pick.
@@ -36,7 +39,8 @@ import { prefersReducedMotion } from '../lib/reveal'
  * construction.
  */
 
-const PICK = DISHES[SURVIVOR_INDEXES[0]]
+/** The generic-dish fallback: today's zero-risk content, unchanged. */
+const DISH_PICK = DISHES[SURVIVOR_INDEXES[0]]
 
 type Stage = 'wait' | 'card' | 'tap' | 'map' | 'arrived'
 const ORDER: Stage[] = ['wait', 'card', 'tap', 'map', 'arrived']
@@ -297,6 +301,21 @@ export default function DecideAct() {
 
   const rank = ORDER.indexOf(stage)
 
+  // The destination: the engine's live #1 pick (real facts only — a Google
+  // rating with its attribution or no score, a real price or none), falling
+  // back to the generic dish while pending or when the API is down.
+  const showcase = useShowcase()
+  const livePick = showcase.status === 'live' ? showcase.data.picks[0] : null
+  const title = livePick ? livePick.name : DISH_PICK.dish
+  const meta = livePick
+    ? metaLine(livePick)
+    : `${DISH_PICK.cuisine} · ${DISH_PICK.area} · ${DISH_PICK.price}`
+  const score = livePick
+    ? livePick.rating != null
+      ? `★ ${livePick.rating.toFixed(1)} · Google`
+      : null
+    : DISH_PICK.score.toFixed(1)
+
   return (
     <section
       ref={ref}
@@ -306,7 +325,7 @@ export default function DecideAct() {
     >
       <div className="act-stage">
         <p className="act-eyebrow">You&apos;re going to</p>
-        <h2 className="story-name">{PICK.dish}</h2>
+        <h2 className="story-name">{title}</h2>
 
         {/* Full-bleed stage: the 3D scene behind, the chosen-dish card
             floating over it until the tap sends it on its way. Fixed
@@ -326,9 +345,18 @@ export default function DecideAct() {
           </span>
 
           <div className="story-cardlayer" aria-hidden={rank >= 3}>
-            {PICK.photo ? (
+            {/* A real restaurant never wears a stock photo: live picks get
+                their cuisine's colour field. The dish fallback keeps its
+                licensed photo as before. */}
+            {livePick ? (
+              <span
+                className="story-photo story-field"
+                style={{ background: cuisineTone(livePick.cuisine) }}
+                aria-hidden="true"
+              />
+            ) : DISH_PICK.photo ? (
               <img
-                src={`/brand/dishes/${PICK.photo}.webp`}
+                src={`/brand/dishes/${DISH_PICK.photo}.webp`}
                 alt=""
                 className="story-photo"
                 width={800}
@@ -340,8 +368,8 @@ export default function DecideAct() {
             <span className="story-scrim" aria-hidden="true" />
             <div className="story-info">
               <p className="story-meta">
-                {PICK.cuisine} · {PICK.area} · {PICK.price}
-                <span className="story-score">{PICK.score.toFixed(1)}</span>
+                {meta}
+                {score ? <span className="story-score">{score}</span> : null}
               </p>
               <div className="story-actions">
                 {TILES.map((t) => (
@@ -361,6 +389,7 @@ export default function DecideAct() {
         </div>
 
         <p className="act-sub">Three taps, start to table.</p>
+        {livePick ? <VenueNote /> : null}
       </div>
     </section>
   )

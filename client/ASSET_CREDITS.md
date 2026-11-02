@@ -105,3 +105,20 @@ that check. Source generation job `84127cd5-60bb-4b43-a7e5-9e0f67e7acbe`
 Processing: audio stripped, scaled to 540×960 from the 720×1280 master,
 faststart. The 1.8 MB master mp4s live in gitignored
 `client/.artifact-assets/hero-streaks/` and are not committed.
+
+## Real restaurants on the page (2026-11-02)
+
+The zero-risk rule for VENUE IDENTITIES was deliberately reversed by the
+owner: the page may now show real restaurants, served live from
+`/api/public/*` under a strict no-invented-data rule (real Google ratings
+with attribution or no score, real prices or none, anonymous engine
+reasons). Two asset consequences:
+
+- **The Pexels dish photos are never paired with a real restaurant name.**
+  On the live wall they are labelled by CUISINE ONLY; the full dish labels
+  render only on the generic fallback (API unreachable), which contains no
+  real venues.
+- **Live restaurant photos appear ONLY on the demo's three results**,
+  streamed per request from Google Places (photo names fetched fresh each
+  time, never stored, per the Place Photos no-caching rule) and displayed
+  with "Google · {author}" attribution from `authorAttributions`.

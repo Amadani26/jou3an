@@ -1,9 +1,63 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import WaitlistCount from '../WaitlistCount'
-import PhoneScreenLive, { type Phase } from './PhoneScreenLive'
+import PhoneScreenLive, { type Phase, type ScreenRow } from './PhoneScreenLive'
 import { scrollToWaitlist } from '../../lib/scroll'
 import { DISHES, SURVIVOR_INDEXES, SURVIVOR_REASONS } from '../../lib/dishes'
 import { prefersReducedMotion } from '../../lib/reveal'
+import { metaLine } from '../../lib/live'
+import { useShowcase } from '../../lib/useShowcase'
+
+/**
+ * One card of the hero's three, from either data source. Live picks carry
+ * real Google ratings (shown WITH the "Google" attribution, or no score at
+ * all) and the engine's anonymous reason line — never invented numbers.
+ */
+type HeroCardData = {
+  key: string
+  name: string
+  meta: string
+  reason: string
+  /** "★ 4.8 · Google" (live, attributed), "9.1" (generic dish), or null. */
+  score: string | null
+  /** Placeholder mode: neutral bars until the live answer lands. */
+  ph: boolean
+}
+
+function heroCards(
+  sc: ReturnType<typeof useShowcase>,
+): HeroCardData[] {
+  if (sc.status === 'live') {
+    return sc.data.picks.map((p) => ({
+      key: p.id,
+      name: p.name,
+      meta: metaLine(p),
+      reason: p.reason,
+      score: p.rating != null ? `★ ${p.rating.toFixed(1)} · Google` : null,
+      ph: false,
+    }))
+  }
+  if (sc.status === 'pending') {
+    return [0, 1, 2].map((i) => ({
+      key: `ph-${i}`,
+      name: ' ',
+      meta: ' ',
+      reason: ' ',
+      score: null,
+      ph: true,
+    }))
+  }
+  return SURVIVOR_INDEXES.map((di, i) => {
+    const d = DISHES[di]
+    return {
+      key: `dish-${di}`,
+      name: d.dish,
+      meta: `${d.cuisine} · ${d.area} · ${d.price}`,
+      reason: SURVIVOR_REASONS[i],
+      score: d.score.toFixed(1),
+      ph: false,
+    }
+  })
+}
 
 /**
  * The hero: copy, the CSS device, and THE SEQUENCE — a 6s one-shot story
@@ -105,6 +159,21 @@ export default function HeroLive() {
   useEffect(() => {
     videoStateRef.current = videoState
   }, [videoState])
+
+  // Live picks (or placeholders, or the generic-dish fallback) — one shared
+  // fetch for the cards AND the phone screen's result rows, so the shared-
+  // element return always lands on its own data.
+  const showcase = useShowcase()
+  const cards = heroCards(showcase)
+  const screenRows: ScreenRow[] | null =
+    showcase.status === 'live'
+      ? showcase.data.picks.map((p) => ({
+          name: p.name,
+          sub: metaLine(p),
+          chip: p.reason,
+          score: p.rating != null ? `★ ${p.rating.toFixed(1)}` : null,
+        }))
+      : null
 
   /* ---- the timeline ---- */
   const run = useCallback(() => {
@@ -386,7 +455,7 @@ export default function HeroLive() {
               <div className="dev-stage">
                 <span className="dev-body" aria-hidden="true" />
                 <div className="dev-face">
-                  <PhoneScreenLive holdAt={hold} />
+                  <PhoneScreenLive holdAt={hold} rows={screenRows} />
                   <span className="dev-glowup" aria-hidden="true" />
                   <span className="dev-sheen" aria-hidden="true" />
                 </div>
@@ -397,38 +466,33 @@ export default function HeroLive() {
         </div>
 
         <div className="seq-layer" aria-hidden="true">
-          {SURVIVOR_INDEXES.map((di, i) => {
-            const d = DISHES[di]
-            return (
-              <div
-                key={di}
-                ref={(el) => {
-                  slotRefs.current[i] = el
-                }}
-                className={`seq-slot seq-slot-${i + 1}`}
-              >
-                <div className="seq-move">
-                  <span className="seq-glow" />
-                  <div className="seq-card3d">
-                    <article className="seq-fc">
-                      <header className="seq-fc-top">
-                        <span className="seq-rank">{i + 1}</span>
-                        <span className="seq-score">{d.score.toFixed(1)}</span>
-                      </header>
-                      <h3 className="seq-name">{d.dish}</h3>
-                      <p className="seq-meta">
-                        {d.cuisine} · {d.area} · {d.price}
-                      </p>
-                      <span className="seq-reason">{SURVIVOR_REASONS[i]}</span>
-                    </article>
-                    <div className="seq-back">
-                      <span>3</span>
-                    </div>
+          {cards.map((c, i) => (
+            <div
+              key={i}
+              ref={(el) => {
+                slotRefs.current[i] = el
+              }}
+              className={`seq-slot seq-slot-${i + 1}`}
+            >
+              <div className="seq-move">
+                <span className="seq-glow" />
+                <div className="seq-card3d">
+                  <article className="seq-fc" data-ph={c.ph ? 'yes' : 'no'}>
+                    <header className="seq-fc-top">
+                      <span className="seq-rank">{i + 1}</span>
+                      {c.score ? <span className="seq-score">{c.score}</span> : null}
+                    </header>
+                    <h3 className="seq-name">{c.name}</h3>
+                    <p className="seq-meta">{c.meta}</p>
+                    <span className="seq-reason">{c.reason}</span>
+                  </article>
+                  <div className="seq-back">
+                    <span>3</span>
                   </div>
                 </div>
               </div>
-            )
-          })}
+            </div>
+          ))}
         </div>
       </div>
 

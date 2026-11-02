@@ -54,6 +54,18 @@ export default function Terms() {
         or error-free, and we may change or stop features.
       </p>
 
+      <h2>Restaurants shown on the website</h2>
+      <p>
+        The website&apos;s examples and demo show <strong>live results from
+        Jou3an&apos;s engine</strong> — real restaurants, with ratings and
+        photos supplied by Google.{' '}
+        <strong>We are not affiliated with, endorsed by, or endorsing the
+        restaurants shown.</strong> Their appearance means only that our
+        engine ranked them for an anonymous query at that moment. Restaurant
+        owner? Contact us at the address below to update or remove your
+        listing.
+      </p>
+
       <h2>Dietary needs and allergies</h2>
       <p>
         Any dietary filtering we do is a <strong>best effort based on
