@@ -6,7 +6,6 @@ import {
   type PanInfo,
 } from 'motion/react'
 import { RotateCcw } from 'lucide-react'
-import { DISHES, type Dish } from '../lib/dishes'
 import {
   DEMO_AREAS,
   demoPhotoUrl,
@@ -41,31 +40,7 @@ import VenueNote from './VenueNote'
  * list of three results on tap, and a plain button advances them.
  */
 
-type Mood = {
-  label: string
-  filter: (d: Dish) => boolean
-}
-
-const MOODS: Mood[] = [
-  { label: 'Quick and cheap', filter: (d) => maxPrice(d) <= 45 },
-  { label: 'Date night', filter: (d) => maxPrice(d) >= 90 },
-  { label: 'Comfort food', filter: (d) => ['American', 'Italian', 'Pakistani', 'Indian'].includes(d.cuisine) },
-  { label: 'Healthy-ish', filter: (d) => d.cuisine === 'Healthy' || d.cuisine === 'Japanese' },
-  { label: 'Something new', filter: (d) => ['Vietnamese', 'Jordanian', 'Emirati', 'Thai'].includes(d.cuisine) },
-]
-
-function maxPrice(d: Dish): number {
-  return Number(d.price.match(/(\d+)\s*$/)?.[1] ?? 0)
-}
-
-/** Top 3 by score within the mood; the whole pool ranked as fallback. */
-function decideThree(mood: Mood): Dish[] {
-  const pool = DISHES.filter(mood.filter)
-  const ranked = [...(pool.length >= 3 ? pool : DISHES)].sort((a, b) => b.score - a.score)
-  return ranked.slice(0, 3)
-}
-
-/** One deck card, from either world. */
+/** One deck card — always a real restaurant. */
 type DemoCard = {
   key: string
   name: string
@@ -79,17 +54,6 @@ type DemoCard = {
   attribution: string | null
   tone: string
 }
-
-const dishCard = (d: Dish, mood: Mood): DemoCard => ({
-  key: `dish-${d.dish}`,
-  name: d.dish,
-  meta: `${d.cuisine} · ${d.area} · ${d.price}`,
-  reason: mood.label,
-  score: d.score.toFixed(1),
-  photoSrc: d.photo ? `/brand/dishes/${d.photo}.webp` : null,
-  attribution: null,
-  tone: d.tone,
-})
 
 // No distance in the meta: the engine's reason line already carries it.
 const liveCard = (r: DemoResult): DemoCard => ({
@@ -110,28 +74,33 @@ type Chip = { key: string; label: string }
 
 export default function DemoSection() {
   const reduce = useReducedMotion() ?? false
-  const showcase = useShowcase()
-  // Area chips unless the API has already proven unreachable — the old
-  // mood demo is the fallback, not the default.
-  const liveMode = showcase.status !== 'fallback'
+  // The snapshot (then live) showcase: the demo's offline floor. When the
+  // per-area call fails, the engine's showcase picks stand in — real
+  // restaurants, colour fields, no photos.
+  const { data: showcase } = useShowcase()
 
   const [chip, setChip] = useState<Chip | null>(null)
   const [deciding, setDeciding] = useState(false)
   const [picks, setPicks] = useState<DemoCard[]>([])
-  const [isLiveResult, setIsLiveResult] = useState(false)
   const [gone, setGone] = useState(0)
   const decideTimer = useRef(0)
 
   useEffect(() => () => window.clearTimeout(decideTimer.current), [])
 
-  const chips: Chip[] = liveMode
-    ? DEMO_AREAS.map((a) => ({ key: a.key, label: a.label }))
-    : MOODS.map((m) => ({ key: m.label, label: m.label }))
+  const chips: Chip[] = DEMO_AREAS.map((a) => ({ key: a.key, label: a.label }))
 
-  const moodFallback = (label?: string): { cards: DemoCard[]; live: boolean } => {
-    const mood = MOODS.find((m) => m.label === label) ?? MOODS[0]
-    return { cards: decideThree(mood).map((d) => dishCard(d, mood)), live: false }
-  }
+  /** API down: the showcase's real picks, as photo-less colour cards. */
+  const showcaseCards = (): DemoCard[] =>
+    showcase.picks.map((p) => ({
+      key: `sc-${p.id}`,
+      name: p.name,
+      meta: metaLine(p),
+      reason: p.reason,
+      score: p.rating != null ? `★ ${p.rating.toFixed(1)}` : null,
+      photoSrc: null,
+      attribution: null,
+      tone: cuisineTone(p.cuisine),
+    }))
 
   const choose = (c: Chip) => {
     if (deciding) return
@@ -144,14 +113,8 @@ export default function DemoSection() {
     const beat = new Promise<void>((res) => {
       decideTimer.current = window.setTimeout(res, reduce ? 80 : 900)
     })
-    const data = liveMode ? getDemo(c.key) : Promise.resolve(null)
-    Promise.all([data, beat]).then(([payload]) => {
-      const out =
-        liveMode && payload
-          ? { cards: payload.results.map(liveCard), live: true }
-          : moodFallback(liveMode ? undefined : c.key)
-      setPicks(out.cards)
-      setIsLiveResult(out.live)
+    Promise.all([getDemo(c.key), beat]).then(([payload]) => {
+      setPicks(payload ? payload.results.map(liveCard) : showcaseCards())
       setDeciding(false)
     })
   }
@@ -171,7 +134,7 @@ export default function DemoSection() {
   return (
     <section className="demo-section" id="demo">
       <div className="demo-head">
-        <h2 className="demo-title">{liveMode ? 'Try it. Pick an area.' : 'Try it. Tap a mood.'}</h2>
+        <h2 className="demo-title">Try it. Pick an area.</h2>
         <p className="demo-sub">One tap in. Exactly 3 out.</p>
       </div>
 
@@ -259,7 +222,7 @@ export default function DemoSection() {
                 <p>That was the whole decision.</p>
                 <button type="button" className="demo-reset" onClick={reset}>
                   <RotateCcw size={15} strokeWidth={2} aria-hidden="true" />
-                  {liveMode ? 'Try another area' : 'Try another mood'}
+                  Try another area
                 </button>
               </motion.div>
             ) : null}
@@ -277,7 +240,7 @@ export default function DemoSection() {
         </div>
       ) : null}
 
-      {isLiveResult || liveMode ? <VenueNote /> : null}
+      <VenueNote />
     </section>
   )
 }

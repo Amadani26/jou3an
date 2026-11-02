@@ -19,6 +19,8 @@
  * area, shared by every section.
  */
 
+import SNAPSHOT_JSON from '../generated/showcase-fallback.json'
+
 const API =
   (import.meta.env.VITE_API_URL as string | undefined) ??
   'https://server-production-0599.up.railway.app'
@@ -75,6 +77,14 @@ async function get<T>(path: string): Promise<T | null> {
     return null
   }
 }
+
+/**
+ * The build-time snapshot: REAL servable restaurants captured from the
+ * production API by scripts/snapshot-fallback.mjs on every build — the
+ * page's instant first content and its no-network floor. Dishes are
+ * never presented as picks, in any state.
+ */
+export const SNAPSHOT: Showcase = SNAPSHOT_JSON as Showcase
 
 let showcaseP: Promise<Showcase | null> | null = null
 export function getShowcase(): Promise<Showcase | null> {

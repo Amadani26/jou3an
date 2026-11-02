@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { DISHES, SURVIVOR_INDEXES, SURVIVOR_REASONS } from '../../lib/dishes'
 import { prefersReducedMotion } from '../../lib/reveal'
 
 /**
@@ -52,7 +51,7 @@ function useRM(): boolean {
   return rm
 }
 
-/** A result row on the glass — live restaurant data, or the dish fallback. */
+/** A result row on the glass — always a REAL restaurant (live or snapshot). */
 export type ScreenRow = {
   name: string
   sub: string
@@ -61,27 +60,17 @@ export type ScreenRow = {
   score: string | null
 }
 
-const DISH_ROWS: ScreenRow[] = SURVIVOR_INDEXES.map((di, i) => {
-  const d = DISHES[di]
-  return {
-    name: d.dish,
-    sub: `${d.cuisine} · ${d.area} · ${d.price}`,
-    chip: SURVIVOR_REASONS[i],
-    score: d.score.toFixed(1),
-  }
-})
-
 export default function PhoneScreenLive({
   onPhase,
   holdAt = null,
-  rows = null,
+  rows,
 }: {
   /** Fired on every DISPLAYED phase change — the hero syncs its payoff to this. */
   onPhase?: (phase: Phase) => void
   /** While set, this phase is displayed and the clock stops. See header. */
   holdAt?: Phase | null
-  /** Live restaurant rows; null falls back to the generic dishes. */
-  rows?: ScreenRow[] | null
+  /** The three restaurants on the glass. Real data in every state. */
+  rows: ScreenRow[]
 }) {
   const reduce = useRM()
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -171,10 +160,10 @@ export default function PhoneScreenLive({
         <p>Deciding</p>
       </div>
 
-      {/* ---- results: exactly 3 (live restaurants, or the dish fallback) ---- */}
+      {/* ---- results: exactly 3 real restaurants ---- */}
       <div className="ps-view ps-results">
         <p className="ps-eyebrow">Decided for you</p>
-        {(rows ?? DISH_ROWS).map((r, i) => (
+        {rows.map((r, i) => (
           <div key={i} className="ps-card" style={{ ['--i' as string]: String(i) }}>
             <span className="ps-rank">{i + 1}</span>
             <span className="ps-cardbody">
@@ -186,8 +175,8 @@ export default function PhoneScreenLive({
             {i === 0 ? <i className="ps-ring ps-ring-card" /> : null}
           </div>
         ))}
-        {/* Live ratings are Google's — attributed wherever they show. */}
-        {rows ? <p className="ps-attr">Ratings by Google</p> : null}
+        {/* Ratings are Google's — attributed wherever they show. */}
+        <p className="ps-attr">Ratings by Google</p>
       </div>
     </div>
   )

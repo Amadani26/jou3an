@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { MapPin, Navigation, Phone, ShoppingBag } from 'lucide-react'
-import { DISHES, SURVIVOR_INDEXES } from '../lib/dishes'
 import { prefersReducedMotion } from '../lib/reveal'
 import { cuisineTone, metaLine } from '../lib/live'
 import { useShowcase } from '../lib/useShowcase'
@@ -39,8 +38,6 @@ import VenueNote from './VenueNote'
  * construction.
  */
 
-/** The generic-dish fallback: today's zero-risk content, unchanged. */
-const DISH_PICK = DISHES[SURVIVOR_INDEXES[0]]
 
 type Stage = 'wait' | 'card' | 'tap' | 'map' | 'arrived'
 const ORDER: Stage[] = ['wait', 'card', 'tap', 'map', 'arrived']
@@ -301,20 +298,15 @@ export default function DecideAct() {
 
   const rank = ORDER.indexOf(stage)
 
-  // The destination: the engine's live #1 pick (real facts only — a Google
-  // rating with its attribution or no score, a real price or none), falling
-  // back to the generic dish while pending or when the API is down.
-  const showcase = useShowcase()
-  const livePick = showcase.status === 'live' ? showcase.data.picks[0] : null
-  const title = livePick ? livePick.name : DISH_PICK.dish
-  const meta = livePick
-    ? metaLine(livePick)
-    : `${DISH_PICK.cuisine} · ${DISH_PICK.area} · ${DISH_PICK.price}`
-  const score = livePick
-    ? livePick.rating != null
-      ? `★ ${livePick.rating.toFixed(1)} · Google`
-      : null
-    : DISH_PICK.score.toFixed(1)
+  // The destination: the engine's #1 pick — the build-time snapshot first,
+  // the live answer when it arrives. Always a REAL restaurant with real
+  // facts: a Google rating with its attribution or no score, a real price
+  // range or none. Never a dish, never an invented number.
+  const { data: showcase } = useShowcase()
+  const pick = showcase.picks[0]
+  const title = pick.name
+  const meta = metaLine(pick)
+  const score = pick.rating != null ? `★ ${pick.rating.toFixed(1)} · Google` : null
 
   return (
     <section
@@ -345,26 +337,13 @@ export default function DecideAct() {
           </span>
 
           <div className="story-cardlayer" aria-hidden={rank >= 3}>
-            {/* A real restaurant never wears a stock photo: live picks get
-                their cuisine's colour field. The dish fallback keeps its
-                licensed photo as before. */}
-            {livePick ? (
-              <span
-                className="story-photo story-field"
-                style={{ background: cuisineTone(livePick.cuisine) }}
-                aria-hidden="true"
-              />
-            ) : DISH_PICK.photo ? (
-              <img
-                src={`/brand/dishes/${DISH_PICK.photo}.webp`}
-                alt=""
-                className="story-photo"
-                width={800}
-                height={600}
-                loading="lazy"
-                decoding="async"
-              />
-            ) : null}
+            {/* A real restaurant never wears a stock photo: the card is its
+                cuisine's colour field, in every state. */}
+            <span
+              className="story-photo story-field"
+              style={{ background: cuisineTone(pick.cuisine) }}
+              aria-hidden="true"
+            />
             <span className="story-scrim" aria-hidden="true" />
             <div className="story-info">
               <p className="story-meta">
@@ -389,7 +368,7 @@ export default function DecideAct() {
         </div>
 
         <p className="act-sub">Three taps, start to table.</p>
-        {livePick ? <VenueNote /> : null}
+        <VenueNote />
       </div>
     </section>
   )

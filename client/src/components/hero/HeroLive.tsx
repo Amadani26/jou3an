@@ -2,62 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import WaitlistCount from '../WaitlistCount'
 import PhoneScreenLive, { type Phase, type ScreenRow } from './PhoneScreenLive'
 import { scrollToWaitlist } from '../../lib/scroll'
-import { DISHES, SURVIVOR_INDEXES, SURVIVOR_REASONS } from '../../lib/dishes'
 import { prefersReducedMotion } from '../../lib/reveal'
 import { metaLine } from '../../lib/live'
 import { useShowcase } from '../../lib/useShowcase'
-
-/**
- * One card of the hero's three, from either data source. Live picks carry
- * real Google ratings (shown WITH the "Google" attribution, or no score at
- * all) and the engine's anonymous reason line — never invented numbers.
- */
-type HeroCardData = {
-  key: string
-  name: string
-  meta: string
-  reason: string
-  /** "★ 4.8 · Google" (live, attributed), "9.1" (generic dish), or null. */
-  score: string | null
-  /** Placeholder mode: neutral bars until the live answer lands. */
-  ph: boolean
-}
-
-function heroCards(
-  sc: ReturnType<typeof useShowcase>,
-): HeroCardData[] {
-  if (sc.status === 'live') {
-    return sc.data.picks.map((p) => ({
-      key: p.id,
-      name: p.name,
-      meta: metaLine(p),
-      reason: p.reason,
-      score: p.rating != null ? `★ ${p.rating.toFixed(1)} · Google` : null,
-      ph: false,
-    }))
-  }
-  if (sc.status === 'pending') {
-    return [0, 1, 2].map((i) => ({
-      key: `ph-${i}`,
-      name: ' ',
-      meta: ' ',
-      reason: ' ',
-      score: null,
-      ph: true,
-    }))
-  }
-  return SURVIVOR_INDEXES.map((di, i) => {
-    const d = DISHES[di]
-    return {
-      key: `dish-${di}`,
-      name: d.dish,
-      meta: `${d.cuisine} · ${d.area} · ${d.price}`,
-      reason: SURVIVOR_REASONS[i],
-      score: d.score.toFixed(1),
-      ph: false,
-    }
-  })
-}
 
 /**
  * The hero: copy, the CSS device, and THE SEQUENCE — a 6s one-shot story
@@ -160,20 +107,25 @@ export default function HeroLive() {
     videoStateRef.current = videoState
   }, [videoState])
 
-  // Live picks (or placeholders, or the generic-dish fallback) — one shared
-  // fetch for the cards AND the phone screen's result rows, so the shared-
-  // element return always lands on its own data.
-  const showcase = useShowcase()
-  const cards = heroCards(showcase)
-  const screenRows: ScreenRow[] | null =
-    showcase.status === 'live'
-      ? showcase.data.picks.map((p) => ({
-          name: p.name,
-          sub: metaLine(p),
-          chip: p.reason,
-          score: p.rating != null ? `★ ${p.rating.toFixed(1)}` : null,
-        }))
-      : null
+  // REAL restaurants in every state: the build-time snapshot first, the
+  // live answer when it arrives — one source for the cards AND the phone
+  // screen's rows, so the shared-element return always lands on its own
+  // data. Ratings are Google's and carry the attribution; no score is a
+  // real state, never a dash.
+  const { data: showcase } = useShowcase()
+  const cards = showcase.picks.map((p) => ({
+    key: p.id,
+    name: p.name,
+    meta: metaLine(p),
+    reason: p.reason,
+    score: p.rating != null ? `★ ${p.rating.toFixed(1)} · Google` : null,
+  }))
+  const screenRows: ScreenRow[] = showcase.picks.map((p) => ({
+    name: p.name,
+    sub: metaLine(p),
+    chip: p.reason,
+    score: p.rating != null ? `★ ${p.rating.toFixed(1)}` : null,
+  }))
 
   /* ---- the timeline ---- */
   const run = useCallback(() => {
@@ -477,7 +429,7 @@ export default function HeroLive() {
               <div className="seq-move">
                 <span className="seq-glow" />
                 <div className="seq-card3d">
-                  <article className="seq-fc" data-ph={c.ph ? 'yes' : 'no'}>
+                  <article className="seq-fc">
                     <header className="seq-fc-top">
                       <span className="seq-rank">{i + 1}</span>
                       {c.score ? <span className="seq-score">{c.score}</span> : null}

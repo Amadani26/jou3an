@@ -760,16 +760,6 @@
   font-weight: 600;
 }
 
-/* Neutral placeholder: fixed-geometry bars while the live answer is on its
-   way — same card, no layout shift when the text lands. */
-.seq-fc[data-ph='yes'] :is(.seq-name, .seq-meta, .seq-reason) {
-  color: transparent;
-  background: #1c1c1c;
-  border-radius: 6px;
-  min-width: 70%;
-}
-.seq-fc[data-ph='yes'] .seq-meta { min-width: 50%; }
-.seq-fc[data-ph='yes'] .seq-reason { min-width: 40%; }
 
 @media (min-width: 768px) {
   .seq-fc { width: calc(var(--pw) * 0.97); padding: 14px 16px 15px; }

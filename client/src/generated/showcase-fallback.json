@@ -1,0 +1,210 @@
+{
+  "picks": [
+    {
+      "id": "cmu9yzhvf0001okyjaxl1j3kw",
+      "placeId": "ChIJ8-3M2EppXz4RTjOPHMw165o",
+      "name": "Kimuraya Authentic Japanese Restaurant - 1st Branch Business Bay",
+      "cuisine": "Japanese",
+      "area": "Business Bay",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.8,
+      "ratingCount": 4426,
+      "reason": "One of the better-rated Japanese spots"
+    },
+    {
+      "id": "cmu9zhhbj0016ok3g4ycihrrt",
+      "placeId": "ChIJgdaleIZrXz4RqH33jIrRcuI",
+      "name": "The Ninth Cut Butchery & Steakhouse",
+      "cuisine": "Steakhouse",
+      "area": "Al Barsha",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.8,
+      "ratingCount": 459,
+      "reason": "One of the better-rated Steakhouse spots"
+    },
+    {
+      "id": "cmua08i12000aoka2cqad7ani",
+      "placeId": "ChIJbUc3jNJpXz4RjlRJ6aw7Lpc",
+      "name": "Calories Lab",
+      "cuisine": "International",
+      "area": "Nad Al Sheba",
+      "priceMin": 20,
+      "priceMax": 55,
+      "rating": 4.9,
+      "ratingCount": 815,
+      "reason": "Something different — International"
+    }
+  ],
+  "wall": [
+    {
+      "id": "cmu9z017g000cokyjey7wxfki",
+      "placeId": "ChIJww96BO0VXz4RTtgKyMGmYIs",
+      "name": "Girl & the Goose - Restaurante Centroamericano",
+      "cuisine": "International",
+      "area": "Business Bay",
+      "priceMin": 120,
+      "priceMax": 280,
+      "rating": 5,
+      "ratingCount": 1726,
+      "reason": "International"
+    },
+    {
+      "id": "cmu9yrbj6000uokv9hwtrp08t",
+      "placeId": "ChIJ04aj-ypDXz4RqBl_qj5ENy0",
+      "name": "Hikāri Dubai",
+      "cuisine": "Asian",
+      "area": "DIFC",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 5,
+      "ratingCount": 1060,
+      "reason": "Asian"
+    },
+    {
+      "id": "cmu9z39ba0005okh7jljvghd4",
+      "placeId": "ChIJheuNzt9DXz4ROvCXu-iJrNs",
+      "name": "Arabian Tea House - Jumeirah Archaeological Site, Dubai",
+      "cuisine": "Middle Eastern",
+      "area": "Jumeirah",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.9,
+      "ratingCount": 8472,
+      "reason": "Middle Eastern"
+    },
+    {
+      "id": "cmua011830000oka3i3beyj8b",
+      "placeId": "ChIJ31yF-fFhXz4R-4RvG206jZg",
+      "name": "Bosporus Turkish Cuisine - City Centre Mirdif",
+      "cuisine": "Turkish",
+      "area": "Mirdif",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.9,
+      "ratingCount": 8595,
+      "reason": "Turkish"
+    },
+    {
+      "id": "cmu9zo7a2000hok5u2dxlnhyt",
+      "placeId": "ChIJsZ85RwBDXz4Rcl424kSGsco",
+      "name": "DANAT ALBAHAR",
+      "cuisine": "Seafood",
+      "area": "Jumeirah",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.9,
+      "ratingCount": 671,
+      "reason": "Seafood"
+    },
+    {
+      "id": "cmu9zld3j000qokmr85vyeuho",
+      "placeId": "ChIJcf4s-2VdXz4RHAVPklPjfoI",
+      "name": "Mehman, Dubai",
+      "cuisine": "Indian",
+      "area": "Deira",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.9,
+      "ratingCount": 1031,
+      "reason": "Indian"
+    },
+    {
+      "id": "cmu9z05h3000eokyjteqpo01m",
+      "placeId": "ChIJRXONdJtpXz4RoAJ5foUeuiM",
+      "name": "DIMO'S Cafe and Restaurant Dubai - All-Day Italian and Mediterranean-Inspired Bistro",
+      "cuisine": "Italian",
+      "area": "Business Bay",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.9,
+      "ratingCount": 1393,
+      "reason": "Italian"
+    },
+    {
+      "id": "cmu9zyczl000wokj7mepl6sqh",
+      "placeId": "ChIJW2MZrXllXz4R6oGUR2glU-I",
+      "name": "Hengchen DSO",
+      "cuisine": "Chinese",
+      "area": "Dubai Silicon Oasis",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.9,
+      "ratingCount": 454,
+      "reason": "Chinese"
+    },
+    {
+      "id": "cmu9y7yps000mokmgzesglp4u",
+      "placeId": "ChIJPYQrCeEVXz4RB1klFLbWBLQ",
+      "name": "Ronin | Ultimate Japanese Restaurant in Dubai | FIVE LUXE JBR",
+      "cuisine": "Japanese",
+      "area": "Jumeirah Beach Residence",
+      "priceMin": null,
+      "priceMax": null,
+      "rating": 4.9,
+      "ratingCount": 1942,
+      "reason": "Japanese"
+    },
+    {
+      "id": "cmu9zgo60000sok3gpxff26ny",
+      "placeId": "ChIJqVkEawVrXz4RQ7cLXG5PNlc",
+      "name": "Khun Chai Thai Restaurant -Barsha Mall",
+      "cuisine": "Thai",
+      "area": "Al Barsha",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.8,
+      "ratingCount": 1259,
+      "reason": "Thai"
+    },
+    {
+      "id": "cmu9z8xq3000mok1a8moti9a2",
+      "placeId": "ChIJRSyXty9DXz4RlDEbfJr2ICo",
+      "name": "La Serre Dubai",
+      "cuisine": "French",
+      "area": "الوصل",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.8,
+      "ratingCount": 1234,
+      "reason": "French"
+    },
+    {
+      "id": "cmua02oi9000soka3wd8rza8s",
+      "placeId": "ChIJx051TUdhXz4Rq4fQPmKKXuU",
+      "name": "Pitfire Pizza",
+      "cuisine": "Pizza",
+      "area": "مردف",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.8,
+      "ratingCount": 1208,
+      "reason": "Pizza"
+    },
+    {
+      "id": "cmu9y73ru0005okmg7l2jw6qv",
+      "placeId": "ChIJddNfIKhtXz4R3q7R4uvgBRM",
+      "name": "Habib Beirut Dubai Marina",
+      "cuisine": "Lebanese",
+      "area": "دبي مارينا",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.8,
+      "ratingCount": 5776,
+      "reason": "Lebanese"
+    },
+    {
+      "id": "cmu9zhhbj0016ok3g4ycihrrt",
+      "placeId": "ChIJgdaleIZrXz4RqH33jIrRcuI",
+      "name": "The Ninth Cut Butchery & Steakhouse",
+      "cuisine": "Steakhouse",
+      "area": "Al Barsha",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.8,
+      "ratingCount": 459,
+      "reason": "Steakhouse"
+    }
+  ]
+}
