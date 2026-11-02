@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import WaitlistCount from '../WaitlistCount'
-import PhoneScreenLive, { type Phase, type ScreenRow } from './PhoneScreenLive'
+import PhoneScreenLive, {
+  type Phase,
+  type ScreenDetail,
+  type ScreenRow,
+} from './PhoneScreenLive'
 import { scrollToWaitlist } from '../../lib/scroll'
 import { prefersReducedMotion } from '../../lib/reveal'
-import { metaLine } from '../../lib/live'
+import { cuisineTone, metaLine } from '../../lib/live'
 import { useShowcase } from '../../lib/useShowcase'
+import VenueNote from '../VenueNote'
 
 /**
- * The hero: copy, the CSS device, and THE SEQUENCE — a 6s one-shot story
- * that replaces the old card fan:
+ * The hero: copy, the CSS device, and THE SEQUENCE — an ~11.5s one-shot
+ * story. The card ballet, then the story CONTINUES INSIDE THE PHONE:
  *
  *   in     0–1.5s  the Higgsfield streak clip floods toward the phone, the
  *                  screen says "Deciding…" and its glow brightens
@@ -22,8 +27,26 @@ import { useShowcase } from '../../lib/useShowcase'
  *                  rect of its own result row (measured live, the shared-
  *                  element handoff) while the screen's rows spring in under
  *                  them on the same stagger
- *   settle         just the device, scaled up a touch, results readable —
- *                  the cards never duplicate the screen they came from
+ *   settle 6.4–7.7 just the device, scaled up a touch — Beat A: the three
+ *                  real results, readable
+ *   tap    7.7–8.4 Beat B: a simulated tap ripple lands on result #1
+ *   detail 8.4–9.6 Beat C: the screen expands pick #1 into the app's own
+ *                  detail view (name, meta, rating on Google, highlight
+ *                  chips, the three action tiles)
+ *   tap    9.6–10.2 Beat D's ripple lands on Directions…
+ *   route  10.2+   …and the screen becomes "On your way": OUR OWN stylised
+ *                  route drawing to a pulsing pin — an illustration, not a
+ *                  map. The story holds here; "Three taps, start to table."
+ *                  appears under the device.
+ *
+ * ⚠️ SHOWCASE ONLY: nothing inside the phone is clickable — the taps are
+ * part of the animation; no tel:, no maps, no Talabat. The only live
+ * controls in the hero are the waitlist CTA and scrolling.
+ *
+ * OFF-SCREEN: the clock PAUSES and resumes where it left off (chosen over
+ * jump-to-end: the story is the pitch, and a user who scrolls back gets
+ * the beats they missed, not a spoiler frame). After the final frame the
+ * route's idle pulses are CSS, paused off-screen via data-live.
  *
  * ONE rAF timeline drives the card transforms (transform/opacity/z-index
  * only); the stage attribute (`data-seq`) lets CSS run the cheap parts
@@ -51,6 +74,11 @@ const T_FLIP = 2500
 const T_ORBIT = 3500
 const T_RETURN = 5200
 const T_END = 6400
+/* ---- the in-screen beats (Beat A starts at T_END) ---- */
+const T_TAP = 7700
+const T_DETAIL = 8400
+const T_TAP2 = 9600
+const T_ROUTE = 10200
 const DEAL_STAGGER = 120
 const DEAL_DUR = 560
 const FLIP_STAGGER = 200
@@ -89,6 +117,16 @@ const stageAt = (t: number): Stage =>
             ? 'return'
             : 'settled'
 
+/** Which screen the glass shows at t — the in-phone story. */
+const holdFor = (t: number): Phase => {
+  if (t >= T_ROUTE) return 'route'
+  if (t >= T_TAP2) return 'detailtap'
+  if (t >= T_DETAIL) return 'detail'
+  if (t >= T_TAP) return 'select'
+  if (t >= T_RETURN) return 'results'
+  return 'deciding'
+}
+
 export default function HeroLive() {
   const ref = useRef<HTMLElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
@@ -100,7 +138,13 @@ export default function HeroLive() {
 
   const [reduce] = useState(prefersReducedMotion)
   const [stage, setStage] = useState<Stage>(() => (reduce || seqPlayed ? 'settled' : 'idle'))
-  const [hold, setHold] = useState<Phase>(() => (reduce || seqPlayed ? 'results' : 'idle'))
+  // Reduced motion and a remount after the story has told itself both rest
+  // on the FINAL frame: the "On your way" screen.
+  const [hold, setHold] = useState<Phase>(() => (reduce || seqPlayed ? 'route' : 'idle'))
+  const [inView, setInView] = useState(true)
+  const pauseRef = useRef<(() => void) | null>(null)
+  const resumeRef = useRef<(() => void) | null>(null)
+  const finishedRef = useRef(reduce || seqPlayed)
   const [videoState, setVideoState] = useState<'cold' | 'arming' | 'ready' | 'off'>('cold')
   const videoStateRef = useRef(videoState)
   useEffect(() => {
@@ -126,6 +170,19 @@ export default function HeroLive() {
     chip: p.reason,
     score: p.rating != null ? `★ ${p.rating.toFixed(1)}` : null,
   }))
+  const pick1 = showcase.picks[0]
+  const fmtCount = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n))
+  const detail: ScreenDetail = {
+    name: pick1.name,
+    meta: metaLine(pick1),
+    rating: pick1.rating != null ? pick1.rating.toFixed(1) : null,
+    ratingCount: pick1.ratingCount != null ? fmtCount(pick1.ratingCount) : null,
+    // Real highlight tags when the payload carries them; the restaurant's
+    // own cuisine and neighbourhood otherwise. Nothing invented.
+    chips: (pick1.tags?.length ? pick1.tags : [pick1.cuisine, pick1.area]).slice(0, 3),
+    reason: pick1.reason,
+    tone: cuisineTone(pick1.cuisine),
+  }
 
   /* ---- the timeline ---- */
   const run = useCallback(() => {
@@ -167,20 +224,26 @@ export default function HeroLive() {
     }
 
     let shownStage: Stage = 'idle'
+    let shownHold: Phase = 'deciding'
     const lit = [false, false, false]
-    const t0 = performance.now()
+    // A pausable clock: elapsed accumulates only while playing, so leaving
+    // the viewport freezes the story exactly where it was.
+    let elapsed = 0
+    let last = performance.now()
 
     const frame = (now: number) => {
-      const t = now - t0
+      elapsed += now - last
+      last = now
+      const t = elapsed
       const st = stageAt(t)
       if (st !== shownStage) {
         shownStage = st
         stageEl.dataset.seq = st
         setStage(st)
         if (st === 'return') {
-          // Measure BEFORE the rows start springing in, then release them.
+          // Measure BEFORE the rows start springing in (holdFor releases
+          // them to 'results' in the same frame).
           measureTargets()
-          setHold('results')
         }
         if (st === 'settled') {
           const v = videoRef.current
@@ -188,6 +251,13 @@ export default function HeroLive() {
         }
       }
       if (t >= T_RETURN && !targets) measureTargets()
+
+      /* the in-phone story: Beat A (results) through the final route frame */
+      const h = holdFor(t)
+      if (t >= T_RETURN && h !== shownHold) {
+        shownHold = h
+        setHold(h)
+      }
 
       for (let i = 0; i < 3; i++) {
         const slot = slots[i]
@@ -250,9 +320,29 @@ export default function HeroLive() {
         `${(6 * Math.sin(easeInOutCubic(orbP) * Math.PI * 2)).toFixed(2)}deg`,
       )
 
-      if (t < T_END) rafRef.current = requestAnimationFrame(frame)
-      else section.style.setProperty('--seq-turn', '0deg')
+      if (t >= T_END) section.style.setProperty('--seq-turn', '0deg')
+
+      if (t < T_ROUTE) rafRef.current = requestAnimationFrame(frame)
+      else {
+        finishedRef.current = true
+        pauseRef.current = null
+        resumeRef.current = null
+      }
     }
+
+    pauseRef.current = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = 0
+      const v = videoRef.current
+      if (v && !v.paused) v.pause()
+    }
+    resumeRef.current = () => {
+      if (rafRef.current || finishedRef.current) return
+      last = performance.now()
+      if (elapsed < T_DEAL) videoRef.current?.play().catch(() => {})
+      rafRef.current = requestAnimationFrame(frame)
+    }
+
     rafRef.current = requestAnimationFrame(frame)
   }, [])
 
@@ -340,6 +430,26 @@ export default function HeroLive() {
     }
   }, [])
 
+  // Off-screen: pause the story (and the final frame's CSS pulses); back
+  // in view: resume exactly where it left off. Play-once is untouched —
+  // this never rewinds, only freezes.
+  useEffect(() => {
+    if (reduce) return
+    const stageEl = stageRef.current
+    if (!stageEl || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(
+      (e) => {
+        const visible = e[0]?.isIntersecting ?? true
+        setInView(visible)
+        if (visible) resumeRef.current?.()
+        else pauseRef.current?.()
+      },
+      { threshold: 0.2 },
+    )
+    io.observe(stageEl)
+    return () => io.disconnect()
+  }, [reduce])
+
   return (
     <section
       ref={ref}
@@ -375,7 +485,9 @@ export default function HeroLive() {
         ref={stageRef}
         className="hero-live-stage"
         data-seq={stage}
+        data-screen={hold}
         data-video={videoState}
+        data-live={inView ? 'yes' : 'no'}
       >
         {/* The Higgsfield streak clip — behind the device, edge-masked, only
             audible to the eye during the 'in' beat. Sources: AV1 → HEVC →
@@ -407,7 +519,7 @@ export default function HeroLive() {
               <div className="dev-stage">
                 <span className="dev-body" aria-hidden="true" />
                 <div className="dev-face">
-                  <PhoneScreenLive holdAt={hold} rows={screenRows} />
+                  <PhoneScreenLive holdAt={hold} rows={screenRows} detail={detail} />
                   <span className="dev-glowup" aria-hidden="true" />
                   <span className="dev-sheen" aria-hidden="true" />
                 </div>
@@ -446,6 +558,12 @@ export default function HeroLive() {
             </div>
           ))}
         </div>
+
+        {/* The payoff line — appears with the final "On your way" frame. */}
+        <p className="hero-tagline">Three taps, start to table.</p>
+
+        {/* Real restaurants on the glass → the disclaimer lives here too. */}
+        <VenueNote />
       </div>
 
       <div className="product-cta">

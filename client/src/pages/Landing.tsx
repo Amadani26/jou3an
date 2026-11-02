@@ -21,7 +21,6 @@ import HeroLive from '../components/hero/HeroLive'
  * because the new story already ACTS OUT what those sections used to state.
  */
 const ProblemWall = lazy(() => import('../components/problem/ProblemWall'))
-const DecideAct = lazy(() => import('../components/DecideAct'))
 const DemoSection = lazy(() => import('../components/DemoSection'))
 
 export default function Landing() {
@@ -37,13 +36,6 @@ export default function Landing() {
       {/* ============================================================ */}
       <Suspense fallback={<div style={{ height: '320svh' }} aria-hidden="true" />}>
         <ProblemWall />
-      </Suspense>
-
-      {/* ============================================================ */}
-      {/* SECTION 3 — DECIDE -> ACT (the payoff moment)                */}
-      {/* ============================================================ */}
-      <Suspense fallback={<div style={{ minHeight: '70svh' }} aria-hidden="true" />}>
-        <DecideAct />
       </Suspense>
 
       {/* ============================================================ */}

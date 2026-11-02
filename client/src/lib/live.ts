@@ -36,6 +36,9 @@ export interface LivePick {
   rating: number | null
   ratingCount: number | null
   reason: string
+  /** Real highlight tags from the catalogue (the server sends up to 3);
+   *  optional so older payloads/snapshots keep working. */
+  tags?: string[]
 }
 
 export interface DemoResult extends LivePick {

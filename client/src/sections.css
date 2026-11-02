@@ -237,7 +237,7 @@
   place-items: center;
 }
 
-.dev-wrap { position: relative; width: var(--pw, min(60vw, 258px)); }
+.dev-wrap { position: relative; width: var(--pw, min(66vw, 272px)); }
 
 /* The float: slow, scripted, interruptible by nothing. */
 .dev-float {
@@ -355,6 +355,7 @@
 
 .ps-top {
   position: absolute;
+  z-index: 3; /* above the route map — the brand never gets covered */
   top: 3.4cqh;
   left: 0;
   right: 0;
@@ -561,6 +562,208 @@
   color: var(--text-muted);
 }
 
+/* ---- the in-phone story: Beats B–D (select → detail → route) ---- */
+
+.pscreen:is([data-phase='select'], [data-phase='detail'], [data-phase='detailtap'], [data-phase='route'])
+  .ps-home { opacity: 0; }
+.pscreen:is([data-phase='detail'], [data-phase='detailtap']) .ps-detail { opacity: 1; transform: none; }
+.pscreen[data-phase='route'] .ps-route { opacity: 1; }
+
+/* Beat C — the detail view expands out of result #1's part of the glass:
+   a scale from the row's origin reads as the shared-element open. */
+.ps-detail {
+  padding: 8cqh 5cqw 5cqh;
+  justify-content: flex-start;
+  transform: scale(0.82);
+  transform-origin: 50% 26%;
+  transition: opacity 360ms var(--ease-out), transform 460ms var(--ease-out);
+}
+
+.psd-hero {
+  position: relative;
+  height: 30cqh;
+  border-radius: 4.5cqw;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  padding: 3.6cqw;
+  flex: none;
+}
+.psd-scrim {
+  position: absolute;
+  inset: 0;
+  /* Heavy on purpose: the cuisine tone is a tint behind the name, not a
+     bright slab — same restraint as the wall's colour fields. */
+  background: linear-gradient(180deg, rgba(8, 8, 8, 0.45) 0%, rgba(8, 8, 8, 0.82) 100%);
+}
+.psd-name {
+  position: relative;
+  margin: 0;
+  font-weight: 800;
+  font-size: 6cqw;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.psd-meta {
+  margin: 2.2cqh 0 0;
+  font-size: 3.5cqw;
+  color: var(--text-secondary);
+}
+.psd-rating {
+  margin: 1.4cqh 0 0;
+  font-size: 4cqw;
+  font-weight: 700;
+}
+.psd-star { color: #ffb547; }
+.psd-count { color: var(--text-secondary); font-weight: 400; }
+.psd-on { color: var(--text-muted); font-weight: 400; font-size: 3cqw; }
+.psd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.8cqw;
+  margin-top: 2cqh;
+}
+.psd-reason {
+  align-self: flex-start;
+  margin-top: 2cqh;
+  padding: 1.2cqw 3.2cqw;
+  border-radius: 999px;
+  background: rgba(254, 0, 0, 0.13);
+  color: var(--red);
+  font-size: 3cqw;
+  font-weight: 600;
+}
+.psd-chip {
+  padding: 1.1cqw 3cqw;
+  border-radius: 999px;
+  background: #1a1a1a;
+  border: 1px solid #242424;
+  font-size: 3cqw;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+/* The three action tiles — the app's own language, NOT interactive: the
+   whole screen is aria-hidden showcase and nothing here links anywhere. */
+.psd-actions {
+  margin-top: auto;
+  display: flex;
+  gap: 2cqw;
+}
+.psd-btn {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1cqh;
+  padding: 2.2cqh 0;
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 3.6cqw;
+  font-size: 2.7cqw;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  overflow: hidden;
+  transition: border-color 240ms linear, background-color 240ms linear;
+}
+.psd-btn svg { width: 4.8cqw; height: 4.8cqw; color: var(--red); }
+
+/* Beat D's ripple on Directions. */
+.psd-ring {
+  right: auto;
+  left: 50%;
+  margin: -4.5cqw 0 0 -4.5cqw;
+}
+.pscreen[data-phase='detailtap'] .psd-btn[data-k='0'] {
+  border-color: var(--red);
+  background: rgba(254, 0, 0, 0.1);
+}
+.pscreen[data-phase='detailtap'] .psd-ring {
+  animation: psTap 760ms var(--ease-out) both;
+}
+
+/* ---- the final frame: "On your way", our own illustration ---- */
+
+.ps-route { padding: 0; }
+.psr-chip {
+  position: absolute;
+  top: 15cqh;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 1.8cqw;
+  padding: 1.7cqw 3.8cqw;
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.85);
+  border: 1px solid rgba(254, 0, 0, 0.5);
+  font-size: 3.4cqw;
+  font-weight: 600;
+  color: var(--text-primary);
+  transform: translate(-50%, -8px);
+  opacity: 0;
+  transition: opacity 400ms var(--ease-out) 1500ms, transform 500ms var(--ease-spring) 1500ms;
+}
+.psr-chip svg { width: 3.8cqw; height: 3.8cqw; color: var(--red); }
+.pscreen[data-phase='route'] .psr-chip { opacity: 1; transform: translate(-50%, 0); }
+
+.psr-map { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.psr-route {
+  stroke: var(--red);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+.pscreen[data-phase='route'] .psr-route {
+  animation: psrDraw 1300ms var(--ease-in-out) 300ms both;
+}
+@keyframes psrDraw {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+
+.psr-you { fill: #f2ede8; }
+
+.psr-dest { opacity: 0; }
+.pscreen[data-phase='route'] .psr-dest {
+  animation: psrArrive 200ms linear 1450ms both;
+}
+@keyframes psrArrive {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.psr-pulse {
+  fill: rgba(254, 0, 0, 0.45);
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+}
+.pscreen[data-phase='route'] .psr-pulse {
+  animation:
+    psrPulse 700ms var(--ease-out) 1550ms both,
+    psrBreathe 2.8s var(--ease-in-out) 2600ms infinite alternate;
+}
+@keyframes psrPulse {
+  0%   { opacity: 0.85; transform: scale(1); }
+  100% { opacity: 0; transform: scale(3.4); }
+}
+@keyframes psrBreathe {
+  from { opacity: 0.08; transform: scale(1.5); }
+  to   { opacity: 0.3; transform: scale(2.1); }
+}
+
+/* Final-frame economy: the pulses hold still while the hero is off-screen. */
+.hero-live-stage[data-live='no'] .psr-pulse { animation-play-state: paused; }
+
 /* ---- THE SEQUENCE: streaks in → deal → flip → orbit → settle ----
  *
  * Geometry is fractions of the device width, published here as --pw and
@@ -570,13 +773,63 @@
  * sits at 10, the device at 50, and each card's per-frame z-index swings
  * around 50 so it genuinely passes in front of and behind the phone.
  */
-.hero-live-stage { --pw: min(60vw, 258px); }
+/* Sized so the detail beat's type is legible at 375/393/430. */
+.hero-live-stage { --pw: min(66vw, 272px); }
 /* The ending: the cards are back inside, the device takes the stage. */
 .hero-live-stage .dev-wrap {
   z-index: 50;
   transition: transform 750ms var(--ease-out);
 }
 .hero-live-stage[data-seq='settled'] .dev-wrap { transform: scale(1.06); }
+
+/* The payoff line under the device — arrives with the final frame. */
+.hero-tagline {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: calc(50% + var(--pw) * 1.12);
+  z-index: 60;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
+  transition: opacity 600ms var(--ease-out) 1600ms, transform 600ms var(--ease-out) 1600ms;
+  pointer-events: none;
+}
+.hero-live-stage[data-screen='route'] .hero-tagline { opacity: 1; transform: none; }
+
+/* The hero shows real restaurants → the disclaimer sits with it. */
+.hero-live-stage .venue-note {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 8px;
+  z-index: 60;
+  margin: 0 auto; /* auto: the 52ch cap must centre, not hug the left */
+  font-size: 10.5px;
+}
+@media (min-width: 768px) {
+  /* Desktop: the device fills the stage's height, so the payoff line and
+     the disclaimer take the empty bottom-left instead of the centre. */
+  .hero-tagline {
+    top: auto;
+    bottom: 56px;
+    left: 44px;
+    right: auto;
+    max-width: 300px;
+    text-align: left;
+  }
+  .hero-live-stage .venue-note {
+    left: 44px;
+    right: auto;
+    bottom: 16px;
+    max-width: 360px;
+    text-align: left;
+    margin: 0;
+  }
+}
 
 /* The Higgsfield clip — behind the device, edge-masked into the black.
    Visible only through the 'in' beat; "the streaks stop" is this fade. */
@@ -1220,454 +1473,6 @@ html.js .wall-sticky[data-play='no'] .wall-plane {
 
 /* ==================================================================== */
 /* DECIDE -> ACT — the departure board                                  */
-/* ==================================================================== */
-
-.act-section {
-  position: relative;
-  padding: clamp(90px, 16svh, 160px) 20px;
-  background:
-    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(254, 0, 0, 0.09), transparent 70%),
-    #000;
-}
-
-.act-stage {
-  max-width: 640px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.act-eyebrow {
-  margin: 0 0 18px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--red);
-}
-
-/* ---- the chosen dish ---- */
-
-.story-name {
-  margin: 0 0 clamp(20px, 3.5svh, 30px);
-  font-family: 'Syne', system-ui, sans-serif;
-  font-weight: 800;
-  font-size: min(11vw, 58px);
-  line-height: 0.98;
-  letter-spacing: -0.04em;
-  color: var(--text-primary);
-  text-wrap: balance;
-}
-
-/* ---- the stage: full-bleed 3D scene + the floating card ---- */
-
-.story-stagewrap {
-  position: relative;
-  width: 100vw;
-  margin-inline: calc(50% - 50vw);
-  height: clamp(360px, 54svh, 560px); /* fixed: no stage can move layout */
-}
-
-/* The scene — edges dissolving into the page, so it reads as a place the
-   section looks out onto, not a box inside it. */
-.story-scene {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  -webkit-mask-image: radial-gradient(ellipse 72% 84% at 50% 46%, #000 50%, transparent 98%);
-  mask-image: radial-gradient(ellipse 72% 84% at 50% 46%, #000 50%, transparent 98%);
-  transition: opacity 700ms var(--ease-out);
-}
-/* Waiting behind the card: present but quiet. */
-html.js .act-section:is([data-stage='wait'], [data-stage='card'], [data-stage='tap']) .story-scene {
-  opacity: 0.3;
-}
-
-/* The drift wrapper: the idle camera sway (2D, composes OUTSIDE the 3D
-   world's own transform) and the perspective the world renders under. */
-.nav-drift {
-  position: absolute;
-  inset: 0;
-  perspective: 900px;
-  perspective-origin: 50% 32%;
-}
-html.js .act-section[data-stage='arrived'] .nav-drift {
-  animation: navDrift 13s var(--ease-in-out) infinite alternate;
-}
-@keyframes navDrift {
-  from { transform: translate3d(-7px, 3px, 0) rotate(-0.5deg); }
-  to   { transform: translate3d(7px, -3px, 0) rotate(0.5deg); }
-}
-
-/* THE WORLD — a 640×420 invented neighbourhood on a tilted plane. The
-   resting transform is the arrived camera; worldTransform() in
-   DecideAct.tsx writes the same arithmetic per-frame during the journey.
-   ⚠️ Keep --nav-zoom and the translate in sync with FINAL_* there. */
-.nav-world {
-  --nav-zoom: 1.18;
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 640px;
-  height: 420px;
-  margin: -210px 0 0 -320px;
-  transform-style: preserve-3d;
-  will-change: transform;
-  transform: scale(var(--nav-zoom)) rotateX(55deg) rotateZ(0deg) translate3d(20px, -40px, 0);
-}
-@media (min-width: 768px) {
-  .nav-world { --nav-zoom: 1; }
-}
-
-.nav-ground { position: absolute; inset: 0; }
-
-/* The route: a soft glow under a solid core, both dash-revealed by the
-   journey (default: fully drawn — no-JS, reduced motion, arrived). */
-.nav-rglow,
-.nav-rcore,
-.nav-comet {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.nav-rglow {
-  stroke: rgba(254, 0, 0, 0.22);
-  stroke-width: 13;
-  stroke-dasharray: 1000;
-  stroke-dashoffset: 0;
-}
-.nav-rcore {
-  stroke: var(--red);
-  stroke-width: 4.5;
-  stroke-dasharray: 1000;
-  stroke-dashoffset: 0;
-}
-html.js .act-section:is([data-stage='wait'], [data-stage='card'], [data-stage='tap'])
-  :is(.nav-rglow, .nav-rcore) {
-  stroke-dashoffset: 1000;
-}
-
-/* The idle comet: one short light pulse forever lapping the route. */
-.nav-comet {
-  stroke: rgba(255, 126, 112, 0.9);
-  stroke-width: 5;
-  stroke-dasharray: 36 964;
-  stroke-dashoffset: 1000;
-  opacity: 0;
-}
-html.js .act-section[data-stage='arrived'] .nav-comet {
-  opacity: 1;
-  animation: navComet 3.8s linear 900ms infinite;
-}
-@keyframes navComet {
-  from { stroke-dashoffset: 1000; }
-  to   { stroke-dashoffset: 0; }
-}
-
-/* ---- the buildings: our own blocks, extruded and softly lit ---- */
-
-.bld {
-  position: absolute;
-  transform-style: preserve-3d;
-  pointer-events: none;
-}
-.bld-top {
-  position: absolute;
-  inset: 0;
-  border-radius: 3px;
-  background: linear-gradient(145deg, #1a1a1b, #101011 58%, #151516);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-  transform: translateZ(var(--h));
-}
-/* South wall (faces the camera) and east wall — two faces are all these
-   viewing angles ever show. */
-.bld-s {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--h);
-  transform-origin: bottom;
-  transform: rotateX(-90deg);
-  background: linear-gradient(180deg, #141415, #070708);
-}
-.bld-e {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 0;
-  width: var(--h);
-  transform-origin: right;
-  transform: rotateY(90deg);
-  background: linear-gradient(90deg, #0e0e0f, #060607);
-}
-
-/* ---- You, travelling; the destination, waiting ---- */
-
-.nav-you {
-  position: absolute;
-  left: -6px;
-  top: -6px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #f2ede8;
-  box-shadow:
-    0 0 2px rgba(255, 255, 255, 0.9),
-    0 0 12px 4px rgba(254, 0, 0, 0.6);
-  transform: translate3d(162px, 332px, 1px);
-  transition: opacity 600ms linear;
-}
-/* Arrived: the pin takes over, the traveller dissolves. Also the no-JS and
-   reduced-motion default, since arrived is the default stage there. */
-html.js .act-section:not([data-stage='arrived']) .nav-you { opacity: 1; }
-.act-section[data-stage='arrived'] .nav-you,
-html:not(.js) .nav-you { opacity: 0; }
-
-.nav-dest {
-  position: absolute;
-  width: 0;
-  height: 0;
-  transform-style: preserve-3d;
-}
-.nav-ring {
-  position: absolute;
-  left: -13px;
-  top: -13px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 2px solid rgba(254, 0, 0, 0.9);
-  box-shadow: 0 0 16px rgba(254, 0, 0, 0.55);
-}
-html.js .act-section[data-stage='arrived'] .nav-ring {
-  animation: navBreathe 2.6s var(--ease-in-out) infinite alternate;
-}
-@keyframes navBreathe {
-  from { transform: scale(1); opacity: 0.75; }
-  to   { transform: scale(1.3); opacity: 1; }
-}
-/* One burst on arrival. */
-.nav-burst {
-  position: absolute;
-  left: -13px;
-  top: -13px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: rgba(254, 0, 0, 0.4);
-  opacity: 0;
-}
-html.js .act-section[data-stage='arrived'] .nav-burst {
-  animation: navBurst 850ms var(--ease-out) both;
-}
-@keyframes navBurst {
-  from { opacity: 0.9; transform: scale(0.5); }
-  to   { opacity: 0; transform: scale(4.4); }
-}
-/* A beam of red light standing at the door. */
-.nav-beam {
-  position: absolute;
-  left: -3px;
-  bottom: 0;
-  width: 6px;
-  height: 64px;
-  transform-origin: bottom;
-  transform: rotateX(-90deg);
-  background: linear-gradient(to top, rgba(254, 0, 0, 0.85), rgba(254, 0, 0, 0));
-}
-html.js .act-section[data-stage='arrived'] .nav-beam {
-  animation: navBeam 2.6s var(--ease-in-out) infinite alternate;
-}
-@keyframes navBeam {
-  from { opacity: 0.65; }
-  to   { opacity: 1; }
-}
-
-/* Idle-loop economy: everything forever pauses while off screen. */
-.act-section[data-live='no'] :is(.nav-drift, .nav-comet, .nav-ring, .nav-beam) {
-  animation-play-state: paused;
-}
-
-/* The card layer: floats over the scene through card/tap, then morphs off
-   as the journey takes the stage. */
-.story-cardlayer {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: min(100% - 40px, 560px);
-  aspect-ratio: 44 / 30;
-  transform: translate(-50%, -50%);
-  border-radius: 20px;
-  overflow: hidden;
-  background: #0d0d0d;
-  box-shadow: 0 34px 70px -34px rgba(0, 0, 0, 0.95);
-  opacity: 0;
-  pointer-events: none;
-}
-html.js .act-section:is([data-stage='card'], [data-stage='tap']) .story-cardlayer {
-  opacity: 1;
-}
-html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-cardlayer .story-photo {
-  transform: scale(1.12);
-  opacity: 0;
-}
-html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-cardlayer .story-info {
-  transform: translate3d(0, 24px, 0);
-  opacity: 0;
-}
-html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-cardlayer {
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(1.06);
-  transition: opacity 500ms linear 200ms, transform 650ms var(--ease-in-out);
-}
-html.js .act-section[data-stage='wait'] .story-cardlayer {
-  opacity: 0;
-}
-.story-cardlayer {
-  transition: opacity 400ms var(--ease-out), transform 650ms var(--ease-in-out);
-}
-
-.story-photo {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scale(1);
-  opacity: 1;
-  transition: transform 750ms var(--ease-in-out), opacity 500ms linear 120ms;
-  will-change: transform, opacity;
-}
-
-.story-scrim {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.18) 30%, rgba(0, 0, 0, 0.86) 100%);
-}
-
-.story-info {
-  position: absolute;
-  inset: auto 0 0;
-  padding: 16px;
-  transition: transform 450ms var(--ease-in-out), opacity 350ms linear;
-}
-
-.story-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 12px;
-  font-size: 13.5px;
-  color: rgba(242, 237, 232, 0.85);
-}
-.story-score {
-  margin-left: auto;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: rgba(8, 8, 8, 0.72);
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.story-actions {
-  display: flex;
-  gap: 8px;
-}
-.story-btn {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 44px;
-  background: rgba(20, 20, 20, 0.92);
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
-  color: var(--text-primary);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  overflow: hidden;
-}
-.story-btn svg { color: var(--red); flex: none; }
-
-/* The simulated tap: Directions presses and a ripple blooms, on cue. */
-html.js .act-section:is([data-stage='tap'], [data-stage='map'], [data-stage='arrived']) .story-btn-dir {
-  animation: storyPress 420ms var(--ease-out);
-  border-color: var(--red);
-}
-@keyframes storyPress {
-  0%   { transform: scale(1); }
-  35%  { transform: scale(0.94); }
-  100% { transform: scale(1); }
-}
-.story-ripple {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 14px;
-  height: 14px;
-  margin: -7px 0 0 -7px;
-  border-radius: 50%;
-  background: rgba(254, 0, 0, 0.45);
-  opacity: 0;
-  pointer-events: none;
-}
-html.js .act-section:is([data-stage='tap'], [data-stage='map'], [data-stage='arrived']) .story-ripple {
-  animation: storyRipple 550ms var(--ease-out) both;
-}
-@keyframes storyRipple {
-  0%   { opacity: 0.9; transform: scale(0.6); }
-  100% { opacity: 0; transform: scale(9); }
-}
-
-/* ---- the arrival chip ---- */
-
-.story-chip {
-  position: absolute;
-  top: 16px;
-  left: 50%;
-  z-index: 3;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 13px;
-  border-radius: 999px;
-  background: rgba(8, 8, 8, 0.85);
-  border: 1px solid rgba(254, 0, 0, 0.5);
-  color: var(--text-primary);
-  font-size: 12.5px;
-  font-weight: 600;
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
-.story-chip svg { color: var(--red); }
-html.js .act-section:not([data-stage='arrived']) .story-chip {
-  opacity: 0;
-  transform: translate(-50%, -8px);
-}
-.story-chip {
-  transition: opacity 400ms var(--ease-out), transform 500ms var(--ease-spring);
-}
-
-.act-sub {
-  margin: 30px 0 0;
-  max-width: 40ch;
-  font-size: 15px;
-  line-height: 1.55;
-  /* White like the page's other supporting lines (ruling). */
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
 /* The real-restaurant disclaimer — every live-venue section carries it. */
 .venue-note {
   margin: 18px auto 0;
@@ -1682,9 +1487,6 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-
-/* A real restaurant's card never wears a stock photo: its cuisine's tone. */
-.story-field { display: block; }
 
 /* Live photo attribution — required wherever the image shows. */
 .demo-card-attr {
@@ -2613,27 +2415,16 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
   .hero-scrollcue i { animation: none; }
   .float-cta { transition: opacity 180ms linear; }
 
-  /* The story rests on its arrived frame: the 3D scene, route drawn, pin
-     lit, chip in place — and the idle loop holds still (no drift, no
-     comet, no breathing). No morph, no journey, no ripple. */
-  html.js .act-section .story-btn-dir,
-  html.js .act-section .story-ripple,
-  html.js .act-section .nav-drift,
-  html.js .act-section .nav-comet,
-  html.js .act-section .nav-ring,
-  html.js .act-section .nav-beam,
-  html.js .act-section .nav-burst { animation: none; }
-  .story-scene,
-  .story-cardlayer,
-  .story-photo,
-  .story-info,
-  .nav-you,
-  .story-chip { transition: none; }
-  html.js .act-section :is(.nav-rglow, .nav-rcore) { stroke-dashoffset: 0; }
-  html.js .act-section .story-scene { opacity: 1; }
-  html.js .act-section .story-cardlayer { opacity: 0; }
-  html.js .act-section .nav-you { opacity: 0; }
-  html.js .act-section .story-chip { opacity: 1; transform: translate(-50%, 0); }
+  /* The hero's in-phone story rests on its final frame: the "On your way"
+     screen, route drawn, pin lit, tagline in place. No ripples, no draw. */
+  .ps-detail,
+  .ps-route,
+  .psr-chip,
+  .hero-tagline { transition: none; }
+  .psr-route { animation: none; stroke-dashoffset: 0; }
+  .psr-dest { animation: none; opacity: 1; }
+  .psr-pulse { animation: none; }
+  .hero-tagline { opacity: 1; transform: none; }
 
   /* Vignettes hold their complete 0% frame; the accordion cuts instantly. */
   .vig-stage *,

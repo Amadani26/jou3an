@@ -1,40 +1,40 @@
 {
   "picks": [
     {
-      "id": "cmu9zo7a2000hok5u2dxlnhyt",
-      "placeId": "ChIJsZ85RwBDXz4Rcl424kSGsco",
-      "name": "DANAT ALBAHAR",
-      "cuisine": "Seafood",
+      "id": "cmua0h9dp0000ok7ehs29mxcy",
+      "placeId": "ChIJr3PsY9hDXz4R1JWWr2On56U",
+      "name": "FLAVE by Chef Wali - Burger Bistro Wasl",
+      "cuisine": "International",
       "area": "Jumeirah",
       "priceMin": 50,
       "priceMax": 120,
       "rating": 4.9,
-      "ratingCount": 671,
-      "reason": "One of the better-rated Seafood spots"
+      "ratingCount": 7240,
+      "reason": "One of the better-rated International spots"
     },
     {
-      "id": "cmu9yzhvf0001okyjaxl1j3kw",
-      "placeId": "ChIJ8-3M2EppXz4RTjOPHMw165o",
-      "name": "Kimuraya Authentic Japanese Restaurant - 1st Branch Business Bay",
-      "cuisine": "Japanese",
-      "area": "Business Bay",
+      "id": "cmua08amr0006oka2g6kz539p",
+      "placeId": "ChIJDxzukfhpXz4Re4YX8pOKAwQ",
+      "name": "Lalezar Restaurant and Cafe",
+      "cuisine": "Turkish",
+      "area": "Downtown Dubai",
       "priceMin": 50,
       "priceMax": 120,
       "rating": 4.8,
-      "ratingCount": 4426,
-      "reason": "One of the better-rated Japanese spots"
+      "ratingCount": 1270,
+      "reason": "One of the better-rated Turkish spots"
     },
     {
-      "id": "cmu9zhhbj0016ok3g4ycihrrt",
-      "placeId": "ChIJgdaleIZrXz4RqH33jIrRcuI",
-      "name": "The Ninth Cut Butchery & Steakhouse",
-      "cuisine": "Steakhouse",
-      "area": "Al Barsha",
+      "id": "cmu9yqb850007okv91pw79o30",
+      "placeId": "ChIJU83PUI9DXz4R6_kiWuYyF7U",
+      "name": "Al Beiruti Cafe DIFC",
+      "cuisine": "Lebanese",
+      "area": "DIFC",
       "priceMin": 50,
       "priceMax": 120,
       "rating": 4.8,
-      "ratingCount": 459,
-      "reason": "One of the better-rated Steakhouse spots"
+      "ratingCount": 4699,
+      "reason": "One of the better-rated Lebanese spots"
     }
   ],
   "wall": [
