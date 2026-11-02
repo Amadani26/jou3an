@@ -6,28 +6,34 @@ import { prefersReducedMotion } from '../lib/reveal'
 /**
  * DECIDE → ACT — the mini story of what happens after you pick.
  *
- *   1. CARD   the chosen result, large: licensed dish photo, name,
- *             cuisine · area · price, and the three action buttons.
- *   2. TAP    a simulated tap lands on Directions — a ripple blooms on the
- *             button — and the card MORPHS into the map: the photo scales
- *             and fades away inside the same panel while the map scales in
- *             beneath it (one shared element, so the photo visibly BECOMES
- *             the map), and the card chrome slides out.
- *   3. MAP    an ORIGINAL stylised map — our own SVG: dark blocks, a few
- *             street lines, nothing traced from any real place, no tiles,
- *             no provider imagery. The route draws itself from a "You" dot
- *             to the destination pin, the pin pulses red once, and a small
- *             arrival chip slides in.
+ *   1. CARD    the chosen result, large: licensed dish photo, name,
+ *              cuisine · area · price, the three action buttons.
+ *   2. TAP     a simulated tap lands on Directions — ripple blooms — and
+ *              the card fades off the SCENE behind it.
+ *   3. JOURNEY a full-bleed 3D navigation view: our own abstract blocks
+ *              extruded as softly lit buildings on a tilted plane (CSS 3D,
+ *              nothing traced from anywhere real — no tiles, no streets of
+ *              any actual city). The You dot travels the red route with a
+ *              light trail while the camera pans with it and banks into
+ *              each turn (~2.3s, time-based).
+ *   4. ARRIVED the camera pulls back, a pulse bursts at the destination,
+ *              the "On your way" chip pops in — and the scene never goes
+ *              still: light pulses run the route, the camera drifts, the
+ *              pin glow breathes. The idle loop pauses off-screen.
  *
- * ⚠️ PLAY ONCE: one once-and-disconnect IntersectionObserver starts the
+ * ⚠️ PLAY ONCE: a once-and-disconnect IntersectionObserver starts the
  * story; stages only move forward, so scrolling away and back finds the
- * final map state. All hidden/waiting states are gated under `html.js`, and
- * the DEFAULT (no JS, prerender, reduced motion) is the finished map —
- * paint-first content everywhere.
+ * arrived scene (idle loop running). The DEFAULT (no JS, prerender,
+ * reduced motion) is the arrived frame — paint-first everywhere. A second
+ * cheap observer only toggles `data-live` to pause the idle animations
+ * while the section is off-screen.
  *
- * Everything animates with transforms, opacity and SVG stroke-dashoffset;
- * the panel has a fixed aspect ratio so no stage change moves layout
- * (CLS 0 by construction).
+ * THE CAMERA is one rAF writing a single transform on the world plane
+ * (scale · rotateX · rotateZ · translate — the translate keeps the dot's
+ * route point glued to screen centre regardless of yaw), plus the dot
+ * transform and the trail dash-offsets. Everything else is CSS keyed off
+ * `data-stage`. The scene wrapper has a fixed height, so CLS is 0 by
+ * construction.
  */
 
 const PICK = DISHES[SURVIVOR_INDEXES[0]]
@@ -41,67 +47,209 @@ const TILES = [
   { label: 'Order', Icon: ShoppingBag, kind: 'order' },
 ] as const
 
-/** Our own abstract neighbourhood: blocks, streets, a route, a pin. */
-function StylisedMap() {
+/* ------------------------------------------------------------------ */
+/* The invented city — 640×420 world units, authored so no block ever  */
+/* crosses a street. {x, y, w, d, h}: footprint + extrusion height.    */
+/* ------------------------------------------------------------------ */
+
+const WORLD_W = 640
+const WORLD_H = 420
+
+const BLOCKS: [number, number, number, number, number][] = [
+  [118, 82, 96, 70, 26],
+  [234, 76, 84, 58, 34],
+  [374, 90, 80, 58, 22], // the destination's block
+  [126, 176, 78, 92, 18],
+  [224, 176, 92, 74, 30],
+  [338, 196, 108, 64, 24],
+  [122, 344, 88, 56, 20],
+  [236, 282, 80, 66, 28],
+  [472, 172, 60, 90, 32],
+  [386, 282, 66, 66, 16],
+  [18, 180, 70, 80, 22],
+  [30, 352, 70, 56, 14],
+  [540, 196, 66, 64, 26],
+  [476, 296, 90, 60, 18],
+  [236, 16, 80, 52, 20],
+  [480, 20, 100, 56, 28],
+  [20, 20, 80, 70, 16],
+  [472, 352, 110, 56, 12],
+  [560, 100, 60, 52, 20],
+]
+
+/** The route, street by street: You → the door. Axis-aligned on purpose. */
+const ROUTE: [number, number][] = [
+  [162, 332],
+  [216, 332],
+  [216, 272],
+  [326, 272],
+  [326, 162],
+  [414, 162],
+]
+const ROUTE_D = 'M162 332 H216 V272 H326 V162 H414'
+const DEST = ROUTE[ROUTE.length - 1]
+
+/** Per-segment camera bank (deg) — leaning into each turn, not a compass. */
+const SEG_YAW = [-12, 12, -10, 14, -8]
+
+/* Segment lengths + total, for the dot's arc-length parametrisation. */
+const SEG_LEN = ROUTE.slice(1).map(
+  (p, i) => Math.abs(p[0] - ROUTE[i][0]) + Math.abs(p[1] - ROUTE[i][1]),
+)
+const ROUTE_LEN = SEG_LEN.reduce((a, b) => a + b, 0)
+
+/** Point + segment index at arc length s. */
+function routeAt(s: number): { x: number; y: number; seg: number } {
+  let rest = Math.max(0, Math.min(ROUTE_LEN, s))
+  for (let i = 0; i < SEG_LEN.length; i++) {
+    if (rest <= SEG_LEN[i] || i === SEG_LEN.length - 1) {
+      const t = SEG_LEN[i] ? rest / SEG_LEN[i] : 1
+      const [ax, ay] = ROUTE[i]
+      const [bx, by] = ROUTE[i + 1]
+      return { x: ax + (bx - ax) * t, y: ay + (by - ay) * t, seg: i }
+    }
+    rest -= SEG_LEN[i]
+  }
+  return { x: DEST[0], y: DEST[1], seg: SEG_LEN.length - 1 }
+}
+
+/* ---- the camera (shared by the rAF's last frame and the CSS default;
+        FINAL_* are mirrored by .nav-world's resting transform) ---- */
+const TILT = 55
+const JOURNEY_MS = 2300
+const PULLBACK_MS = 520
+const FINAL_FOCUS = [300, 250] // what the resting camera centres on
+const FINAL_ZOOM_MOBILE = 1.18
+const FINAL_ZOOM_DESKTOP = 1.0
+const TRAVEL_ZOOM_MOBILE = 1.62
+const TRAVEL_ZOOM_DESKTOP = 1.34
+
+const easeInOutCubic = (p: number) =>
+  p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
+
+const worldTransform = (zoom: number, yaw: number, fx: number, fy: number) =>
+  `scale(${zoom.toFixed(3)}) rotateX(${TILT}deg) rotateZ(${yaw.toFixed(2)}deg) ` +
+  `translate3d(${(WORLD_W / 2 - fx).toFixed(1)}px, ${(WORLD_H / 2 - fy).toFixed(1)}px, 0)`
+
+/** The 3D neighbourhood: ground SVG + extruded blocks + the destination. */
+function NavWorld() {
   return (
-    <svg
-      className="story-map"
-      viewBox="0 0 440 300"
-      fill="none"
-      aria-hidden="true"
-      focusable="false"
-      preserveAspectRatio="xMidYMid slice"
-    >
-      {/* City blocks — plain rounded rectangles, an invented layout. */}
-      <g fill="#111111" stroke="#1e1e1e" strokeWidth="1.5">
-        <rect x="18" y="22" width="96" height="70" rx="6" />
-        <rect x="134" y="16" width="120" height="58" rx="6" />
-        <rect x="274" y="30" width="80" height="84" rx="6" />
-        <rect x="26" y="116" width="78" height="92" rx="6" />
-        <rect x="124" y="96" width="92" height="74" rx="6" />
-        <rect x="238" y="136" width="108" height="64" rx="6" />
-        <rect x="42" y="230" width="120" height="58" rx="6" />
-        <rect x="186" y="192" width="74" height="96" rx="6" />
-        <rect x="372" y="60" width="60" height="120" rx="6" />
-        <rect x="286" y="222" width="130" height="66" rx="6" />
-      </g>
-      {/* Streets between the blocks. */}
-      <g stroke="#262626" strokeWidth="3" strokeLinecap="round">
-        <path d="M0 102 H440" />
-        <path d="M0 212 H440" />
-        <path d="M116 0 V300" />
-        <path d="M226 0 V300" />
-        <path d="M362 0 V300" />
-      </g>
-      {/* The route: along the streets, You -> destination. */}
-      <path
-        className="story-route"
-        d="M62 272 H116 V212 H226 V102 H322"
-        stroke="#FE0000"
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        pathLength={100}
-      />
-      {/* You */}
-      <circle cx="62" cy="272" r="6" fill="#F2EDE8" />
-      <text className="story-you" x="62" y="256" textAnchor="middle">
-        You
-      </text>
-      {/* Destination pin + one red pulse on arrival */}
-      <g className="story-dest">
-        <circle className="story-pulse" cx="322" cy="102" r="9" />
-        <circle cx="322" cy="102" r="9" fill="#FE0000" />
-        <circle cx="322" cy="102" r="3.4" fill="#0a0a0a" />
-      </g>
-    </svg>
+    <div className="nav-world">
+      <svg
+        className="nav-ground"
+        viewBox={`0 0 ${WORLD_W} ${WORLD_H}`}
+        width={WORLD_W}
+        height={WORLD_H}
+        fill="none"
+        aria-hidden="true"
+        focusable="false"
+      >
+        {/* Streets of nowhere. */}
+        <g stroke="#1d1d1d" strokeWidth="7" strokeLinecap="round">
+          <path d="M0 162 H640" />
+          <path d="M0 272 H640" />
+          <path d="M0 332 H216" />
+          <path d="M216 0 V420" />
+          <path d="M326 0 V420" />
+          <path d="M462 0 V420" />
+        </g>
+        {/* The route: a soft glow under a solid core, both revealed by the
+            same dash-offset as the dot travels (pathLength-normalised). */}
+        <path className="nav-rglow" d={ROUTE_D} pathLength={1000} />
+        <path className="nav-rcore" d={ROUTE_D} pathLength={1000} />
+        {/* The idle comet: a short bright pulse looping the route forever. */}
+        <path className="nav-comet" d={ROUTE_D} pathLength={1000} />
+      </svg>
+
+      {BLOCKS.map(([x, y, w, d, h], i) => (
+        <div
+          key={i}
+          className="bld"
+          style={{
+            left: x,
+            top: y,
+            width: w,
+            height: d,
+            ['--h' as string]: `${h}px`,
+          }}
+        >
+          <span className="bld-s" />
+          <span className="bld-e" />
+          <span className="bld-top" />
+        </div>
+      ))}
+
+      {/* You — a lit dot on the ground; the rAF drives it along the route. */}
+      <span className="nav-you" />
+
+      {/* The destination: ground rings + a beam of red light at the door,
+          breathing forever once arrived; the burst fires once on arrival. */}
+      <div className="nav-dest" style={{ left: DEST[0], top: DEST[1] }}>
+        <span className="nav-ring" />
+        <span className="nav-burst" />
+        <span className="nav-beam" />
+      </div>
+    </div>
   )
 }
 
 export default function DecideAct() {
   const ref = useRef<HTMLElement | null>(null)
   const [stage, setStage] = useState<Stage>('wait')
+  const [live, setLive] = useState(true)
   const timers = useRef<number[]>([])
+  const rafRef = useRef(0)
+
+  /* The journey: one rAF writing the camera, the dot and the trail. */
+  const drive = () => {
+    const world = ref.current?.querySelector<HTMLElement>('.nav-world')
+    if (!world) return
+    const dot = world.querySelector<HTMLElement>('.nav-you')
+    const glow = world.querySelector<SVGPathElement>('.nav-rglow')
+    const core = world.querySelector<SVGPathElement>('.nav-rcore')
+    const desktop = window.matchMedia('(min-width: 768px)').matches
+    const travelZoom = desktop ? TRAVEL_ZOOM_DESKTOP : TRAVEL_ZOOM_MOBILE
+    const finalZoom = desktop ? FINAL_ZOOM_DESKTOP : FINAL_ZOOM_MOBILE
+
+    let yaw = SEG_YAW[0]
+    let last = performance.now()
+    const t0 = last
+
+    const frame = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000)
+      last = now
+      const t = now - t0
+
+      if (t <= JOURNEY_MS) {
+        const s = ROUTE_LEN * easeInOutCubic(clamp01(t / JOURNEY_MS))
+        const p = routeAt(s)
+        yaw += (SEG_YAW[p.seg] - yaw) * Math.min(1, 6 * dt)
+        world.style.transform = worldTransform(travelZoom, yaw, p.x, p.y)
+        if (dot) dot.style.transform = `translate3d(${p.x}px, ${p.y}px, 1px)`
+        const off = String(1000 - (s / ROUTE_LEN) * 1000)
+        if (glow) glow.style.strokeDashoffset = off
+        if (core) core.style.strokeDashoffset = off
+      } else {
+        /* pull back to the resting frame */
+        const q = easeInOutCubic(clamp01((t - JOURNEY_MS) / PULLBACK_MS))
+        const zoom = travelZoom + (finalZoom - travelZoom) * q
+        const fx = DEST[0] + (FINAL_FOCUS[0] - DEST[0]) * q
+        const fy = DEST[1] + (FINAL_FOCUS[1] - DEST[1]) * q
+        yaw += (0 - yaw) * Math.min(1, 7 * dt)
+        world.style.transform = worldTransform(zoom, q >= 1 ? 0 : yaw, fx, fy)
+        if (dot) dot.style.transform = `translate3d(${DEST[0]}px, ${DEST[1]}px, 1px)`
+        if (glow) glow.style.strokeDashoffset = '0'
+        if (core) core.style.strokeDashoffset = '0'
+        if (q >= 1) {
+          setStage('arrived')
+          return
+        }
+      }
+      rafRef.current = requestAnimationFrame(frame)
+    }
+    rafRef.current = requestAnimationFrame(frame)
+  }
 
   useEffect(() => {
     const el = ref.current
@@ -119,41 +267,63 @@ export default function DecideAct() {
           finish()
           return
         }
-        const at = (s: Stage, ms: number) =>
-          timers.current.push(window.setTimeout(() => setStage(s), ms))
+        const at = (fn: () => void, ms: number) =>
+          timers.current.push(window.setTimeout(fn, ms))
         setStage('card')
-        at('tap', 1500) // read the card, then the tap lands
-        at('map', 2150) // ripple finishes, the morph begins
-        at('arrived', 3400) // route drawn, pin pulsed, chip in
+        at(() => setStage('tap'), 1400) // read the card, then the tap lands
+        at(() => {
+          setStage('map') // card morphs off the scene...
+          drive() // ...and the journey rolls (sets 'arrived' itself)
+        }, 2050)
       },
       { rootMargin: '-15% 0px' },
     )
     io.observe(el)
+
+    // Idle-loop economy: pause the forever-animations while off screen.
+    const liveIO = new IntersectionObserver((e) =>
+      setLive(e[0]?.isIntersecting ?? true),
+    )
+    liveIO.observe(el)
+
     return () => {
       io.disconnect()
+      liveIO.disconnect()
       for (const t of timers.current) window.clearTimeout(t)
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const rank = ORDER.indexOf(stage)
 
   return (
-    <section ref={ref} className="act-section" data-stage={stage}>
+    <section
+      ref={ref}
+      className="act-section"
+      data-stage={stage}
+      data-live={live ? 'yes' : 'no'}
+    >
       <div className="act-stage">
         <p className="act-eyebrow">You&apos;re going to</p>
         <h2 className="story-name">{PICK.dish}</h2>
 
-        {/* THE PANEL — one shared element for the whole story. */}
-        <div className="story-panel">
-          {/* The map lives underneath from the start; the photo above it is
-              what morphs away, so the photo visibly becomes the map. */}
-          <div className="story-maplayer">
-            <StylisedMap />
-            <span className="story-chip" role="status">
-              <MapPin size={13} strokeWidth={2.2} aria-hidden="true" />
-              On your way
-            </span>
+        {/* Full-bleed stage: the 3D scene behind, the chosen-dish card
+            floating over it until the tap sends it on its way. Fixed
+            height — no stage change can move layout. */}
+        <div className="story-stagewrap">
+          <div className="story-scene" aria-hidden="true">
+            {/* The drift wrapper owns the idle camera sway (2D) and the
+                perspective the 3D world renders under. */}
+            <div className="nav-drift">
+              <NavWorld />
+            </div>
           </div>
+
+          <span className="story-chip" role="status">
+            <MapPin size={13} strokeWidth={2.2} aria-hidden="true" />
+            On your way
+          </span>
 
           <div className="story-cardlayer" aria-hidden={rank >= 3}>
             {PICK.photo ? (
@@ -190,9 +360,7 @@ export default function DecideAct() {
           </div>
         </div>
 
-        <p className="act-sub">
-          Three taps, start to table.
-        </p>
+        <p className="act-sub">Three taps, start to table.</p>
       </div>
     </section>
   )

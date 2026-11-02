@@ -1252,45 +1252,249 @@ html.js .wall-sticky[data-play='no'] .wall-plane {
   text-wrap: balance;
 }
 
-/* ---- the panel: card -> map, one shared element ---- */
+/* ---- the stage: full-bleed 3D scene + the floating card ---- */
 
-.story-panel {
+.story-stagewrap {
   position: relative;
-  width: min(100%, 560px);
-  aspect-ratio: 44 / 30; /* fixed: no stage can move layout */
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  height: clamp(360px, 54svh, 560px); /* fixed: no stage can move layout */
+}
+
+/* The scene — edges dissolving into the page, so it reads as a place the
+   section looks out onto, not a box inside it. */
+.story-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  -webkit-mask-image: radial-gradient(ellipse 72% 84% at 50% 46%, #000 50%, transparent 98%);
+  mask-image: radial-gradient(ellipse 72% 84% at 50% 46%, #000 50%, transparent 98%);
+  transition: opacity 700ms var(--ease-out);
+}
+/* Waiting behind the card: present but quiet. */
+html.js .act-section:is([data-stage='wait'], [data-stage='card'], [data-stage='tap']) .story-scene {
+  opacity: 0.3;
+}
+
+/* The drift wrapper: the idle camera sway (2D, composes OUTSIDE the 3D
+   world's own transform) and the perspective the world renders under. */
+.nav-drift {
+  position: absolute;
+  inset: 0;
+  perspective: 900px;
+  perspective-origin: 50% 32%;
+}
+html.js .act-section[data-stage='arrived'] .nav-drift {
+  animation: navDrift 13s var(--ease-in-out) infinite alternate;
+}
+@keyframes navDrift {
+  from { transform: translate3d(-7px, 3px, 0) rotate(-0.5deg); }
+  to   { transform: translate3d(7px, -3px, 0) rotate(0.5deg); }
+}
+
+/* THE WORLD — a 640×420 invented neighbourhood on a tilted plane. The
+   resting transform is the arrived camera; worldTransform() in
+   DecideAct.tsx writes the same arithmetic per-frame during the journey.
+   ⚠️ Keep --nav-zoom and the translate in sync with FINAL_* there. */
+.nav-world {
+  --nav-zoom: 1.18;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 640px;
+  height: 420px;
+  margin: -210px 0 0 -320px;
+  transform-style: preserve-3d;
+  will-change: transform;
+  transform: scale(var(--nav-zoom)) rotateX(55deg) rotateZ(0deg) translate3d(20px, -40px, 0);
+}
+@media (min-width: 768px) {
+  .nav-world { --nav-zoom: 1; }
+}
+
+.nav-ground { position: absolute; inset: 0; }
+
+/* The route: a soft glow under a solid core, both dash-revealed by the
+   journey (default: fully drawn — no-JS, reduced motion, arrived). */
+.nav-rglow,
+.nav-rcore,
+.nav-comet {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.nav-rglow {
+  stroke: rgba(254, 0, 0, 0.22);
+  stroke-width: 13;
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 0;
+}
+.nav-rcore {
+  stroke: var(--red);
+  stroke-width: 4.5;
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 0;
+}
+html.js .act-section:is([data-stage='wait'], [data-stage='card'], [data-stage='tap'])
+  :is(.nav-rglow, .nav-rcore) {
+  stroke-dashoffset: 1000;
+}
+
+/* The idle comet: one short light pulse forever lapping the route. */
+.nav-comet {
+  stroke: rgba(255, 126, 112, 0.9);
+  stroke-width: 5;
+  stroke-dasharray: 36 964;
+  stroke-dashoffset: 1000;
+  opacity: 0;
+}
+html.js .act-section[data-stage='arrived'] .nav-comet {
+  opacity: 1;
+  animation: navComet 3.8s linear 900ms infinite;
+}
+@keyframes navComet {
+  from { stroke-dashoffset: 1000; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* ---- the buildings: our own blocks, extruded and softly lit ---- */
+
+.bld {
+  position: absolute;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+.bld-top {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background: linear-gradient(145deg, #1a1a1b, #101011 58%, #151516);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  transform: translateZ(var(--h));
+}
+/* South wall (faces the camera) and east wall — two faces are all these
+   viewing angles ever show. */
+.bld-s {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--h);
+  transform-origin: bottom;
+  transform: rotateX(-90deg);
+  background: linear-gradient(180deg, #141415, #070708);
+}
+.bld-e {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: var(--h);
+  transform-origin: right;
+  transform: rotateY(90deg);
+  background: linear-gradient(90deg, #0e0e0f, #060607);
+}
+
+/* ---- You, travelling; the destination, waiting ---- */
+
+.nav-you {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #f2ede8;
+  box-shadow:
+    0 0 2px rgba(255, 255, 255, 0.9),
+    0 0 12px 4px rgba(254, 0, 0, 0.6);
+  transform: translate3d(162px, 332px, 1px);
+  transition: opacity 600ms linear;
+}
+/* Arrived: the pin takes over, the traveller dissolves. Also the no-JS and
+   reduced-motion default, since arrived is the default stage there. */
+html.js .act-section:not([data-stage='arrived']) .nav-you { opacity: 1; }
+.act-section[data-stage='arrived'] .nav-you,
+html:not(.js) .nav-you { opacity: 0; }
+
+.nav-dest {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+}
+.nav-ring {
+  position: absolute;
+  left: -13px;
+  top: -13px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(254, 0, 0, 0.9);
+  box-shadow: 0 0 16px rgba(254, 0, 0, 0.55);
+}
+html.js .act-section[data-stage='arrived'] .nav-ring {
+  animation: navBreathe 2.6s var(--ease-in-out) infinite alternate;
+}
+@keyframes navBreathe {
+  from { transform: scale(1); opacity: 0.75; }
+  to   { transform: scale(1.3); opacity: 1; }
+}
+/* One burst on arrival. */
+.nav-burst {
+  position: absolute;
+  left: -13px;
+  top: -13px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(254, 0, 0, 0.4);
+  opacity: 0;
+}
+html.js .act-section[data-stage='arrived'] .nav-burst {
+  animation: navBurst 850ms var(--ease-out) both;
+}
+@keyframes navBurst {
+  from { opacity: 0.9; transform: scale(0.5); }
+  to   { opacity: 0; transform: scale(4.4); }
+}
+/* A beam of red light standing at the door. */
+.nav-beam {
+  position: absolute;
+  left: -3px;
+  bottom: 0;
+  width: 6px;
+  height: 64px;
+  transform-origin: bottom;
+  transform: rotateX(-90deg);
+  background: linear-gradient(to top, rgba(254, 0, 0, 0.85), rgba(254, 0, 0, 0));
+}
+html.js .act-section[data-stage='arrived'] .nav-beam {
+  animation: navBeam 2.6s var(--ease-in-out) infinite alternate;
+}
+@keyframes navBeam {
+  from { opacity: 0.65; }
+  to   { opacity: 1; }
+}
+
+/* Idle-loop economy: everything forever pauses while off screen. */
+.act-section[data-live='no'] :is(.nav-drift, .nav-comet, .nav-ring, .nav-beam) {
+  animation-play-state: paused;
+}
+
+/* The card layer: floats over the scene through card/tap, then morphs off
+   as the journey takes the stage. */
+.story-cardlayer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(100% - 40px, 560px);
+  aspect-ratio: 44 / 30;
+  transform: translate(-50%, -50%);
   border-radius: 20px;
   overflow: hidden;
   background: #0d0d0d;
   box-shadow: 0 34px 70px -34px rgba(0, 0, 0, 0.95);
-}
-
-.story-maplayer,
-.story-cardlayer {
-  position: absolute;
-  inset: 0;
-}
-
-.story-map { width: 100%; height: 100%; display: block; }
-
-.story-you {
-  font-size: 12px;
-  font-weight: 600;
-  fill: var(--text-muted);
-}
-
-/* The map waits small and dim under the photo, then scales in as the photo
-   morphs away above it. Default (no JS / reduced motion) is the final map. */
-.story-maplayer { transform: scale(1); opacity: 1; }
-html.js .act-section:is([data-stage='wait'], [data-stage='card'], [data-stage='tap']) .story-maplayer {
-  transform: scale(0.94);
-  opacity: 0;
-}
-.story-maplayer {
-  transition: transform 700ms var(--ease-in-out), opacity 450ms linear;
-}
-
-/* The card layer: present through card/tap, morphs out into the map. */
-.story-cardlayer {
   opacity: 0;
   pointer-events: none;
 }
@@ -1307,12 +1511,15 @@ html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-cardl
 }
 html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-cardlayer {
   opacity: 0;
-  transition: opacity 500ms linear 250ms;
+  transform: translate(-50%, -50%) scale(1.06);
+  transition: opacity 500ms linear 200ms, transform 650ms var(--ease-in-out);
 }
 html.js .act-section[data-stage='wait'] .story-cardlayer {
   opacity: 0;
 }
-.story-cardlayer { transition: opacity 400ms var(--ease-out); }
+.story-cardlayer {
+  transition: opacity 400ms var(--ease-out), transform 650ms var(--ease-in-out);
+}
 
 .story-photo {
   position: absolute;
@@ -1413,53 +1620,13 @@ html.js .act-section:is([data-stage='tap'], [data-stage='map'], [data-stage='arr
   100% { opacity: 0; transform: scale(9); }
 }
 
-/* ---- the route, the pulse, the arrival chip ---- */
-
-.story-route {
-  stroke-dasharray: 100;
-  stroke-dashoffset: 0; /* drawn by default: final state everywhere JS-less */
-}
-.story-dest { opacity: 1; }
-.story-pulse {
-  fill: rgba(254, 0, 0, 0.45);
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-html.js .act-section:not([data-stage='map'], [data-stage='arrived']) .story-route {
-  stroke-dashoffset: 100;
-}
-html.js .act-section:not([data-stage='map'], [data-stage='arrived']) .story-dest {
-  opacity: 0;
-}
-html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-route {
-  animation: routeDraw 950ms var(--ease-in-out) 350ms both;
-}
-html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-dest {
-  animation: routeArrive 200ms linear 1180ms both;
-}
-html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-pulse {
-  animation: routePulse 700ms var(--ease-out) 1260ms both;
-}
-
-@keyframes routeDraw {
-  from { stroke-dashoffset: 100; }
-  to   { stroke-dashoffset: 0; }
-}
-@keyframes routeArrive {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes routePulse {
-  0%   { opacity: 0.8; transform: scale(1); }
-  100% { opacity: 0; transform: scale(3.2); }
-}
+/* ---- the arrival chip ---- */
 
 .story-chip {
   position: absolute;
-  top: 14px;
-  left: 14px;
+  top: 16px;
+  left: 50%;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1471,12 +1638,12 @@ html.js .act-section:is([data-stage='map'], [data-stage='arrived']) .story-pulse
   font-size: 12.5px;
   font-weight: 600;
   opacity: 1;
-  transform: none;
+  transform: translate(-50%, 0);
 }
 .story-chip svg { color: var(--red); }
 html.js .act-section:not([data-stage='arrived']) .story-chip {
   opacity: 0;
-  transform: translate3d(0, -8px, 0);
+  transform: translate(-50%, -8px);
 }
 .story-chip {
   transition: opacity 400ms var(--ease-out), transform 500ms var(--ease-spring);
@@ -1487,7 +1654,9 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
   max-width: 40ch;
   font-size: 15px;
   line-height: 1.55;
-  color: var(--text-secondary);
+  /* White like the page's other supporting lines (ruling). */
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 /* ==================================================================== */
@@ -2385,23 +2554,27 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
   .hero-scrollcue i { animation: none; }
   .float-cta { transition: opacity 180ms linear; }
 
-  /* The story rests on its final frame: the map, route drawn, pin lit,
-     arrival chip in place. No morph, no draw, no ripple. */
-  html.js .act-section .story-route,
-  html.js .act-section .story-dest,
-  html.js .act-section .story-pulse,
+  /* The story rests on its arrived frame: the 3D scene, route drawn, pin
+     lit, chip in place — and the idle loop holds still (no drift, no
+     comet, no breathing). No morph, no journey, no ripple. */
   html.js .act-section .story-btn-dir,
-  html.js .act-section .story-ripple { animation: none; }
-  .story-maplayer,
+  html.js .act-section .story-ripple,
+  html.js .act-section .nav-drift,
+  html.js .act-section .nav-comet,
+  html.js .act-section .nav-ring,
+  html.js .act-section .nav-beam,
+  html.js .act-section .nav-burst { animation: none; }
+  .story-scene,
   .story-cardlayer,
   .story-photo,
   .story-info,
+  .nav-you,
   .story-chip { transition: none; }
-  html.js .act-section .story-route { stroke-dashoffset: 0; }
-  html.js .act-section .story-dest { opacity: 1; }
-  html.js .act-section .story-maplayer { opacity: 1; transform: none; }
+  html.js .act-section :is(.nav-rglow, .nav-rcore) { stroke-dashoffset: 0; }
+  html.js .act-section .story-scene { opacity: 1; }
   html.js .act-section .story-cardlayer { opacity: 0; }
-  html.js .act-section .story-chip { opacity: 1; transform: none; }
+  html.js .act-section .nav-you { opacity: 0; }
+  html.js .act-section .story-chip { opacity: 1; transform: translate(-50%, 0); }
 
   /* Vignettes hold their complete 0% frame; the accordion cuts instantly. */
   .vig-stage *,
