@@ -1,20 +1,21 @@
-import { useRef, useState } from 'react'
-import {
-  motion,
-  useMotionValueEvent,
-  useReducedMotion,
-  useScroll,
-  useTransform,
-} from 'motion/react'
+import { useEffect, useRef, useState } from 'react'
 import { DISHES, SURVIVOR_INDEXES, SURVIVOR_REASONS, type Dish } from '../../lib/dishes'
+import { prefersReducedMotion } from '../../lib/reveal'
 
 /**
  * THE PROBLEM — a wall of appetite.
  *
  * A mixed-size poster wall of generic dishes drifts in opposite directions,
- * row by row, on a plane that starts tilted away into the dark and flattens
- * toward the viewer as the section scrolls in. Dense, delicious, endless —
- * the feeling of every food app at 8pm.
+ * row by row. When the section is ~40% in view the whole collapse plays on
+ * a FIXED ~4.5s timeline — the plane flattens toward the viewer, then the
+ * Spend / Nearby / Your taste waves, the red scan, and the 3 survivors, at
+ * the same speed for everyone. It used to be scroll-linked, which read as
+ * broken at any scroll speed but the author's.
+ *
+ * The section is ONE viewport tall and never pins or hijacks the scroll:
+ * the story plays in place, and a user who scrolls past before it finishes
+ * gets the final state the moment the section leaves view. Plays once per
+ * visit (module flag); reduced motion renders the final state outright.
  *
  * ⚠️ ZERO-RISK: every card is a DISH, never a venue (src/lib/dishes.ts). The
  * photos are licensed Pexels stock credited in client/ASSET_CREDITS.md, used
@@ -24,8 +25,8 @@ import { DISHES, SURVIVOR_INDEXES, SURVIVOR_REASONS, type Dish } from '../../lib
  * PERFORMANCE SHAPE:
  * - Row drift is a CSS keyframe on each track (transform only, GPU), with the
  *   track content duplicated so a -50% translate loops seamlessly.
- * - The tilt/flatten is ONE scroll-driven element (the plane wrapper): motion
- *   composes rotateX/scale/y into a single transform. One write per frame.
+ * - The timeline is five setTimeout class flips; every transition under them
+ *   runs in CSS on the compositor. Nothing runs per frame in JS.
  * - Cards themselves are static DOM inside the tracks — nothing per-card runs
  *   per frame.
  */
@@ -71,14 +72,21 @@ const STAGE_LABEL: Partial<Record<Stage, string>> = {
   scan: 'Deciding',
 }
 
-function stageOf(p: number): Stage {
-  if (p < 0.26) return 'wall'
-  if (p < 0.42) return 'budget'
-  if (p < 0.56) return 'nearby'
-  if (p < 0.68) return 'taste'
-  if (p < 0.78) return 'scan'
-  return 'resolved'
-}
+/**
+ * The fixed timeline, ms from trigger. t=0 is the plane starting to flatten
+ * (its 950ms CSS transition); each wave gets a readable beat; ~4.5s to the
+ * resolve, whose own transitions carry the last half-second.
+ */
+const TIMELINE: [Stage, number][] = [
+  ['budget', 1200],
+  ['nearby', 2100],
+  ['taste', 3000],
+  ['scan', 3800],
+  ['resolved', 4500],
+]
+
+/** Play-once per visit. Module scope: survives remounts, dies on reload. */
+let wallPlayed = false
 
 /** Rows are authored, not random: each row mixes sizes so the wall reads as a
  *  designed bento, and every photo dish appears exactly once. */
@@ -155,72 +163,62 @@ function PosterCard({ card, delay }: { card: WallCard; delay: number }) {
 
 export default function ProblemWall() {
   const ref = useRef<HTMLElement | null>(null)
-  const reduce = useReducedMotion()
-  const [stage, setStage] = useState<Stage>('wall')
-  const lockedRef = useRef(false)
-  const [locked, setLocked] = useState(false)
+  const [reduce] = useState(prefersReducedMotion)
+  const [stage, setStage] = useState<Stage>(() =>
+    reduce || wallPlayed ? 'resolved' : 'wall',
+  )
+  const [play, setPlay] = useState(() => reduce || wallPlayed)
+  const timersRef = useRef<number[]>([])
 
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ['start start', 'end end'],
-  })
-
-  // Discrete stages, not a per-frame binding: the waves are choreography, and
-  // every transition below runs on the compositor from one class flip.
-  //
-  // ⚠️ PLAY ONCE. The first time the collapse resolves, the section LOCKS:
-  // the 320svh pin distance is removed in the same frame as a compensating
-  // scrollTo, so the viewport does not move a pixel, and from then on the
-  // resolved wall is an ordinary 100svh block the user scrolls past in either
-  // direction. No replay, no reverse, no re-pin. A reload starts fresh —
-  // nothing is persisted, by design.
-  useMotionValueEvent(scrollYProgress, 'change', (p) => {
-    if (lockedRef.current) return
-    const next = stageOf(p)
-    if (next === 'resolved') {
-      lockedRef.current = true
-      const sec = ref.current
-      if (sec) {
-        const rect = sec.getBoundingClientRect()
-        const top = window.scrollY + rect.top
-        const oldH = rect.height
-        sec.style.height = '100svh'
-        const newH = sec.getBoundingClientRect().height
-        const dH = oldH - newH
-        const S = window.scrollY
-        // Keep exactly the same pixels on screen: while the sticky was pinned
-        // the right anchor is the section top; past the pin range, everything
-        // below simply moved up by dH, so the viewport follows it.
-        window.scrollTo(0, S >= top + dH ? S - dH : top)
-      }
-      setStage('resolved')
-      setLocked(true)
-      return
+  // The trigger: ~40% of the section in view starts the fixed timeline,
+  // once. Leaving view mid-story (scrolled past, or back up) lands it on
+  // the final state — nobody can ever see it stuck between waves.
+  useEffect(() => {
+    if (reduce || wallPlayed) return
+    const sec = ref.current
+    if (!sec) return
+    let playing = false
+    let done = false
+    const io = new IntersectionObserver(
+      (entries) => {
+        const e = entries[0]
+        if (!e || done) return
+        if (!playing && e.intersectionRatio >= 0.4) {
+          playing = true
+          wallPlayed = true
+          setPlay(true)
+          for (const [st, at] of TIMELINE) {
+            timersRef.current.push(
+              window.setTimeout(() => {
+                setStage(st)
+                if (st === 'resolved') {
+                  done = true
+                  io.disconnect()
+                }
+              }, at),
+            )
+          }
+        } else if (playing && !e.isIntersecting) {
+          done = true
+          for (const t of timersRef.current) window.clearTimeout(t)
+          setStage('resolved')
+          io.disconnect()
+        }
+      },
+      { threshold: [0, 0.4] },
+    )
+    io.observe(sec)
+    return () => {
+      io.disconnect()
+      for (const t of timersRef.current) window.clearTimeout(t)
     }
-    setStage((prev) => (prev === next ? prev : next))
-  })
-
-  // The plane arrives: tilted away and sunk at the top of the section,
-  // face-on by a quarter of the way through.
-  const rotateX = useTransform(scrollYProgress, [0, 0.24], [34, 0])
-  const planeY = useTransform(scrollYProgress, [0, 0.24], [-72, 0])
-  const planeScale = useTransform(scrollYProgress, [0, 0.24], [0.82, 1])
-
-  const introOpacity = useTransform(scrollYProgress, [0.16, 0.3], [1, 0])
-  const introY = useTransform(scrollYProgress, [0.16, 0.3], [0, -20])
+  }, [reduce])
 
   return (
     <section ref={ref} className="wall-section">
-      <div className="wall-sticky" data-stage={stage}>
+      <div className="wall-sticky" data-stage={stage} data-play={play ? 'yes' : 'no'}>
         <div className="wall-perspective">
-          <motion.div
-            className="wall-plane"
-            style={
-              locked || reduce
-                ? undefined
-                : { rotateX, y: planeY, scale: planeScale }
-            }
-          >
+          <div className="wall-plane">
             {ROWS.map((row, r) => (
               <div key={r} className="wall-row" data-dir={r % 2 ? 'rtl' : 'ltr'}>
                 <div className="wall-track" style={{ ['--rowdur' as string]: `${46 + r * 9}s` }}>
@@ -235,24 +233,18 @@ export default function ProblemWall() {
                 </div>
               </div>
             ))}
-          </motion.div>
+          </div>
           {/* The dark the plane recedes into. */}
           <span aria-hidden="true" className="wall-haze" />
         </div>
 
-        <motion.div
-          className="wall-copy"
-          style={
-            locked || reduce
-              ? { opacity: 0 }
-              : { opacity: introOpacity, y: introY }
-          }
-        >
+        {/* Fades out (CSS) the moment the first wave lands. */}
+        <div className="wall-copy">
           <h2 className="wall-line">Too many options.</h2>
           <p className="wall-sub">
             All of them open. All of them plausible.
           </p>
-        </motion.div>
+        </div>
 
         {/* The filter being applied right now — the engine narrating itself. */}
         {STAGE_LABEL[stage] ? (

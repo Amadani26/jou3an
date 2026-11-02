@@ -15,19 +15,21 @@ import { prefersReducedMotion } from '../../lib/reveal'
  *                  red 3), 120ms stagger, landing around the device
  *   flip   2.5–3.5 each card flips face-up (rotateY under perspective),
  *                  a red under-glow lighting as it reveals
- *   orbit  3.5–6s  the cards orbit the phone in 3D — scaled down and dimmed
- *                  while behind — easing out into the settled arrangement:
- *                  #1 largest in front, #2/#3 smaller beside/behind
+ *   orbit  3.5–5.2 the cards make one revolution around the phone in 3D —
+ *                  scaled down and dimmed while behind
+ *   return 5.2–6.4 each card flies BACK INTO THE GLASS, shrinking onto the
+ *                  rect of its own result row (measured live, the shared-
+ *                  element handoff) while the screen's rows spring in under
+ *                  them on the same stagger
+ *   settle         just the device, scaled up a touch, results readable —
+ *                  the cards never duplicate the screen they came from
  *
  * ONE rAF timeline drives the card transforms (transform/opacity/z-index
  * only); the stage attribute (`data-seq`) lets CSS run the cheap parts
- * (video fade, screen glow, under-glows). Plays ONCE per visit — a module
- * flag — and scrolling back never replays it. Desktop gets a whisper of
- * idle drift after settling; phones hold still.
- *
- * GEOMETRY: everything is a fraction of the device width (--pw in CSS, the
- * measured dev-wrap width in JS), so the JS timeline's final frame and the
- * CSS static pose (reduced motion / no-JS) are the same arithmetic.
+ * (video fade, screen glow, under-glows, the final device scale-up). Plays
+ * ONCE per visit — a module flag — and scrolling back never replays it.
+ * The final frame is the device alone, so it fits one viewport below the
+ * nav at every phone width by construction.
  *
  * The clip never gates anything: it loads after the page is interactive,
  * waits at most VIDEO_GRACE_MS at trigger time, and an autoplay rejection
@@ -46,42 +48,45 @@ const DESKTOP_MQ = '(min-width: 768px)'
 const T_DEAL = 1500
 const T_FLIP = 2500
 const T_ORBIT = 3500
-const T_END = 6000
+const T_RETURN = 5200
+const T_END = 6400
 const DEAL_STAGGER = 120
 const DEAL_DUR = 560
 const FLIP_STAGGER = 200
 const FLIP_DUR = 460
+/** ⚠️ 130ms matches the .ps-card results-transition stagger (sections.css),
+    so each flying card and the row it becomes move on the same beat. */
+const RETURN_STAGGER = 130
+const RETURN_DUR = 650
 /** How long the trigger waits for the clip before playing without it. */
 const VIDEO_GRACE_MS = 900
 
-/* ---- the shared geometry (fractions of the device width) ----
-   ⚠️ The SETTLE_* targets are mirrored by the .seq-slot CSS vars in
-   sections.css (the static pose) — change both together.
-
-   The orbit and the settle are DECOUPLED: the orbit sweeps a wide ring
-   (even past the viewport edge on a phone — transient), then the last
-   700ms lerps each card from its ring pose to an explicit settle target.
-   On a 393 viewport there is no "beside the phone", so the mobile settle
-   is a diagonal — #2 peeking above-left, #1 front over the lower glass,
-   #3 below-right — keeping every name fully visible. */
+/* ---- the ring geometry (fractions of the device width) ----
+   The ring may sweep past a phone viewport's edges mid-orbit — transient
+   and deliberate. Nothing settles OUT here any more: the return targets
+   are the screen's own result-row rects, measured when the return begins. */
 const THETA = [90, 210, 330] // ring angles, degrees; 90° = front centre
 const ORBIT_RX = { mobile: 0.55, desktop: 1.28 }
 const ORBIT_Y = { mobile: [0.45, -0.35, 0.25], desktop: [0.66, -0.08, 0.16] }
-const SETTLE_X = { mobile: [0, -0.3, 0.26], desktop: [0, -1.11, 1.11] }
-const SETTLE_Y = { mobile: [0.6, -1.18, 1.18], desktop: [0.66, -0.08, 0.16] }
-const SETTLE_SCALE = { mobile: [1.04, 0.84, 0.84], desktop: [1.04, 0.86, 0.86] }
-const SETTLE_OPACITY = { mobile: [1, 0.92, 0.92], desktop: [1, 0.88, 0.88] }
-/** When the ring → settle-target lerp begins. */
-const T_SETTLE_BLEND = 5300
 
 const easeOutCubic = (p: number) => 1 - (1 - p) ** 3
 const easeInOutCubic = (p: number) =>
   p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 
-type Stage = 'idle' | 'in' | 'deal' | 'flip' | 'orbit' | 'settled'
+type Stage = 'idle' | 'in' | 'deal' | 'flip' | 'orbit' | 'return' | 'settled'
 const stageAt = (t: number): Stage =>
-  t < T_DEAL ? 'in' : t < T_FLIP ? 'deal' : t < T_ORBIT ? 'flip' : t < T_END ? 'orbit' : 'settled'
+  t < T_DEAL
+    ? 'in'
+    : t < T_FLIP
+      ? 'deal'
+      : t < T_ORBIT
+        ? 'flip'
+        : t < T_RETURN
+          ? 'orbit'
+          : t < T_END
+            ? 'return'
+            : 'settled'
 
 export default function HeroLive() {
   const ref = useRef<HTMLElement | null>(null)
@@ -93,8 +98,6 @@ export default function HeroLive() {
   const startedRef = useRef(seqPlayed)
 
   const [reduce] = useState(prefersReducedMotion)
-  /** Mounted with the story already told (remount after play): static pose. */
-  const [mountedSettled] = useState(seqPlayed)
   const [stage, setStage] = useState<Stage>(() => (reduce || seqPlayed ? 'settled' : 'idle'))
   const [hold, setHold] = useState<Phase>(() => (reduce || seqPlayed ? 'results' : 'idle'))
   const [videoState, setVideoState] = useState<'cold' | 'arming' | 'ready' | 'off'>('cold')
@@ -114,15 +117,33 @@ export default function HeroLive() {
     const bp = window.matchMedia(DESKTOP_MQ).matches ? 'desktop' : 'mobile'
     const rx = pw * ORBIT_RX[bp]
     const ys = ORBIT_Y[bp].map((f) => f * pw)
-    const sx = SETTLE_X[bp].map((f) => f * pw)
-    const sy = SETTLE_Y[bp].map((f) => f * pw)
-    const ss = SETTLE_SCALE[bp]
-    const so = SETTLE_OPACITY[bp]
-    const dSettle = THETA.map((a) => (Math.sin((a * Math.PI) / 180) + 1) / 2)
 
     const slots = slotRefs.current
     const movers = slots.map((s) => s?.querySelector<HTMLElement>('.seq-move') ?? null)
     const cards = slots.map((s) => s?.querySelector<HTMLElement>('.seq-card3d') ?? null)
+
+    /* The shared-element targets: each card's own result row on the glass,
+       measured the moment the return begins (the rows are laid out while
+       still invisible). The hidden row carries a +4.5cqh pre-spring offset
+       (sections.css) — subtracted so cards land on the FINAL row positions
+       the spring is heading for. */
+    let targets: { x: number; y: number; s: number }[] | null = null
+    const measureTargets = () => {
+      const stageRect = stageEl.getBoundingClientRect()
+      const faceH =
+        stageEl.querySelector('.dev-face')?.getBoundingClientRect().height ?? 0
+      const rows = stageEl.querySelectorAll<HTMLElement>('.pscreen .ps-card')
+      targets = [0, 1, 2].map((i) => {
+        const r = rows[i]?.getBoundingClientRect()
+        const cw = movers[i]?.querySelector<HTMLElement>('.seq-fc')?.offsetWidth || 1
+        if (!r) return { x: 0, y: -pw * 0.1, s: 0.32 }
+        return {
+          x: r.left + r.width / 2 - (stageRect.left + stageRect.width / 2),
+          y: r.top + r.height / 2 - (stageRect.top + stageRect.height / 2) - faceH * 0.045,
+          s: Math.max(0.2, r.width / cw),
+        }
+      })
+    }
 
     let shownStage: Stage = 'idle'
     const lit = [false, false, false]
@@ -135,12 +156,17 @@ export default function HeroLive() {
         shownStage = st
         stageEl.dataset.seq = st
         setStage(st)
-        if (st === 'deal') setHold('results')
+        if (st === 'return') {
+          // Measure BEFORE the rows start springing in, then release them.
+          measureTargets()
+          setHold('results')
+        }
         if (st === 'settled') {
           const v = videoRef.current
           if (v && !v.paused) v.pause()
         }
       }
+      if (t >= T_RETURN && !targets) measureTargets()
 
       for (let i = 0; i < 3; i++) {
         const slot = slots[i]
@@ -156,36 +182,48 @@ export default function HeroLive() {
           slot.dataset.lit = 'yes'
         }
 
-        /* the ring: a full revolution, easing out as it comes home */
-        const orbP = easeInOutCubic(clamp01((t - T_ORBIT) / (T_END - T_ORBIT)))
+        /* the ring: one full revolution, easing out as it comes home */
+        const orbP = easeInOutCubic(clamp01((t - T_ORBIT) / (T_RETURN - T_ORBIT)))
         const ang = ((THETA[i] + 360 * orbP) * Math.PI) / 180
-        const d = (Math.sin(ang) + 1) / 2
-        const ringX = rx * Math.cos(ang)
-        const ringS = (ss[i] * (0.8 + 0.2 * d)) / (0.8 + 0.2 * dSettle[i])
-        const ringO = Math.min(1, (so[i] * (0.6 + 0.4 * d)) / (0.6 + 0.4 * dSettle[i]))
-
-        /* ring → settle target, over the last stretch of the revolution */
-        const blend = easeInOutCubic(clamp01((t - T_SETTLE_BLEND) / (T_END - T_SETTLE_BLEND)))
-        const targetX = ringX + (sx[i] - ringX) * blend
-        const targetY = ys[i] + (sy[i] - ys[i]) * blend
-        const scale = ringS + (ss[i] - ringS) * blend
-        const op = ringO + (so[i] - ringO) * blend
+        const sinA = Math.sin(ang)
+        const d = (sinA + 1) / 2
+        let x = rx * Math.cos(ang)
+        let y = ys[i]
+        let s = 0.78 + 0.27 * d
+        let op = 0.55 + 0.45 * d
+        let z = sinA
 
         /* deal: from the centre of the glass to the ring's start pose */
         const dealP = easeOutCubic(clamp01((t - T_DEAL - i * DEAL_STAGGER) / DEAL_DUR))
-        const x = targetX * dealP
-        const y = -pw * 0.1 + (targetY + pw * 0.1) * dealP
-        const s = 0.32 + (scale - 0.32) * dealP
-        const o = Math.min(1, dealP * 2.4) * op
+        x *= dealP
+        y = -pw * 0.1 + (y + pw * 0.1) * dealP
+        s = 0.32 + (s - 0.32) * dealP
+        let o = Math.min(1, dealP * 2.4) * op
+
+        /* return: fly back into the glass onto this card's own result row,
+           crossing to the front layer early, fading out on arrival as the
+           real row springs in underneath. */
+        const retP = easeInOutCubic(
+          clamp01((t - T_RETURN - i * RETURN_STAGGER) / RETURN_DUR),
+        )
+        if (retP > 0 && targets) {
+          const tg = targets[i]
+          x += (tg.x - x) * retP
+          y += (tg.y - y) * retP
+          s += (tg.s - s) * retP
+          z += (1 - z) * Math.min(1, retP / 0.4)
+          const fade = clamp01((retP - 0.72) / 0.28)
+          o = (o + (1 - o) * retP) * (1 - fade)
+        }
 
         move.style.transform = `translate(-50%, -50%) translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${s.toFixed(3)})`
         move.style.opacity = o.toFixed(3)
         card.style.transform = `perspective(800px) rotateY(${rot.toFixed(1)}deg)`
-        slot.style.zIndex = String(50 + Math.round(Math.sin(ang) * 12) + (Math.sin(ang) >= 0 ? 2 : -2))
+        slot.style.zIndex = String(50 + Math.round(z * 12) + (z >= 0 ? 2 : -2))
       }
 
-      /* the device turns a little with the orbit, returning home at the end */
-      const orbP = clamp01((t - T_ORBIT) / (T_END - T_ORBIT))
+      /* the device turns a little with the orbit, home before the return */
+      const orbP = clamp01((t - T_ORBIT) / (T_RETURN - T_ORBIT))
       section.style.setProperty(
         '--seq-turn',
         `${(6 * Math.sin(easeInOutCubic(orbP) * Math.PI * 2)).toFixed(2)}deg`,
@@ -281,8 +319,6 @@ export default function HeroLive() {
     }
   }, [])
 
-  const staticPose = reduce || mountedSettled
-
   return (
     <section
       ref={ref}
@@ -318,7 +354,6 @@ export default function HeroLive() {
         ref={stageRef}
         className="hero-live-stage"
         data-seq={stage}
-        data-static={staticPose ? 'yes' : 'no'}
         data-video={videoState}
       >
         {/* The Higgsfield streak clip — behind the device, edge-masked, only

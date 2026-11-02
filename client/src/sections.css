@@ -563,7 +563,12 @@
  * around 50 so it genuinely passes in front of and behind the phone.
  */
 .hero-live-stage { --pw: min(60vw, 258px); }
-.hero-live-stage .dev-wrap { z-index: 50; }
+/* The ending: the cards are back inside, the device takes the stage. */
+.hero-live-stage .dev-wrap {
+  z-index: 50;
+  transition: transform 750ms var(--ease-out);
+}
+.hero-live-stage[data-seq='settled'] .dev-wrap { transform: scale(1.06); }
 
 /* The Higgsfield clip — behind the device, edge-masked into the black.
    Visible only through the 'in' beat; "the streaks stop" is this fade. */
@@ -623,22 +628,14 @@
 }
 
 /* A slot is a zero-size anchor at the stage centre; the mover inside it is
-   what the timeline writes transform/opacity to. CSS z-index is the static
-   pose; the per-frame inline value overrides it while the story plays. */
+   what the timeline writes transform/opacity to. Hidden before the deal
+   and after the return — the final frame has NO cards, only the device. */
 .seq-slot {
   position: absolute;
   left: 50%;
   top: 50%;
   width: 0;
   height: 0;
-}
-.seq-slot-1 { z-index: 64; --sx: 0px;                       --sy: calc(var(--pw) * 0.6);   --ss: 1.04; --so: 1; }
-.seq-slot-2 { z-index: 40; --sx: calc(var(--pw) * -0.3);   --sy: calc(var(--pw) * -1.18); --ss: 0.84; --so: 0.92; }
-.seq-slot-3 { z-index: 40; --sx: calc(var(--pw) * 0.26);   --sy: calc(var(--pw) * 1.18);  --ss: 0.84; --so: 0.92; }
-@media (min-width: 768px) {
-  .seq-slot-1 { --sy: calc(var(--pw) * 0.66); }
-  .seq-slot-2 { --sx: calc(var(--pw) * -1.11); --sy: calc(var(--pw) * -0.08); --ss: 0.86; --so: 0.88; }
-  .seq-slot-3 { --sx: calc(var(--pw) * 1.11);  --sy: calc(var(--pw) * 0.16);  --ss: 0.86; --so: 0.88; }
 }
 
 .seq-move {
@@ -648,16 +645,6 @@
   opacity: 0;
   will-change: transform, opacity;
 }
-
-/* The static settled pose — reduced motion, no-JS, and remounting after the
-   story has already told itself all land here, lit and readable. */
-.hero-live-stage[data-static='yes'] .seq-move,
-html:not(.js) .seq-move {
-  opacity: var(--so);
-  transform: translate(-50%, -50%) translate3d(var(--sx), var(--sy), 0) scale(var(--ss));
-}
-.hero-live-stage[data-static='yes'] .seq-glow,
-html:not(.js) .seq-glow { opacity: 0.5; }
 
 /* The two faces. The mover owns position/scale; this element owns only the
    flip, so perspective stays local to each card. */
@@ -773,16 +760,6 @@ html:not(.js) .seq-glow { opacity: 0.5; }
   .seq-reason { font-size: 11.5px; }
   .seq-score { font-size: 12px; }
 
-  /* Settled, desktop only: a whisper of idle drift. Phones hold still. */
-  .hero-live-stage[data-seq='settled'] .seq-slot {
-    animation: seqIdle 16s var(--ease-in-out) infinite alternate;
-  }
-  .hero-live-stage[data-seq='settled'] .seq-slot-2 { animation-delay: -6s; }
-  .hero-live-stage[data-seq='settled'] .seq-slot-3 { animation-delay: -11s; }
-}
-@keyframes seqIdle {
-  from { transform: translate3d(0, 0, 0) rotate(0deg); }
-  to   { transform: translate3d(0, -9px, 0) rotate(0.5deg); }
 }
 
 /* ---- ?debug=1 overlay ---- */
@@ -819,10 +796,12 @@ html:not(.js) .seq-glow { opacity: 0.5; }
 /* PROBLEM — the wall of appetite                                       */
 /* ==================================================================== */
 
-.wall-section { position: relative; height: 320svh; }
+/* One viewport, no pin: the collapse is TIME-BASED (see ProblemWall.tsx),
+   so the section needs no scroll runway and never traps the scroll. */
+.wall-section { position: relative; height: 100svh; }
 
 .wall-sticky {
-  position: sticky; top: 0;
+  position: relative;
   height: 100svh;
   overflow: hidden;
   display: flex;
@@ -850,6 +829,13 @@ html:not(.js) .seq-glow { opacity: 0.5; }
   gap: 10px;
   transform-origin: 50% 20%;
   will-change: transform;
+  transition: transform 950ms var(--ease-out);
+}
+/* Before the timeline starts the plane waits tilted away into the dark;
+   data-play flips and it flattens toward the viewer as the story's first
+   beat. JS-gated so no-JS (and the played/reduced states) sit flat. */
+html.js .wall-sticky[data-play='no'] .wall-plane {
+  transform: rotateX(34deg) translate3d(0, -72px, 0) scale(0.82);
 }
 
 .wall-row { overflow: visible; }
@@ -963,6 +949,12 @@ html:not(.js) .seq-glow { opacity: 0.5; }
   padding: 0 20px;
   max-width: 620px;
   margin: 0 auto;
+  transition: opacity 500ms var(--ease-out), transform 500ms var(--ease-out);
+}
+/* The headline yields the stage to the waves. */
+.wall-sticky:not([data-stage='wall']) .wall-copy {
+  opacity: 0;
+  transform: translate3d(0, -20px, 0);
 }
 
 .wall-line {
@@ -2382,13 +2374,12 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
   .dev-float,
   .dev-sheen,
   .ps-dots i { animation: none; }
-  /* The sequence rests on its settled frame (HeroLive mounts data-static
-     under reduced motion and never mounts the clip): three cards locked
-     around the device, under-glows lit, the CSS bloom in place of video.
-     No deal, no flip, no orbit, no idle drift. */
+  /* The sequence rests on its final frame (HeroLive mounts settled under
+     reduced motion and never mounts the clip): the device alone, scaled,
+     results on the glass. No deal, no flip, no orbit, no return. */
   .seq-move,
   .seq-glow { transition: none; }
-  .seq-slot { animation: none; }
+  .hero-live-stage .dev-wrap { transition: none; }
   /* The scroll cue has no journey to prompt and the floating button appears
      and disappears without travelling. */
   .hero-scrollcue i { animation: none; }
