@@ -6,6 +6,8 @@ import { toEngineContext } from '../services/engine/request'
 import type { EngineInput, Pick } from '../services/engine/types'
 import { isServeable } from '../lib/venueType'
 import { isBarLike } from '../lib/barLike'
+import { DEMO_AREAS, decideForArea, demoArea } from '../lib/demoAreas'
+import { isOpenNow, nextOpeningLabel } from '../lib/hours'
 import { displayArea } from '../lib/areaName'
 import {
   getPlacePhotos,
@@ -59,16 +61,6 @@ router.use((req, res, next) => {
   }
   next()
 })
-
-/* ---- the demo's areas: fixed centroids, same vocabulary as the app ---- */
-const DEMO_AREAS: Record<string, { label: string; lat: number; lng: number }> = {
-  MARINA: { label: 'Marina', lat: 25.0805, lng: 55.1403 },
-  DOWNTOWN: { label: 'Downtown', lat: 25.1972, lng: 55.2744 },
-  JLT: { label: 'JLT', lat: 25.0693, lng: 55.1413 },
-  DIFC: { label: 'DIFC', lat: 25.211, lng: 55.2796 },
-  BUSINESS_BAY: { label: 'Business Bay', lat: 25.1857, lng: 55.265 },
-  JBR: { label: 'JBR', lat: 25.0772, lng: 55.1334 },
-}
 
 /* ---- tiny TTL cache: "short server cache", per the brief ---- */
 const TTL_MS = 120_000
@@ -196,25 +188,31 @@ router.get('/showcase', async (_req, res) => {
  */
 router.get('/demo', async (req, res) => {
   try {
-    const area = String(req.query.area ?? 'MARINA').toUpperCase()
-    const spot = DEMO_AREAS[area]
+    const key_ = String(req.query.area ?? 'MARINA').toUpperCase()
+    const spot = demoArea(key_)
     if (!spot) {
       res.status(400).json({ error: 'Unknown area' })
       return
     }
-    const key = `demo:${area}`
+    const key = `demo:${spot.key}`
     const hit = cached<object>(key)
     if (hit) {
       res.json(hit)
       return
     }
 
-    const decision = await anonymousDecision(spot)
+    // HARD area filter — three places IN the tapped area, never widened.
+    // The only relaxation decideForArea permits is the hours gate, within
+    // the same area; a closed pick carries its next opening time so the
+    // card can say "Opens at 12:00" instead of hiding it.
+    const now = new Date()
+    const candidates = await prisma.restaurant.findMany()
+    const decision = decideForArea(candidates, spot, now, now.getUTCHours())
     const results = await Promise.all(
       decision.picks.map(async (p) => {
         const base = {
           ...publicPick(p),
-          distanceKm: p.distanceKm,
+          opensAt: isOpenNow(p.restaurant, now) ? null : nextOpeningLabel(p.restaurant, now),
           hasPhoto: false as boolean,
           photoAuthor: null as { name: string; uri: string | null } | null,
         }
@@ -240,9 +238,9 @@ router.get('/demo', async (req, res) => {
     )
 
     const payload = {
-      area,
+      area: spot.key,
       label: spot.label,
-      areas: Object.entries(DEMO_AREAS).map(([k, v]) => ({ key: k, label: v.label })),
+      areas: DEMO_AREAS.map((a) => ({ key: a.key, label: a.label })),
       results,
       generatedAt: new Date().toISOString(),
     }

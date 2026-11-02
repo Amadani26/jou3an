@@ -167,3 +167,41 @@ export function isOpenNow(
 export function hasKnownHours(restaurant: { openingHours?: unknown }): boolean {
   return parsePeriods(restaurant.openingHours) !== null
 }
+
+/**
+ * The Dubai wall-clock time ("12:00") at which a currently-closed place next
+ * opens, or null when it cannot be said (unknown hours, or open 24/7 —
+ * both of which `isOpenNow` already reports as open).
+ *
+ * Used by the public demo: when an area is quiet enough that the engine has
+ * to relax the hours gate, the card says "Opens at 12:00" instead of hiding
+ * that the place is shut right now.
+ */
+export function nextOpeningLabel(
+  restaurant: { openingHours?: unknown },
+  date: Date = new Date(),
+): string | null {
+  const periods = parsePeriods(restaurant.openingHours)
+  if (!periods) return null
+
+  const now = dubaiWeekMinutes(date)
+  let bestDelta = Infinity
+  let best: HoursPoint | null = null
+
+  for (const period of periods) {
+    if (!period.close) return null // 24/7 — never closed, nothing to announce
+    const open = toWeekMinutes(period.open.day, period.open.hour, period.open.minute ?? 0)
+    // The next occurrence of this opening, looking at this week and the next.
+    for (const candidate of [open, open + MINUTES_PER_WEEK]) {
+      const delta = candidate - now
+      if (delta >= 0 && delta < bestDelta) {
+        bestDelta = delta
+        best = period.open
+      }
+    }
+  }
+
+  if (!best) return null
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(best.hour)}:${pad(best.minute ?? 0)}`
+}
