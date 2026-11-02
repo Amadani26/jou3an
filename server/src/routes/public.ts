@@ -5,6 +5,7 @@ import { decide } from '../services/engine'
 import { toEngineContext } from '../services/engine/request'
 import type { EngineInput, Pick } from '../services/engine/types'
 import { isServeable } from '../lib/venueType'
+import { isBarLike } from '../lib/barLike'
 import { displayArea } from '../lib/areaName'
 import {
   getPlacePhotos,
@@ -82,7 +83,9 @@ const store = (key: string, data: unknown) => cache.set(key, { at: Date.now(), d
 /* ---- the anonymous engine run ---- */
 
 async function anonymousDecision(coords?: { lat: number; lng: number }) {
-  const candidates = await prisma.restaurant.findMany()
+  // Marketing-surface rule: no bars, lounges, pubs or clubs as picks —
+  // "Jou3an decides restaurants". The APP's own pools are untouched.
+  const candidates = (await prisma.restaurant.findMany()).filter((r) => !isBarLike(r))
   const input: EngineInput = {
     candidates,
     taste: {}, // empty profile: no personal-history reason line can fire
@@ -154,6 +157,7 @@ router.get('/showcase', async (_req, res) => {
     const seenCuisine = new Set<string>()
     const wall: ReturnType<typeof publicPick>[] = []
     for (const r of rows) {
+      if (isBarLike(r)) continue
       const key = r.cuisineType.toLowerCase()
       if (seenCuisine.has(key)) continue
       seenCuisine.add(key)
