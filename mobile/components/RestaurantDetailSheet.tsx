@@ -26,7 +26,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated'
-import { prettyTag, visibleTags, prettyDistance } from '../lib/api'
+import { highlightTags, tagLabel, prettyDistance } from '../lib/api'
 import { usePressed } from '../lib/usePressed'
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window')
@@ -41,7 +41,8 @@ export interface RestaurantDetailSheetProps {
   showClose?: boolean
   name: string
   cuisine: string
-  priceRange: string
+  /** Null when the price is unknown — the segment is hidden, not dashed. */
+  priceRange: string | null
   area: string
   tags?: string[]
   /** Google's 0–5 rating. Omit/null hides the rating row entirely. */
@@ -371,10 +372,19 @@ export default function RestaurantDetailSheet({
                 <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: '#8A847E' }}>
                   {cuisine}
                 </Text>
-                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#242424' }} />
-                <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 14, color: '#FFB547' }}>
-                  {priceRange}
-                </Text>
+                {/* Unknown price: segment and its separator both disappear. */}
+                {priceRange ? (
+                  <>
+                    <View
+                      style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#242424' }}
+                    />
+                    <Text
+                      style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 14, color: '#FFB547' }}
+                    >
+                      {priceRange}
+                    </Text>
+                  </>
+                ) : null}
                 <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#242424' }} />
                 <Ionicons name="location-outline" size={13} color="#8A847E" />
                 <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 14, color: '#8A847E' }}>
@@ -448,8 +458,9 @@ export default function RestaurantDetailSheet({
                 </View>
               ) : null}
 
-              {/* Tags */}
-              {visibleTags(tags).length > 0 ? (
+              {/* Highlight chips — at most 3, directly under the rating.
+                  Hidden entirely when the row has none: no placeholders. */}
+              {highlightTags(tags).length > 0 ? (
                 <View
                   style={{
                     flexDirection: 'row',
@@ -458,7 +469,7 @@ export default function RestaurantDetailSheet({
                     marginBottom: 16,
                   }}
                 >
-                  {visibleTags(tags).map((t) => (
+                  {highlightTags(tags).map((t) => (
                     <View
                       key={t}
                       style={{
@@ -475,7 +486,7 @@ export default function RestaurantDetailSheet({
                           color: '#E8272A',
                         }}
                       >
-                        {prettyTag(t)}
+                        {tagLabel(t)}
                       </Text>
                     </View>
                   ))}

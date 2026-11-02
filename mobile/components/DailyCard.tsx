@@ -9,8 +9,9 @@ interface DailyCardProps {
   name: string
   cuisine: string
   area: string
-  priceMin: number
-  priceMax: number
+  /** Null = price unknown — the AED line is hidden, never dashed. */
+  priceMin: number | null
+  priceMax: number | null
   /** Google Places photo URL; falls back to the placeholder when absent. */
   imageUrl?: string
   /** Google's 0–5 score. Absent on the static FALLBACK_PICKS, so the badge
@@ -123,15 +124,17 @@ export default function DailyCard({
         >
           {cuisine} · {area}
         </Text>
-        <Text
-          style={{
-            fontFamily: 'DMSans_600SemiBold',
-            fontSize: 13,
-            color: '#FFB547',
-          }}
-        >
-          AED {priceMin}–{priceMax}
-        </Text>
+        {priceMin != null && priceMax != null ? (
+          <Text
+            style={{
+              fontFamily: 'DMSans_600SemiBold',
+              fontSize: 13,
+              color: '#FFB547',
+            }}
+          >
+            AED {priceMin}–{priceMax}
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   )

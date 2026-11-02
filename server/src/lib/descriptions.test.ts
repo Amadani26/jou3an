@@ -36,6 +36,12 @@ describe('describeFacts', () => {
     expect(facts).toContain('pakistani restaurant')
   })
 
+  it('omits the spend line for an unknown price (migration price_optional)', () => {
+    const facts = describeFacts(source({ priceMin: null, priceMax: null }))
+    expect(facts).not.toContain('Typical spend')
+    expect(facts.toLowerCase()).not.toContain('unknown')
+  })
+
   // A prompt that mentions a gap invites the model to fill it.
   it('omits unknown fields entirely rather than saying "unknown"', () => {
     const facts = describeFacts(
@@ -179,5 +185,45 @@ describe('validateDescription', () => {
     const v = validateDescription('An authentic hidden gem! Truly iconic! A third one!')
     expect(v.ok).toBe(false)
     expect(v.problems.length).toBeGreaterThan(1)
+  })
+
+  it('rejects price claims when the price is unknown', () => {
+    for (const text of [
+      'Serves Pakistani food for dinner. A mid-range spot for a meal out.',
+      'Serves Asian fusion late. Good food at a reasonable price.',
+      'Casual Middle Eastern food. An inexpensive choice for a quick meal.',
+      'French food in a casual room. Upscale without the fuss.',
+    ]) {
+      const v = validateDescription(text, { priceKnown: false })
+      expect(v.ok, `"${text}" should be rejected`).toBe(false)
+      expect(v.problems.join(' ')).toMatch(/price is unknown/)
+    }
+  })
+
+  it('allows price words when the price is known, and by default', () => {
+    const text = 'Serves Pakistani food for dinner. A mid-range spot for a meal out.'
+    expect(validateDescription(text, { priceKnown: true }).ok).toBe(true)
+    expect(validateDescription(text).ok).toBe(true)
+  })
+
+  it('does not false-positive on price-free copy for an unpriced row', () => {
+    const text =
+      'Serves Pakistani food for a sit-down dinner. It suits a casual meal with friends in Al Satwa.'
+    expect(validateDescription(text, { priceKnown: false }).ok).toBe(true)
+  })
+})
+
+describe('buildDescriptionPrompt price handling', () => {
+  it('says nothing extra when the price band is known', () => {
+    const prompt = buildDescriptionPrompt(source())
+    expect(prompt).toContain('Typical spend per person: AED 25–60')
+    expect(prompt).not.toMatch(/price is unknown/)
+  })
+
+  it('forbids price wording when the band is null', () => {
+    const prompt = buildDescriptionPrompt(source({ priceMin: null, priceMax: null }))
+    expect(prompt).not.toContain('Typical spend')
+    expect(prompt).toMatch(/price is unknown/i)
+    expect(prompt).toMatch(/mid-range/)
   })
 })

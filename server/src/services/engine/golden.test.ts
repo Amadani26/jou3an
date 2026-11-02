@@ -116,7 +116,8 @@ describe('golden 2 — DIFC fancy date night', () => {
   it('leans expensive for a FANCY high-budget brief', () => {
     const decision = d()
     const midPrices = decision.picks.map(
-      (p) => (p.restaurant.priceMin + p.restaurant.priceMax) / 2,
+      // The fixture always carries prices; ?? 0 only satisfies the nullable type.
+      (p) => ((p.restaurant.priceMin ?? 0) + (p.restaurant.priceMax ?? 0)) / 2,
     )
     // At least one genuinely upmarket option, not three cheap eats.
     expect(Math.max(...midPrices)).toBeGreaterThan(120)

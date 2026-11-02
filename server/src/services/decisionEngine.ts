@@ -74,8 +74,10 @@ export function decideRestaurants(
     // Area mentioned
     if (text.includes(r.area.toLowerCase().replace('_', ' '))) score += 2
 
-    // Cheaper is better when budget-conscious
-    if (wantsCheap) score += Math.max(0, 4 - Math.floor(r.priceMax / 40))
+    // Cheaper is better when budget-conscious (unknown price asserts nothing)
+    if (wantsCheap && r.priceMax != null) {
+      score += Math.max(0, 4 - Math.floor(r.priceMax / 40))
+    }
 
     // Rating as a gentle tiebreaker
     score += r.ratingScore

@@ -135,8 +135,10 @@ export interface Restaurant {
   name: string
   cuisineType: string
   area: LocationArea
-  priceMin: number
-  priceMax: number
+  /** Null = price unknown (migration `price_optional`) — render through
+   *  `aedRange()`, which hides the segment rather than inventing a band. */
+  priceMin: number | null
+  priceMax: number | null
   /**
    * ⚠️ DEPRECATED — hand-seeded only (10 rows). Read through `callablePhone()`,
    * which prefers `phoneNumber`. Same relationship as `area` -> `areaName`.
@@ -587,7 +589,8 @@ export interface HistoryItem {
   /** @deprecated Coarse 5-value enum — use displayArea(). */
   area: LocationArea
   areaName?: string | null
-  priceRange: string
+  /** Null when the price is unknown — the row hides the segment. */
+  priceRange: string | null
   actionTaken: 'DIRECTIONS' | 'CALL' | 'ORDER' | 'SELECT' | null
   createdAt: string
   tags: string[]
@@ -653,23 +656,17 @@ export function displayArea(r: {
   return AREA_LABELS[r.area ?? 'OTHER'] ?? 'Dubai'
 }
 
-export const prettyTag = (tag: string) =>
-  tag
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
-
-/** Tags that must never render anywhere in the app (e.g. lingering in old data). */
-export const HIDDEN_TAGS = ['halal']
+// Tag display moved to lib/tags.ts (pure, so the lib-scoped tests can reach
+// it); re-exported here so the existing call sites keep one import.
+export { HIDDEN_TAGS, highlightTags, prettyTag, tagLabel, visibleTags } from './tags'
+import { prettyTag, visibleTags } from './tags'
+// Price display — same arrangement (pure, lib-tested, re-exported).
+export { aedRange } from './price'
 
 /** "1.2 km" — or null when we don't know how far away it is. */
 export function prettyDistance(km?: number | null): string | null {
   return typeof km === 'number' ? `${km.toFixed(1)} km` : null
 }
-
-/** Strip hidden tags before displaying a restaurant's tag list. */
-export const visibleTags = (tags: string[] = []) =>
-  tags.filter((t) => !HIDDEN_TAGS.includes(t.toLowerCase()))
 
 /**
  * Absolute URLs for a restaurant's Google Places photos.

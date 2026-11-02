@@ -422,7 +422,12 @@ router.get('/history', requireAuth, async (req, res) => {
         // real neighbourhood and what the app should render.
         area: r.area,
         areaName: r.areaName,
-        priceRange: `AED ${r.priceMin}–${r.priceMax}`,
+        // Null when the price is unknown — the app hides the segment rather
+        // than printing a fabricated range (migration `price_optional`).
+        priceRange:
+          r.priceMin == null || r.priceMax == null
+            ? null
+            : `AED ${r.priceMin}–${r.priceMax}`,
         actionTaken: s.actionTaken,
         createdAt: s.createdAt,
         // Extras so the mobile RestaurantDetailSheet can render on tap:

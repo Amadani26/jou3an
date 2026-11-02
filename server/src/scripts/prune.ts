@@ -51,7 +51,8 @@ interface PruneRow {
   price: string
 }
 
-const priceLabel = (r: Restaurant) => `${r.priceMin}–${r.priceMax}`
+const priceLabel = (r: Restaurant) =>
+  r.priceMin == null || r.priceMax == null ? '—' : `${r.priceMin}–${r.priceMax}`
 
 function toRow(r: Restaurant): PruneRow {
   return {

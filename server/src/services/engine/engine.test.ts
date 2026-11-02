@@ -10,8 +10,15 @@ import {
   explorationFor,
 } from './select'
 import { BUDGET_BANDS, filterCandidates, matchesCuisines } from './filter'
-import { NEUTRAL, mealFit, normalizeWeight, priceFit, tasteScore } from './score'
-import { CONTEXT_WEIGHTS, TASTE_NAMESPACE_WEIGHTS, WEIGHTS } from './config'
+import { NEUTRAL, mealFit, normalizeWeight, priceFit, tasteScore, vibeFit } from './score'
+import { dimensionsFor } from '../tasteDimensions'
+import {
+  CONTEXT_WEIGHTS,
+  TASTE_DIMENSION_DAMP,
+  TASTE_NAMESPACE_WEIGHTS,
+  TASTE_NORMALISATION_FLOOR,
+  WEIGHTS,
+} from './config'
 import { WEIGHT_MAX, WEIGHT_MIN } from '../tasteDimensions'
 import { conflictsWithDietary } from '../../lib/dietary'
 import { effectiveTasteWeights, quizWeightsFrom } from '../tasteProfile'
@@ -633,6 +640,50 @@ describe('taste term — more than one dimension', () => {
     expect(tasteScore(known, weights)).toBeGreaterThan(tasteScore(unknown, weights))
   })
 
+  /**
+   * ⚠️ `tag:late-night` is DAMPED at scoring time (TASTE_DIMENSION_DAMP).
+   * generate:tags marks ~52% of the catalogue "Open late", so the dimension
+   * pins at the ceiling for any active user — the price:LOW saturation story
+   * again, inside the tag namespace. The stored weight is untouched; it just
+   * speaks at half volume when candidates are ranked.
+   */
+  it('damps tag:late-night so it cannot drown a distinctive tag', () => {
+    const lateNightSpot = restaurant({
+      cuisineType: 'Peruvian',
+      tags: ['late-night'],
+      priceMin: 120,
+      priceMax: 220,
+    })
+    // Identical stored weight, identical row shape — the damped dimension
+    // must move the score less than an undamped tag does.
+    const viaLateNight = tasteScore(lateNightSpot, { [tagDimension('late-night')]: 8 })
+    const viaSteakhouse = tasteScore(steakhouse(), { [tagDimension('steakhouse')]: 8 })
+    expect(viaLateNight).toBeGreaterThan(NEUTRAL) // a true night owl still leans
+    expect(viaLateNight).toBeLessThan(viaSteakhouse)
+  })
+
+  it('a pinned late-night cannot outvote a modest distinctive tag', () => {
+    const weights = {
+      [tagDimension('late-night')]: 8, // saturated: every second swipe fed it
+      [tagDimension('steakhouse')]: -3, // a genuine "not for me"
+    }
+    const lateSteakhouse = restaurant({
+      cuisineType: 'American',
+      tags: ['steakhouse', 'late-night'],
+      priceMin: 120,
+      priceMax: 220,
+    })
+    // 8 damped to 4 against -3 still wins the tag mean, but by 0.5 not 2.5 —
+    // assert the damp is applied: the mean is of (8×damp, -3), not (8, -3).
+    const damp = TASTE_DIMENSION_DAMP['tag:late-night']
+    const tagMean = (8 * damp - 3) / 2
+    const expected = normalizeWeight(
+      (TASTE_NAMESPACE_WEIGHTS.tag * tagMean) /
+        Math.max(TASTE_NAMESPACE_WEIGHTS.tag, TASTE_NORMALISATION_FLOOR),
+    )
+    expect(tasteScore(lateSteakhouse, weights)).toBeCloseTo(expected, 10)
+  })
+
   it('lets the cuisine outvote a tag when the two disagree', () => {
     const score = tasteScore(steakhouse(), {
       [cuisineDimension('American')]: 4,
@@ -1088,6 +1139,32 @@ describe('budget is a score term, never a filter', () => {
 
 describe('priceFit — the bands the quiz offers', () => {
   const at = (mid: number) => restaurant({ priceMin: mid, priceMax: mid })
+
+  /**
+   * ⚠️ Migration `price_optional`: a row Google has no price signal for stores
+   * NULL (the old import default invented AED 45–100). Unknown price is a real
+   * state and must be budget-inert and vibe-inert — never punished, never
+   * guessed, and never a `price:` taste dimension.
+   */
+  it('is NEUTRAL for an unknown price, under every band', () => {
+    const unknown = restaurant({ priceMin: null, priceMax: null })
+    for (const band of ['LOW', 'MID', 'HIGH', 'ANY'] as const) {
+      expect(priceFit(unknown, band)).toBe(NEUTRAL)
+    }
+  })
+
+  it('vibeFit is NEUTRAL for an unknown price, FANCY or CASUAL', () => {
+    const unknown = restaurant({ priceMin: null, priceMax: null })
+    expect(vibeFit(unknown, 'FANCY')).toBe(NEUTRAL)
+    expect(vibeFit(unknown, 'CASUAL')).toBe(NEUTRAL)
+  })
+
+  it('emits no price: dimension for an unknown price', () => {
+    const unknown = restaurant({ priceMin: null, priceMax: null })
+    expect(dimensionsFor(unknown).some((k) => k.startsWith('price:'))).toBe(false)
+    // …while a priced row still emits one.
+    expect(dimensionsFor(at(60)).some((k) => k.startsWith('price:'))).toBe(true)
+  })
 
   it('matches the quiz copy: under 100 / 100-200 / 200+', () => {
     expect(BUDGET_BANDS.LOW).toEqual({ min: 0, max: 100 })

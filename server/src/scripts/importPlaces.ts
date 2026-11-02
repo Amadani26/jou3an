@@ -137,8 +137,9 @@ async function main() {
     // Best guess from the candidates file; the Places sync below replaces it
     // with the structured address components, which are more reliable.
     const areaNameGuess = areaNameFromFormattedAddress(c.address)
+    // Null when Google has no price signal — stored as null, shown as nothing.
     const price = priceRangeFor(c.priceLevel)
-    const priceLabel = `${price.min}–${price.max}`
+    const priceLabel = price ? `${price.min}–${price.max}` : '—'
     // Classified from the candidate's own taxonomy, so a coffee shop is parked
     // the moment it lands rather than sitting in the engine until someone runs
     // `classify:cafes`. Correct a misread with `npm run setvenue`.
@@ -180,8 +181,8 @@ async function main() {
           name: c.name,
           cuisineType: cuisine,
           area,
-          priceMin: price.min,
-          priceMax: price.max,
+          priceMin: price?.min ?? null,
+          priceMax: price?.max ?? null,
           // Pinned from the start: the id is exactly what discovery matched,
           // so Text Search must never get a chance to second-guess it.
           googlePlaceId: c.placeId,

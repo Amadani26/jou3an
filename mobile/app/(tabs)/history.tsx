@@ -166,7 +166,10 @@ function HistoryRow({
           style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: '#8A847E' }}
           numberOfLines={1}
         >
-          {item.cuisine} · {displayArea(item)} · {item.priceRange}
+          {/* Unknown price: the segment and its separator are simply absent. */}
+          {[item.cuisine, displayArea(item), item.priceRange]
+            .filter(Boolean)
+            .join(' · ')}
         </Text>
       </View>
 

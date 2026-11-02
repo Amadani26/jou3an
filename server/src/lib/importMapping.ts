@@ -206,17 +206,20 @@ export const PRICE_BANDS: Record<PriceLevel, { min: number; max: number }> = {
   PRICE_LEVEL_VERY_EXPENSIVE: { min: 280, max: 600 },
 }
 
-/** Used when Google has no price signal — the middle of the market. */
-export const PRICE_FALLBACK = { min: 45, max: 100 }
-
-export function priceRangeFor(priceLevel?: PriceLevel | string | null): {
-  min: number
-  max: number
-} {
+/**
+ * ⚠️ Returns NULL when Google has no price signal. There USED to be a
+ * `PRICE_FALLBACK` of AED 45–100 here ("the middle of the market") — it put a
+ * fabricated range on 75 live rows that the app then displayed as if real.
+ * NULL is the honest answer: the UI hides the AED segment, the engine scores
+ * price as NEUTRAL, and nothing may reintroduce a guessed band.
+ */
+export function priceRangeFor(
+  priceLevel?: PriceLevel | string | null,
+): { min: number; max: number } | null {
   if (priceLevel && priceLevel in PRICE_BANDS) {
     return PRICE_BANDS[priceLevel as PriceLevel]
   }
-  return PRICE_FALLBACK
+  return null
 }
 
 /* ------------------------------------------------------------------ */

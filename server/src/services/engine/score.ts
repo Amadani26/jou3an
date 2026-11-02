@@ -33,6 +33,7 @@ import {
   QUALITY_FALLBACK_MAX,
   QUALITY_RATING_CEILING,
   QUALITY_RATING_FLOOR,
+  TASTE_DIMENSION_DAMP,
   TASTE_NAMESPACE_WEIGHTS,
   TASTE_NORMALISATION_FLOOR,
   TOP_TASTE_DIMENSIONS,
@@ -124,10 +125,16 @@ export function tasteDetail(r: Candidate, weights: TasteWeights): TasteDetail {
   const byNamespace = new Map<Namespace, number[]>()
 
   for (const key of dimensionsFor(r)) {
-    const weight = weights[key]
-    if (typeof weight !== 'number' || weight === 0) continue
+    const stored = weights[key]
+    if (typeof stored !== 'number' || stored === 0) continue
     const parsed = parseDimension(key)
     if (!parsed) continue
+
+    // Catalogue-saturated dimensions speak at a fraction of their stored
+    // value — see TASTE_DIMENSION_DAMP. The contribution records the DAMPED
+    // weight, because that is what actually ranked.
+    const weight = stored * (TASTE_DIMENSION_DAMP[key] ?? 1)
+    if (weight === 0) continue
 
     contributions.push({ key, namespace: parsed.namespace, weight })
     const bucket = byNamespace.get(parsed.namespace)
@@ -172,7 +179,12 @@ export function tasteScore(r: Candidate, weights: TasteWeights): number {
  */
 export function vibeFit(r: Candidate, vibe: Vibe): number {
   if (vibe === 'ANY') return NEUTRAL
-  const normalised = clamp01(midPrice(r) / VIBE_PRICE_CEILING)
+  // Unknown price is a real state (migration `price_optional`): no evidence,
+  // so NEUTRAL — never a guessed band, and never a punishment for our gap.
+  if (r.priceMin == null || r.priceMax == null) return NEUTRAL
+  const normalised = clamp01(
+    midPrice({ priceMin: r.priceMin, priceMax: r.priceMax }) / VIBE_PRICE_CEILING,
+  )
   return vibe === 'FANCY' ? normalised : 1 - normalised
 }
 
@@ -190,8 +202,11 @@ export function vibeFit(r: Candidate, vibe: Vibe): number {
  */
 export function priceFit(r: Candidate, budget: Budget): number {
   if (budget === 'ANY') return NEUTRAL
+  // Unknown price: budget-inert, same reasoning as vibeFit. The user's band
+  // leans the ranking among rows whose price we actually know.
+  if (r.priceMin == null || r.priceMax == null) return NEUTRAL
   const band = PRICE_BANDS[budget]
-  const mid = midPrice(r)
+  const mid = midPrice({ priceMin: r.priceMin, priceMax: r.priceMax })
 
   if (mid >= band.min && mid <= band.max) return 1
 

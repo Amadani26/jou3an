@@ -69,6 +69,12 @@ export interface PlaceDetails {
   primaryType?: string
   types?: string[]
   /**
+   * Google's coarse price bucket ("PRICE_LEVEL_MODERATE"). Absent when Google
+   * has no price signal — a real answer the price backfill stores as NULL.
+   * Billed on the Places "Pro" SKU.
+   */
+  priceLevel?: string
+  /**
    * Google's own one-or-two-sentence blurb for the place, when it has one.
    * ⚠️ Billed on the Places "Enterprise + Atmosphere" SKU — the most expensive
    * band — so it rides along only where the call is already being made, and
@@ -382,6 +388,43 @@ export async function getPlacePhone(placeId: string): Promise<PlaceDetails> {
   return placesFetch<PlaceDetails>(
     `/places/${encodeURIComponent(placeId)}`,
     'id,displayName,internationalPhoneNumber',
+    { method: 'GET' },
+  )
+}
+
+/**
+ * Price-only Place Details — the narrow call for the price backfill
+ * (`npm run sync:prices`). `priceLevel` sits on the Places "Pro" SKU
+ * (~$17/1,000), cheaper than the Advanced band the phone/hours calls pay but
+ * not Essentials; the mask stays narrow so nothing already stored is re-billed.
+ */
+export async function getPlacePrice(placeId: string): Promise<PlaceDetails> {
+  return placesFetch<PlaceDetails>(
+    `/places/${encodeURIComponent(placeId)}`,
+    'id,displayName,priceLevel',
+    { method: 'GET' },
+  )
+}
+
+/**
+ * Photos-only Place Details — the FREE call.
+ *
+ * `photos` sits in the Place Details "Essentials (IDs Only)" SKU, which is
+ * free with an unlimited cap (verified against Google's pricing + field-mask
+ * docs on 2026-11-02). ⚠️ That holds ONLY while the mask stays exactly
+ * `id,photos` — adding `displayName` (Pro, $17/1k) or anything richer bills
+ * the whole request at that band. This is what the photo-name re-sync and the
+ * proxy's self-heal path call, so both must stay on this mask.
+ *
+ * Photo resource names EXPIRE (Google says to re-retrieve them rather than
+ * cache long-term — the Sep 2026 batch died with "The photo resource in the
+ * request is invalid"), so treat stored photoRefs as a short-lived cache that
+ * this call refreshes.
+ */
+export async function getPlacePhotos(placeId: string): Promise<PlaceDetails> {
+  return placesFetch<PlaceDetails>(
+    `/places/${encodeURIComponent(placeId)}`,
+    'id,photos',
     { method: 'GET' },
   )
 }

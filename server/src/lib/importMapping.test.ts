@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   CUISINE_FALLBACK,
-  PRICE_FALLBACK,
   areaFromPlace,
   cuisineFromTypes,
   priceRangeFor,
@@ -93,23 +92,24 @@ describe('priceRangeFor', () => {
     expect(priceRangeFor('PRICE_LEVEL_VERY_EXPENSIVE')).toEqual({ min: 280, max: 600 })
   })
 
-  it('falls back to mid-market when Google has no price signal', () => {
-    expect(priceRangeFor(null)).toEqual(PRICE_FALLBACK)
-    expect(priceRangeFor(undefined)).toEqual(PRICE_FALLBACK)
-    expect(priceRangeFor('PRICE_LEVEL_UNSPECIFIED')).toEqual(PRICE_FALLBACK)
+  it('returns NULL when Google has no price signal — never a guessed band', () => {
+    // The old PRICE_FALLBACK (45–100) put a fabricated range on 75 live rows.
+    expect(priceRangeFor(null)).toBeNull()
+    expect(priceRangeFor(undefined)).toBeNull()
+    expect(priceRangeFor('PRICE_LEVEL_UNSPECIFIED')).toBeNull()
   })
 
-  it('always produces min <= max', () => {
+  it('always produces min <= max for every real band', () => {
     for (const lvl of [
       'PRICE_LEVEL_FREE',
       'PRICE_LEVEL_INEXPENSIVE',
       'PRICE_LEVEL_MODERATE',
       'PRICE_LEVEL_EXPENSIVE',
       'PRICE_LEVEL_VERY_EXPENSIVE',
-      null,
     ]) {
-      const { min, max } = priceRangeFor(lvl)
-      expect(min).toBeLessThanOrEqual(max)
+      const range = priceRangeFor(lvl)
+      expect(range).not.toBeNull()
+      expect(range!.min).toBeLessThanOrEqual(range!.max)
     }
   })
 })

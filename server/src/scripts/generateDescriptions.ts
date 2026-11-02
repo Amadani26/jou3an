@@ -125,7 +125,9 @@ async function generateOne(
 
     const raw = textOf(message)
     const text = sanitizeDescription(raw)
-    const check = validateDescription(text)
+    const check = validateDescription(text, {
+      priceKnown: r.priceMin != null && r.priceMax != null,
+    })
     if (check.ok) {
       return {
         text,
@@ -209,7 +211,16 @@ async function main() {
     return
   }
 
-  const client = new Anthropic({ apiKey })
+  // An org-level key (not scoped to a workspace) is refused with a 400 unless
+  // the workspace is named per-request. Optional: a workspace-scoped key needs
+  // nothing. The ID is `wrkspc_…`, from console.anthropic.com → Workspaces.
+  const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim()
+  const client = new Anthropic({
+    apiKey,
+    ...(workspaceId
+      ? { defaultHeaders: { 'anthropic-workspace-id': workspaceId } }
+      : {}),
+  })
 
   // One free count_tokens call on a real prompt beats guessing from character
   // counts — the per-row input is near-identical across the catalogue.

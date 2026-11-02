@@ -18,8 +18,9 @@ export interface DescriptionSource {
   name: string
   cuisineType: string
   tags: string[]
-  priceMin: number
-  priceMax: number
+  /** Null = Google has no price signal; the spend line is then OMITTED. */
+  priceMin: number | null
+  priceMax: number | null
   /** Real neighbourhood; falls back to the coarse enum label. */
   areaName?: string | null
   area?: string | null
@@ -97,11 +98,12 @@ export function describeFacts(r: DescriptionSource): string {
   const area = r.areaName?.trim() || prettyEnumArea(r.area ?? '')
   const tags = r.tags.map((t) => t.trim()).filter(Boolean)
 
-  const facts: string[] = [
-    `Name: ${r.name}`,
-    `Cuisine: ${r.cuisineType}`,
-    `Typical spend per person: AED ${r.priceMin}–${r.priceMax}`,
-  ]
+  const facts: string[] = [`Name: ${r.name}`, `Cuisine: ${r.cuisineType}`]
+  // Unknown price is omitted, not written as "unknown" — same rule as every
+  // other gap in this list: a prompt that mentions a gap invites filling it.
+  if (r.priceMin != null && r.priceMax != null) {
+    facts.push(`Typical spend per person: AED ${r.priceMin}–${r.priceMax}`)
+  }
   if (area) facts.push(`Neighbourhood: ${area}, Dubai`)
   if (tags.length) facts.push(`Tags: ${tags.join(', ')}`)
   if (typeof r.googleRating === 'number') {
@@ -127,12 +129,25 @@ Rules:
 - No marketing language. Never write "hidden gem", "must-try", "authentic", "vibrant", "iconic", "unforgettable", "culinary journey", "nestled" or anything in that register.
 - No emojis, no hashtags, no quotation marks, no markdown, no exclamation marks.
 - Do not repeat the restaurant's name more than once, and never open with it twice.
-- Do not state the exact rating number or the exact price range — the app already shows both. You may describe the price band in words ("mid-range", "inexpensive", "expensive").
+- Do not state the exact rating number or the exact price range — the app already shows both. You may describe the price band in words ("mid-range", "inexpensive", "expensive") ONLY when the facts state a typical spend. If no spend is given, the price is unknown — say nothing about price, cost or spend in any form.
 - Reply with the two sentences only. No preamble, no labels, no options.`
+
+/** Whether the row carries a real price band the copy may characterise. */
+export function hasKnownPrice(r: DescriptionSource): boolean {
+  return r.priceMin != null && r.priceMax != null
+}
 
 /** The per-row user message. */
 export function buildDescriptionPrompt(r: DescriptionSource): string {
-  return `Write the description for this restaurant.\n\n${describeFacts(r)}`
+  // Omitting the spend fact is not enough on its own: the system prompt steers
+  // the second sentence toward "who it suits", and with no band given the
+  // model INVENTS one ("a mid-range spot") — measured on the 61 nulled rows,
+  // 46 of 61 claimed a price we do not have. The gap has to be stated as a
+  // prohibition, not left as a gap.
+  const priceNote = hasKnownPrice(r)
+    ? ''
+    : '\n\nThis restaurant\'s price is unknown. Do not mention price, cost or spend in any form — no "mid-range", "inexpensive", "affordable", "upscale" or anything like them.'
+  return `Write the description for this restaurant.\n\n${describeFacts(r)}${priceNote}`
 }
 
 /** Anything in the Unicode pictographic range — emoji, dingbats, symbols. */
@@ -178,13 +193,55 @@ export interface Validation {
 }
 
 /**
+ * Price claims, as whole words. Checked only when the row's price is UNKNOWN:
+ * a priced row may legitimately say "mid-range", a null-price row saying it is
+ * inventing data — the exact dishonesty the nullable price columns removed.
+ */
+export const PRICE_CLAIM_WORDS = [
+  'price',
+  'prices',
+  'priced',
+  'pricey',
+  'cost',
+  'costs',
+  'costly',
+  'spend',
+  'aed',
+  'mid-range',
+  'midrange',
+  'inexpensive',
+  'expensive',
+  'affordable',
+  'cheap',
+  'budget',
+  'wallet',
+  'upscale',
+  'high-end',
+  'premium',
+  'value',
+]
+
+const PRICE_CLAIM_RE = new RegExp(
+  `\\b(${PRICE_CLAIM_WORDS.join('|')})\\b`,
+  'gi',
+)
+
+export interface ValidateOptions {
+  /** False = the row has no price band, so any price wording is a rejection. */
+  priceKnown?: boolean
+}
+
+/**
  * Whether a sanitized description is storable.
  *
  * Deliberately strict: this runs unattended across hundreds of rows, and a
  * rejected row simply keeps its null description — which every surface already
  * hides — whereas a bad row is live copy about a real business.
  */
-export function validateDescription(text: string): Validation {
+export function validateDescription(
+  text: string,
+  opts: ValidateOptions = {},
+): Validation {
   const problems: string[] = []
 
   if (!text) {
@@ -213,6 +270,15 @@ export function validateDescription(text: string): Validation {
   const hype = HYPE_WORDS.filter((w) => lower.includes(w))
   if (hype.length) {
     problems.push(`hype wording: ${hype.join(', ')}`)
+  }
+
+  if (opts.priceKnown === false) {
+    const claims = [...new Set(text.match(PRICE_CLAIM_RE) ?? [])]
+    if (claims.length) {
+      problems.push(
+        `mentions price (${claims.join(', ')}) but this restaurant's price is unknown`,
+      )
+    }
   }
 
   return { ok: problems.length === 0, problems }

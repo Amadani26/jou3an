@@ -10,7 +10,8 @@ export interface ResultCardProps {
   rank: number
   name: string
   cuisine: string
-  priceRange: string
+  /** Null when the price is unknown — the segment is hidden, not dashed. */
+  priceRange: string | null
   area: string
   /** Km from the user, shown next to the area when known. */
   distanceKm?: number
@@ -166,10 +167,18 @@ export default function ResultCard({
             <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: '#888888' }}>
               {cuisine}
             </Text>
-            <Dot />
-            <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 12, color: '#F4A261' }}>
-              {priceRange}
-            </Text>
+            {/* Unknown price: the segment AND its separator disappear —
+                never a dash, never a guessed band. */}
+            {priceRange ? (
+              <>
+                <Dot />
+                <Text
+                  style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 12, color: '#F4A261' }}
+                >
+                  {priceRange}
+                </Text>
+              </>
+            ) : null}
             <Dot />
             <Ionicons name="location-outline" size={11} color="#888888" />
             <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: '#888888' }}>
