@@ -74,6 +74,9 @@ export function buildReason(
     case 'context': {
       if (opts.vibe === 'FANCY') return `Worth dressing up for`
       if (opts.vibe === 'CASUAL') return `Easy, casual ${cuisine}`
+      // Honest prices made these columns nullable; a null band must fall
+      // back to the cuisine, never print "AED null–null a head".
+      if (restaurant.priceMin == null || restaurant.priceMax == null) return cuisine
       return `AED ${restaurant.priceMin}–${restaurant.priceMax} a head`
     }
 
