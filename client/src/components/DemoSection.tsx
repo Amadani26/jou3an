@@ -46,6 +46,8 @@ type DemoCard = {
   name: string
   meta: string
   reason: string
+  /** "Opens at 12:00" — shown, never hidden, when the pick is closed now. */
+  opensAt: string | null
   /** "★ 4.8" (real, Google-attributed on the card) or "9.1" (generic). */
   score: string | null
   /** Live proxy URL or stock dish path; null → colour field. */
@@ -61,6 +63,7 @@ const liveCard = (r: DemoResult): DemoCard => ({
   name: r.name,
   meta: metaLine(r),
   reason: r.reason,
+  opensAt: r.opensAt ?? null,
   score: r.rating != null ? `★ ${r.rating.toFixed(1)}` : null,
   photoSrc: r.hasPhoto && r.placeId ? demoPhotoUrl(r.placeId) : null,
   attribution:
@@ -96,6 +99,7 @@ export default function DemoSection() {
       name: p.name,
       meta: metaLine(p),
       reason: p.reason,
+      opensAt: null,
       score: p.rating != null ? `★ ${p.rating.toFixed(1)}` : null,
       photoSrc: null,
       attribution: null,
@@ -135,7 +139,7 @@ export default function DemoSection() {
     <section className="demo-section" id="demo">
       <div className="demo-head">
         <h2 className="demo-title">Try it. Pick an area.</h2>
-        <p className="demo-sub">One tap in. Exactly 3 out.</p>
+        <p className="demo-sub">Pick an area. Get 3 places there.</p>
       </div>
 
       <div className="demo-stage" data-state={chip ? (deciding ? 'deciding' : 'results') : 'chips'}>
@@ -343,6 +347,7 @@ function CardFace({ card, rank }: { card: DemoCard; rank: number }) {
       <div className="demo-card-body">
         <h3>{card.name}</h3>
         <p>{card.meta}</p>
+        {card.opensAt ? <span className="demo-card-opens">Opens at {card.opensAt}</span> : null}
         <em>{card.reason}</em>
       </div>
     </>

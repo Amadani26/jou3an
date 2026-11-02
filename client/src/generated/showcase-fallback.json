@@ -1,6 +1,18 @@
 {
   "picks": [
     {
+      "id": "cmu9zo7a2000hok5u2dxlnhyt",
+      "placeId": "ChIJsZ85RwBDXz4Rcl424kSGsco",
+      "name": "DANAT ALBAHAR",
+      "cuisine": "Seafood",
+      "area": "Jumeirah",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.9,
+      "ratingCount": 671,
+      "reason": "One of the better-rated Seafood spots"
+    },
+    {
       "id": "cmu9yzhvf0001okyjaxl1j3kw",
       "placeId": "ChIJ8-3M2EppXz4RTjOPHMw165o",
       "name": "Kimuraya Authentic Japanese Restaurant - 1st Branch Business Bay",
@@ -23,18 +35,6 @@
       "rating": 4.8,
       "ratingCount": 459,
       "reason": "One of the better-rated Steakhouse spots"
-    },
-    {
-      "id": "cmua08i12000aoka2cqad7ani",
-      "placeId": "ChIJbUc3jNJpXz4RjlRJ6aw7Lpc",
-      "name": "Calories Lab",
-      "cuisine": "International",
-      "area": "Nad Al Sheba",
-      "priceMin": 20,
-      "priceMax": 55,
-      "rating": 4.9,
-      "ratingCount": 815,
-      "reason": "Something different — International"
     }
   ],
   "wall": [

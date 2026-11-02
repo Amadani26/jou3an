@@ -39,7 +39,9 @@ export interface LivePick {
 }
 
 export interface DemoResult extends LivePick {
-  distanceKm: number | null
+  /** "12:00" when the place is closed right now (quiet-area late-night
+   *  relaxation — within the SAME area, never a wider one); null = open. */
+  opensAt: string | null
   hasPhoto: boolean
   photoAuthor: { name: string; uri: string | null } | null
 }
@@ -62,7 +64,9 @@ export const DEMO_AREAS = [
   { key: 'JLT', label: 'JLT' },
   { key: 'DIFC', label: 'DIFC' },
   { key: 'BUSINESS_BAY', label: 'Business Bay' },
-  { key: 'JBR', label: 'JBR' },
+  // ⚠️ No JBR chip: the catalogue holds only 3 non-bar servable rows there
+  // (2026-11-02) — not enough to RELIABLY field three. Restore it when the
+  // area is imported more deeply (the server gates it too).
 ] as const
 
 async function get<T>(path: string): Promise<T | null> {

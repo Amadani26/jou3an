@@ -1734,7 +1734,21 @@ html.js .act-section:not([data-stage='arrived']) .story-chip {
   max-width: 42ch;
   font-size: 15px;
   line-height: 1.55;
-  color: var(--text-secondary);
+  /* White like the page's other supporting lines (ruling). */
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* A closed pick says so — honest, quiet, never hidden. */
+.demo-card-opens {
+  display: inline-block;
+  margin: 6px 8px 0 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 181, 71, 0.14);
+  color: #ffb547;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .demo-stage {
