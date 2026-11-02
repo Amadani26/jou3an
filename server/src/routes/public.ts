@@ -120,6 +120,9 @@ function publicPick(p: Pick) {
     priceMax: r.priceMax,
     rating: r.googleRating,
     ratingCount: r.googleRatingCount,
+    // Real highlight tags (the closed 15-slug vocabulary), capped like the
+    // app's own chips; the hero's detail beat renders them.
+    tags: (r.tags ?? []).slice(0, 3),
     reason: safeReason(p.reason, r.cuisineType),
   }
 }
@@ -163,6 +166,7 @@ router.get('/showcase', async (_req, res) => {
         priceMax: r.priceMax,
         rating: r.googleRating,
         ratingCount: r.googleRatingCount,
+        tags: (r.tags ?? []).slice(0, 3),
         reason: r.cuisineType,
       })
       if (wall.length >= 14) break
