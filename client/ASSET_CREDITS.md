@@ -162,3 +162,14 @@ standard GSAP licence. three / @react-three/fiber / drei /
 @react-three/postprocessing / postprocessing / Lenis are MIT. No HDR
 environment file is shipped — the studio lighting is generated in code
 (drei Lightformers), so there is nothing to licence there.
+
+## Web v2 — the "3" poster (2026-11-03, self-rendered)
+
+`public/v2/three-poster.webp` (900×900, 12 KB) is a STILL OF OUR OWN
+WebGL SCENE — the lacquer 3 at its exact resting pose — captured from
+`/v2?freeze3=1` (freezes the clock and pins progress to 0) and cropped to
+45% of frame height, centred. No third-party assets involved. It paints
+on first byte and crossfades into the live canvas once shaders are
+compiled (`data-ready`); the registration depends on `POSTER_ROT_Y` in
+JourneyCanvas.tsx — **re-capture whenever that constant, the lacquer
+material, the studio rig or the glyph geometry change.**

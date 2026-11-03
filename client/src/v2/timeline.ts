@@ -46,3 +46,13 @@ export const CH5_COPY_AT = HANDOFF_END + 0.016 // headline crossfades to "It lea
 export const SWIPE_AT = CH5_COPY_AT + 0.02 // one card swipes away (one-shot, CSS)
 export const TASTE_START = SWIPE_AT + 0.012
 export const TASTE_END = 0.92 // lacquer hue/glow shift fully in
+
+/** Scroll regulation: the runway's rest points, as progress values. A
+ *  settling scroll is eased to the nearest one IN ITS DIRECTION, so a fast
+ *  swipe advances to the next beat and the beat plays at the snap tween's
+ *  pace, not at flick speed. Chosen at each chapter's readable pose:
+ *  0 top · lit 3 · tunnel's end · just past the burst trigger (so the
+ *  one-shot fires on the way in) · answers handed off · taste settled ·
+ *  runway end. Only the runway snaps — the tail (demo/FAQ/join) scrolls
+ *  free. */
+export const SNAP_POINTS = [0, 0.14, 0.4, 0.56, 0.75, 0.93, 1]

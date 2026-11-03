@@ -17,8 +17,9 @@
  * in-area picks, photos with attribution, VenueNote), FAQ, CTABand
  * (waitlist — Supabase direct, MOCKED on Vercel previews, the
  * production-only waitlist_join analytics event), Footer (legal links,
- * wordmark monument), FloatingCTA (phone-only, hides over #waitlist).
- * Analytics/OG are app-/document-level and apply here unchanged.
+ * wordmark monument). The waitlist shortcut is the header JoinPill (all
+ * widths — it REPLACED the phone-only FloatingCTA here). Analytics/OG
+ * are app-/document-level and apply unchanged.
  *
  * REAL DATA ONLY throughout; static fallback renders every chapter's
  * content readable with zero WebGL. ?fps=1 overlays a frame meter.
@@ -34,9 +35,8 @@ import VenueNote from '../components/VenueNote'
 import FAQ from '../components/FAQ'
 import CTABand from '../components/CTABand'
 import Footer from '../components/Footer'
-import FloatingCTA from '../components/FloatingCTA'
 import {
-  CHAPTER_VH, P3, SETTLE_END, HANDOFF_END, CH5_COPY_AT, SWIPE_AT,
+  CHAPTER_VH, P3, SETTLE_END, HANDOFF_END, CH5_COPY_AT, SWIPE_AT, SNAP_POINTS,
 } from './timeline'
 import type { CardRectTargets, PostJourneyEls } from './JourneyCanvas'
 import '../v2/journey.css'
@@ -53,6 +53,34 @@ function webglOK(): boolean {
   } catch {
     return false
   }
+}
+
+/** The ONE waitlist shortcut: a compact pill pinned top-right in the
+ *  header band on ALL widths (the nav only carries the wordmark on the
+ *  left, so the slot is free at 375→1440). 44pt+ tap target, safe-area
+ *  aware, hides while the waitlist band itself is in view. Replaces the
+ *  phone-only FloatingCTA on this page. */
+function JoinPill({ onJoin }: { onJoin: () => void }) {
+  const [hidden, setHidden] = useState(false)
+  useEffect(() => {
+    const band = document.querySelector('#waitlist')
+    if (!band || !('IntersectionObserver' in window)) return
+    const io = new IntersectionObserver(([e]) => setHidden(e.isIntersecting), { threshold: 0.15 })
+    io.observe(band)
+    return () => io.disconnect()
+  }, [])
+  return (
+    <button
+      type="button"
+      className="j-joinpill"
+      data-hidden={hidden ? '1' : '0'}
+      tabIndex={hidden ? -1 : 0}
+      aria-hidden={hidden}
+      onClick={onJoin}
+    >
+      Join waitlist
+    </button>
+  )
 }
 
 /** Frame-time meter for measurements (?fps=1). */
@@ -218,6 +246,7 @@ export default function JourneyV2() {
 
   const [mode, setMode] = useState<'pending' | 'full' | 'static'>('pending')
   const [mount3d, setMount3d] = useState(false)
+  const lenisRef = useRef<Lenis | null>(null)
   const progress = useRef(0)
   const runwayRef = useRef<HTMLDivElement>(null)
   const answersRef = useRef<HTMLElement>(null)
@@ -236,11 +265,69 @@ export default function JourneyV2() {
   useEffect(() => {
     if (mode !== 'full') return
     gsap.registerPlugin(ScrollTrigger)
-    const lenis = new Lenis({ smoothWheel: true })
+    // SCROLL REGULATION (polish backlog #1): Lenis owns touch as well as
+    // wheel (syncTouch) with its inertia pulled way down, so an iPhone
+    // flick travels a controlled distance instead of ripping through the
+    // story; the snap pass below then eases to the nearest beat.
+    const lenis = new Lenis({
+      smoothWheel: true,
+      syncTouch: true, // Lenis owns touch: flicks decay under OUR curve, not iOS momentum
+      syncTouchLerp: 0.08,
+      touchInertiaExponent: 2.2, // steeper decay — a hard flick travels ~a chapter, not four
+      touchMultiplier: 1.2,
+      lerp: 0.1,
+    })
+    lenisRef.current = lenis
     lenis.on('scroll', ScrollTrigger.update)
     const tick = (time: number) => lenis.raf(time * 1000)
     gsap.ticker.add(tick)
     gsap.ticker.lagSmoothing(0)
+
+    // Chapter snapping — runway only, directional, interruptible. When a
+    // scroll settles between beats, ease to the nearest SNAP_POINT in the
+    // direction of travel; the beat then plays at the tween's pace. The
+    // tail (demo/FAQ/join) scrolls free, and any user input interrupts a
+    // snap (scrollTo is not locked).
+    const snap = { px: [] as number[], end: 0, active: false, lastY: 0, dir: 1 }
+    const measureSnap = () => {
+      const el = runwayRef.current
+      if (!el) return
+      const span = el.offsetHeight - window.innerHeight
+      snap.end = el.offsetTop + span
+      snap.px = SNAP_POINTS.map((f) => el.offsetTop + span * f)
+    }
+    measureSnap()
+    window.addEventListener('resize', measureSnap)
+    const onLenis = ({ velocity, scroll }: { velocity: number; scroll: number }) => {
+      ScrollTrigger.update()
+      if (scroll > snap.lastY + 0.5) snap.dir = 1
+      else if (scroll < snap.lastY - 0.5) snap.dir = -1
+      snap.lastY = scroll
+      if (snap.active || scroll > snap.end - 2) return
+      if (Math.abs(velocity) > 0.12) return
+      // settled between beats → pick the nearest point in the travel direction
+      let target: number | null = null
+      let best = Infinity
+      for (const px of snap.px) {
+        const d = px - scroll
+        const inDir = snap.dir === 1 ? d >= -1 : d <= 1
+        if (inDir && Math.abs(d) < best) {
+          best = Math.abs(d)
+          target = px
+        }
+      }
+      if (target == null || best < 6) return
+      snap.active = true
+      lenis.scrollTo(target, {
+        duration: Math.min(1.4, 0.45 + (best / window.innerHeight) * 0.35),
+        easing: (x: number) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2),
+        onComplete: () => { snap.active = false },
+      })
+      // a new gesture interrupts the tween; re-arm shortly either way
+      window.setTimeout(() => { snap.active = false }, 1600)
+    }
+    lenis.off('scroll', ScrollTrigger.update)
+    lenis.on('scroll', onLenis)
 
     const st = ScrollTrigger.create({
       trigger: runwayRef.current,
@@ -250,6 +337,10 @@ export default function JourneyV2() {
       onUpdate: (self) => {
         const p = self.progress
         progress.current = p
+        if (post.canvasWrapEl) {
+          const scrolled = p > 0.06 ? '1' : '0'
+          if (post.canvasWrapEl.dataset.scrolled !== scrolled) post.canvasWrapEl.dataset.scrolled = scrolled
+        }
         const sec = answersRef.current
         if (sec) {
           sec.dataset.handoff = p >= HANDOFF_FLIP ? '1' : '0'
@@ -261,13 +352,25 @@ export default function JourneyV2() {
       },
     })
 
+    // FIRST-IMPRESSION LOAD: the poster paints instantly; the 3D chunk
+    // starts downloading+mounting right after first paint goes idle (not
+    // on scroll intent any more), and the canvas stays at opacity 0 while
+    // shaders compile and the composer warms — then the poster crossfades
+    // out. Scroll/touch intent still arms it even earlier.
     const arm = () => setMount3d(true)
     const opts = { once: true, passive: true } as const
     window.addEventListener('wheel', arm, opts)
     window.addEventListener('touchstart', arm, opts)
     window.addEventListener('scroll', arm, opts)
     window.addEventListener('keydown', arm, opts)
-    const timer = window.setTimeout(arm, 6000)
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }
+    const kick = () => (typeof w.requestIdleCallback === 'function'
+      ? w.requestIdleCallback!(arm, { timeout: 1200 })
+      : window.setTimeout(arm, 400))
+    let timer = 0
+    if (document.readyState === 'complete') timer = window.setTimeout(kick, 150)
+    else window.addEventListener('load', () => { timer = window.setTimeout(kick, 150) }, { once: true })
+    if (window.location.search.includes('freeze3')) arm()
 
     return () => {
       st.kill()
@@ -278,8 +381,23 @@ export default function JourneyV2() {
       window.removeEventListener('scroll', arm)
       window.removeEventListener('keydown', arm)
       window.clearTimeout(timer)
+      window.removeEventListener('resize', measureSnap)
+      lenisRef.current = null
     }
   }, [mode])
+
+  /** The pill's jump: Lenis-driven when live (so the smoother and the
+   *  scroll agree), native smooth otherwise; focuses the email after. */
+  const jumpToWaitlist = () => {
+    const el = document.querySelector('#waitlist')
+    if (!el) return
+    const lenis = lenisRef.current
+    if (lenis) lenis.scrollTo(el as HTMLElement, { duration: 1.1 })
+    else el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    window.setTimeout(() => {
+      ;(document.querySelector('#waitlist-email') as HTMLInputElement | null)?.focus({ preventScroll: true })
+    }, 1150)
+  }
 
   // Everything after the runway: the live demo, FAQ, the join (wordmark +
   // waitlist band) and the footer — identical in full and static modes,
@@ -301,13 +419,13 @@ export default function JourneyV2() {
       />
       <CTABand />
       <Footer />
-      <FloatingCTA />
     </div>
   )
 
   if (mode === 'static') {
     return (
       <div className="j-root">
+        <JoinPill onJoin={jumpToWaitlist} />
         <StaticJourney picks={picks} names={wall.map((p) => p.name)} />
         {tail}
       </div>
@@ -316,8 +434,24 @@ export default function JourneyV2() {
 
   return (
     <div className="j-root">
-      {/* The persistent scene, behind everything. */}
-      <div className="j-canvas" aria-hidden="true" ref={(el) => { post.canvasWrapEl = el }}>
+      <JoinPill onJoin={jumpToWaitlist} />
+
+      {/* The persistent scene, behind everything. The poster is a still of
+          the lacquer 3 rendered from THIS scene at its exact resting pose
+          (scripts: build, open /v2?freeze3=1, capture — see
+          ASSET_CREDITS.md): it paints on first byte, and when the live
+          canvas has compiled its shaders and warmed the composer
+          (data-ready) the two crossfade — same pose, no pop. */}
+      <div className="j-canvas" aria-hidden="true" data-ready="0" data-scrolled="0" ref={(el) => { post.canvasWrapEl = el }}>
+        <img
+          className="j-poster"
+          src="/v2/three-poster.webp"
+          alt=""
+          width={900}
+          height={900}
+          fetchPriority="high"
+          decoding="async"
+        />
         {mode === 'full' && mount3d ? (
           <Suspense fallback={null}>
             <JourneyCanvas
@@ -327,6 +461,7 @@ export default function JourneyV2() {
               rects={rects}
               post={post}
               isPhone={isPhone}
+              onReady={() => { if (post.canvasWrapEl) post.canvasWrapEl.dataset.ready = '1' }}
             />
           </Suspense>
         ) : null}

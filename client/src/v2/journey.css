@@ -359,3 +359,67 @@
   color: #fe0000;
   text-shadow: 0 0 42px rgba(254, 0, 0, 0.4);
 }
+
+/* ---- first-impression: poster → canvas crossfade ---- */
+
+/* The committed still of the lacquer 3 at its exact resting pose. Sized
+   by viewport HEIGHT only (the 3's projected size depends on the vertical
+   fov alone), so it registers with the WebGL render at every aspect. The
+   crop is 45% of frame height, centred. */
+.j-poster {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: 45svh;
+  width: auto;
+  aspect-ratio: 1;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.6s ease;
+}
+
+.j-canvas canvas {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.j-canvas[data-ready='1'] canvas { opacity: 1; }
+.j-canvas[data-ready='1'] .j-poster { opacity: 0; }
+/* story already underway (or user raced the load): the poster bows out
+   regardless, so it can never contradict a mid-chapter scene */
+.j-canvas[data-scrolled='1'] .j-poster { opacity: 0; transition-duration: 0.25s; }
+
+/* ---- the header Join pill (the one waitlist shortcut, all widths) ---- */
+
+.j-joinpill {
+  position: fixed;
+  z-index: 60; /* above the nav bar */
+  top: calc(env(safe-area-inset-top, 0px) + 7px);
+  right: calc(env(safe-area-inset-right, 0px) + 14px);
+  min-height: 44px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #000;
+  background: #fe0000;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.j-joinpill:active { transform: scale(0.97); }
+
+.j-joinpill[data-hidden='1'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .j-joinpill { top: calc(env(safe-area-inset-top, 0px) + 9px); right: 22px; }
+}

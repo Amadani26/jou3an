@@ -44,6 +44,17 @@ const THREE_END_Z = TUNNEL_START - CARD_COUNT * TUNNEL_STEP - 4 // past the last
 const CAM_END_Z = THREE_END_Z + 7.5
 const PICK_PLANE_Z = CAM_END_Z - 6.5 // where the answer cards live & settle
 
+/** The 3's base yaw. The committed poster (public/v2/three-poster.webp) is
+ *  rendered at exactly this pose with ?freeze3=1, and the live scene STARTS
+ *  here — that identity is what makes the poster → WebGL crossfade seamless.
+ *  Re-capture the poster if this constant, the material or the studio change. */
+const POSTER_ROT_Y = 0.55
+
+/** Poster-capture mode: freezes the clock and pins progress to 0 so the
+ *  canvas renders the exact resting pose. Dev-only query flag. */
+const FREEZE =
+  typeof window !== 'undefined' && window.location.search.includes('freeze3')
+
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (1 - t) * (1 - t) * 2)
 const easeIn = (t: number) => t * t
@@ -212,6 +223,7 @@ function Journey({
   post,
   isPhone,
   fx,
+  onReady,
 }: {
   picks: LivePick[]
   wall: LivePick[]
@@ -220,8 +232,25 @@ function Journey({
   post: PostJourneyEls
   isPhone: boolean
   fx: Fx
+  onReady: () => void
 }) {
   const camera = useThree((s) => s.camera)
+  const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
+
+  // Pre-compile every material/shader before the first VISIBLE frame: the
+  // canvas mounts at opacity 0, gl.compile walks the scene up front, and a
+  // few warm frames run the composer passes; only then onReady fires and
+  // the poster crossfades out. No first-scroll shader hitch.
+  useEffect(() => {
+    try {
+      gl.compile(scene, camera)
+    } catch {
+      /* compile is an optimisation, never a blocker */
+    }
+  }, [gl, scene, camera])
+  const warmFrames = useRef(0)
+  const readySent = useRef(false)
 
   const glyphGeo = useMemo(() => buildGlyphGeometry(), [])
   const glowTex = useMemo(() => makeGlowTexture(), [])
@@ -268,9 +297,13 @@ function Journey({
 
   useFrame((state) => {
     if (document.hidden) return
-    const p = clamp01(progress.current)
-    const t = state.clock.elapsedTime
+    const p = FREEZE ? 0 : clamp01(progress.current)
+    const t = FREEZE ? 0 : state.clock.elapsedTime
     fx.p = p
+    if (!readySent.current && ++warmFrames.current >= 5) {
+      readySent.current = true
+      onReady()
+    }
 
     // --- chapter scalars ---
     const flight = clamp01((p - P1) / (P2 - P1))
@@ -349,7 +382,7 @@ function Journey({
       const upX = isPhone ? 0.0 : 1.7
       const upY = isPhone ? 1.95 : 1.15
       three.position.set(upX * splitT, upY * splitT, zz)
-      three.rotation.y = t * 0.15 + p * 3.2
+      three.rotation.y = POSTER_ROT_Y + t * 0.15 + p * 3.2
       three.rotation.x = Math.sin(t * 0.2) * 0.06
       updateLacquer(mat, { ignite, flight, burst, split: splitT, taste: tasteT })
       let scale = (1 + burst * 0.18) * lerp(1, isPhone ? 0.42 : 0.5, splitT) * lerp(1, 1.22, tasteT)
@@ -360,7 +393,7 @@ function Journey({
         const visH = 2 * dist * Math.tan((50 * Math.PI) / 360)
         const visW = visH * (window.innerWidth / window.innerHeight)
         const cx = visW / 2 - (isPhone ? 0.5 : 0.95)
-        const cy = visH / 2 - (isPhone ? 0.62 : 0.8)
+        const cy = visH / 2 - (isPhone ? 1.0 : 1.15)
         const cz = camZ - dist
         three.position.set(
           lerp(three.position.x, cx, parkE),
@@ -515,6 +548,7 @@ export default function JourneyCanvas({
   rects,
   post,
   isPhone,
+  onReady,
 }: {
   picks: LivePick[]
   wall: LivePick[]
@@ -522,6 +556,7 @@ export default function JourneyCanvas({
   rects: CardRectTargets
   post: PostJourneyEls
   isPhone: boolean
+  onReady: () => void
 }) {
   const fx = useRef<Fx>({ ignite: 0, burstEnv: 0, p: 0 }).current
   return (
@@ -531,7 +566,7 @@ export default function JourneyCanvas({
       gl={{ antialias: false, powerPreference: 'high-performance', alpha: false }}
       style={{ position: 'absolute', inset: 0 }}
     >
-      <Journey picks={picks} wall={wall} progress={progress} rects={rects} post={post} isPhone={isPhone} fx={fx} />
+      <Journey picks={picks} wall={wall} progress={progress} rects={rects} post={post} isPhone={isPhone} fx={fx} onReady={onReady} />
       <Studio isPhone={isPhone} />
       {/* Bloom's high threshold keeps it selective in this black scene; the
           phone drops grain and (via props below) runs a lighter bloom. */}

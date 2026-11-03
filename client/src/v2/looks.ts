@@ -41,8 +41,8 @@ export function updateLacquer(
 ): void {
   const chapterDim = lerp(1, 0.45, s.flight) * lerp(1, 0.62, s.split)
   mat.emissiveIntensity =
-    lerp(0.02, 0.55, s.ignite) * chapterDim + s.burst * 1.8 + s.taste * 0.38
-  mat.envMapIntensity = lerp(0.5, 1.1, s.ignite)
+    lerp(0.1, 0.55, s.ignite) * chapterDim + s.burst * 1.8 + s.taste * 0.38
+  mat.envMapIntensity = lerp(0.68, 1.1, s.ignite)
   // ch5: the material itself shifts as taste builds
   mat.color.lerpColors(baseColor, learnedColor, s.taste)
   mat.clearcoatRoughness = lerp(0.07, 0.035, s.taste)
