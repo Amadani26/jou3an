@@ -128,6 +128,11 @@ export default function JourneyV2() {
 
   const showFps = typeof window !== 'undefined' && window.location.search.includes('fps=1')
   const isPhone = typeof window !== 'undefined' && window.innerWidth < 768
+  // Premium-material variants under review: ?look=1 (dark glass) /
+  // 2 (polished metal) / 3 (red lacquer). Default 1.
+  const lookParam =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('look') : null
+  const look = (lookParam === '2' || lookParam === '3' ? lookParam : '1') as '1' | '2' | '3'
 
   useEffect(() => {
     setMode(prefersReducedMotion() || !webglOK() ? 'static' : 'full')
@@ -187,7 +192,7 @@ export default function JourneyV2() {
       <div className="j-canvas" aria-hidden="true">
         {mode === 'full' && mount3d ? (
           <Suspense fallback={null}>
-            <JourneyCanvas picks={picks} progress={progress} isPhone={isPhone} />
+            <JourneyCanvas picks={picks} progress={progress} isPhone={isPhone} look={look} />
           </Suspense>
         ) : null}
       </div>

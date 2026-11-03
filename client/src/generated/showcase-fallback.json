@@ -1,48 +1,48 @@
 {
   "picks": [
     {
-      "id": "cmu9zsato0002okwkj4moijpx",
-      "placeId": "ChIJdaLbTG9pXz4R0YMlX-2f0Xk",
-      "name": "MOLI by SHI",
-      "cuisine": "Chinese",
-      "area": "حدائق الشيخ محمد بن راشد",
-      "priceMin": 120,
-      "priceMax": 280,
-      "rating": 4.9,
-      "ratingCount": 1711,
-      "tags": [
-        "late-night"
-      ],
-      "reason": "One of the better-rated Chinese spots"
-    },
-    {
-      "id": "cmu9zzw4l000dok0fmlbpqkd3",
-      "placeId": "ChIJDy6_Ri1hXz4RXTGUZLNBn8w",
-      "name": "TORI - Al Khawaneej Walk",
+      "id": "cmua08i12000aoka2cqad7ani",
+      "placeId": "ChIJbUc3jNJpXz4RjlRJ6aw7Lpc",
+      "name": "Calories Lab",
       "cuisine": "International",
-      "area": "Al Khawaneej",
-      "priceMin": 50,
-      "priceMax": 120,
-      "rating": 4.8,
-      "ratingCount": 907,
+      "area": "Nad Al Sheba",
+      "priceMin": 20,
+      "priceMax": 55,
+      "rating": 4.9,
+      "ratingCount": 815,
       "tags": [
-        "late-night"
+        "late-night",
+        "healthy"
       ],
       "reason": "One of the better-rated International spots"
     },
     {
-      "id": "cmua0hzc9000cok7en3vnmkee",
-      "placeId": "ChIJW-9LMolDXz4Rz_y2JIdb8JQ",
-      "name": "REIF Japanese Kushiyaki - Dar Wasl",
+      "id": "cmu9yq4ov0003okv9z9ml1vq8",
+      "placeId": "ChIJIyIBa4ZCXz4RlA3uV9BIhYA",
+      "name": "Fogo de Chão Brazilian Steakhouse",
+      "cuisine": "Brazilian",
+      "area": "DIFC",
+      "priceMin": 280,
+      "priceMax": 600,
+      "rating": 4.7,
+      "ratingCount": 8547,
+      "tags": [
+        "steakhouse",
+        "fine-dining"
+      ],
+      "reason": "One of the better-rated Brazilian spots"
+    },
+    {
+      "id": "cmu9z87af000aok1adi5qiqir",
+      "placeId": "ChIJqWa8Z05CXz4RyGKQGczHYD8",
+      "name": "miyabi sushi City Walk Courtyard",
       "cuisine": "Japanese",
       "area": "Al Wasl",
-      "priceMin": 120,
-      "priceMax": 280,
-      "rating": 4.7,
-      "ratingCount": 1764,
-      "tags": [
-        "seafood"
-      ],
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.6,
+      "ratingCount": 2506,
+      "tags": [],
       "reason": "Something different — Japanese"
     }
   ],

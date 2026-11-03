@@ -29,13 +29,17 @@ export function buildGlyphGeometry(): THREE.ExtrudeGeometry {
   const shapes = path.toShapes()
 
   const upem = GLYPH.unitsPerEm
+  // Premium pass: high curve/bevel segment counts so no facet survives at
+  // DPR 2 / 1440 — the glyph is ONE mesh, so the vertex cost is cheap, and
+  // the extra bevel segments are what let the studio reflections roll
+  // smoothly around the edge instead of stepping.
   const geo = new THREE.ExtrudeGeometry(shapes, {
     depth: upem * 0.22,
     bevelEnabled: true,
-    bevelThickness: upem * 0.025,
-    bevelSize: upem * 0.02,
-    bevelSegments: 3,
-    curveSegments: 10,
+    bevelThickness: upem * 0.03,
+    bevelSize: upem * 0.024,
+    bevelSegments: 10,
+    curveSegments: 28,
   })
 
   // Normalise: centre on the glyph bbox, scale so the outline is ~1.4 units tall.

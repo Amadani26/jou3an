@@ -122,3 +122,43 @@ reasons). Two asset consequences:
   streamed per request from Google Places (photo names fetched fresh each
   time, never stored, per the Place Photos no-caching rule) and displayed
   with "Google · {author}" attribution from `authorAttributions`.
+
+## Web v2 spike — atmosphere clips (2026-11-03, Higgsfield Plus, commercial use)
+
+Two abstract AI-generated clips for the "journey of 3" spike (`/v2` on the
+`web-v2` branch), generated with **Higgsfield `seedance_2_5` on 2026-11-03
+under the Plus plan, which permits commercial use**. Both are fully
+abstract by prompt and by eye: no food, no people, no UI, no logos, no
+text. Two variants were generated per clip; the unused variants are logged
+for the record.
+
+- **Ch1 ember underlay** (`public/v2/embers-*.mp4`) — "sparse glowing
+  deep-red particles floating in black void". Chosen variant job
+  `a5d9c35e-7d9f-49d0-b7e5-9397f63d1297`; unused variant
+  `d67947a7-c7af-4030-bc8c-b993514f5a87`.
+- **Ch3 radial-burst plate** (`public/v2/burst-*.mp4`) — "crimson light
+  filaments radiating from center, volumetric red glow". Chosen variant job
+  `56c19dbc-7406-45fe-b95c-4a54cc4a2f4e`; unused variant
+  `6a55e45d-8002-4b33-afcf-2f753fd90c56`.
+
+| File | Codec | Size | Role |
+| --- | --- | --- | --- |
+| `v2/embers-hevc.mp4` | H.265 hvc1 (crf 30) | 61 KB | Safari |
+| `v2/embers-h264.mp4` | H.264 (crf 26) | 214 KB | universal fallback |
+| `v2/burst-hevc.mp4` | H.265 hvc1 (crf 30) | 113 KB | Safari |
+| `v2/burst-h264.mp4` | H.264 (crf 26) | 287 KB | universal fallback |
+
+Processing: audio stripped, scaled to 960×540 from the 1280×720 masters,
+faststart. Used as additive in-scene WebGL video textures (never as page
+elements), muted/looped/playsinline, playback gated to their chapter
+windows. The masters live in gitignored `client/.artifact-assets/clips/`
+and are not committed.
+
+## GSAP licence note (web v2)
+
+The v2 journey uses **GSAP + ScrollTrigger**, which is **NOT MIT**: since
+GSAP 3.13 it is free for all use, including commercial, under Webflow's
+standard GSAP licence. three / @react-three/fiber / drei /
+@react-three/postprocessing / postprocessing / Lenis are MIT. No HDR
+environment file is shipped — the studio lighting is generated in code
+(drei Lightformers), so there is nothing to licence there.
