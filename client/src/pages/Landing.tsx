@@ -34,7 +34,10 @@ export default function Landing() {
       {/* ============================================================ */}
       {/* SECTION 2 — PROBLEM (the wall that collapses, locked)        */}
       {/* ============================================================ */}
-      <Suspense fallback={<div style={{ height: '320svh' }} aria-hidden="true" />}>
+      {/* 100svh matches .wall-section exactly — the wall went time-based and
+          one-viewport (no pin), so the old 320svh scroll-runway reservation
+          was a ~220svh collapse when the lazy chunk resolved. */}
+      <Suspense fallback={<div style={{ height: '100svh' }} aria-hidden="true" />}>
         <ProblemWall />
       </Suspense>
 
