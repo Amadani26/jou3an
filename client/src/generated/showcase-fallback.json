@@ -1,47 +1,49 @@
 {
   "picks": [
     {
-      "id": "cmu9yrbj6000uokv9hwtrp08t",
-      "placeId": "ChIJ04aj-ypDXz4RqBl_qj5ENy0",
-      "name": "Hikāri Dubai",
-      "cuisine": "Asian",
-      "area": "DIFC",
-      "priceMin": 50,
-      "priceMax": 120,
-      "rating": 5,
-      "ratingCount": 1060,
+      "id": "cmu9zsato0002okwkj4moijpx",
+      "placeId": "ChIJdaLbTG9pXz4R0YMlX-2f0Xk",
+      "name": "MOLI by SHI",
+      "cuisine": "Chinese",
+      "area": "حدائق الشيخ محمد بن راشد",
+      "priceMin": 120,
+      "priceMax": 280,
+      "rating": 4.9,
+      "ratingCount": 1711,
       "tags": [
         "late-night"
       ],
-      "reason": "One of the better-rated Asian spots"
+      "reason": "One of the better-rated Chinese spots"
     },
     {
-      "id": "cmu9yn65y001dok81ogj9waz9",
-      "placeId": "ChIJ07P2x6FpXz4R-Fp10II8wcU",
-      "name": "Solara",
+      "id": "cmu9zzw4l000dok0fmlbpqkd3",
+      "placeId": "ChIJDy6_Ri1hXz4RXTGUZLNBn8w",
+      "name": "TORI - Al Khawaneej Walk",
       "cuisine": "International",
-      "area": "Downtown Dubai",
-      "priceMin": null,
-      "priceMax": null,
-      "rating": 4.9,
-      "ratingCount": 470,
+      "area": "Al Khawaneej",
+      "priceMin": 50,
+      "priceMax": 120,
+      "rating": 4.8,
+      "ratingCount": 907,
       "tags": [
         "late-night"
       ],
       "reason": "One of the better-rated International spots"
     },
     {
-      "id": "cmu9zwgfv0000okj7jvgevvha",
-      "placeId": "ChIJqZTPLj1lXz4R3Ow52jePqfU",
-      "name": "Bosporus - Silicon Oasis",
-      "cuisine": "Turkish",
-      "area": "Dubai Silicon Oasis",
-      "priceMin": 50,
-      "priceMax": 120,
-      "rating": 4.9,
-      "ratingCount": 2341,
-      "tags": [],
-      "reason": "One of the better-rated Turkish spots"
+      "id": "cmua0hzc9000cok7en3vnmkee",
+      "placeId": "ChIJW-9LMolDXz4Rz_y2JIdb8JQ",
+      "name": "REIF Japanese Kushiyaki - Dar Wasl",
+      "cuisine": "Japanese",
+      "area": "Al Wasl",
+      "priceMin": 120,
+      "priceMax": 280,
+      "rating": 4.7,
+      "ratingCount": 1764,
+      "tags": [
+        "seafood"
+      ],
+      "reason": "Something different — Japanese"
     }
   ],
   "wall": [

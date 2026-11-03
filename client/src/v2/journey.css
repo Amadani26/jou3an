@@ -1,0 +1,167 @@
+/* WEB V2 SPIKE — journey layout. Scoped under .j-* so nothing leaks into
+   the live page's styles (and vice versa). */
+
+.j-root {
+  position: relative;
+  background: #000;
+}
+
+/* The persistent canvas sits behind the HTML story for the whole runway.
+   position: fixed, not sticky: the runway and the end section scroll over it. */
+.j-canvas {
+  position: fixed;
+  /* under the fixed nav is fine — the scene is scenery */
+  inset: 0;
+  z-index: 0;
+}
+
+.j-runway {
+  position: relative;
+  z-index: 1;
+  pointer-events: none; /* scenery text only; the canvas never takes input either */
+}
+
+.j-chapter {
+  height: 200svh;
+}
+
+.j-sticky {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 24px;
+}
+
+.j-kicker {
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #7c766f;
+  margin-bottom: 14px;
+}
+
+.j-title {
+  font-family: 'Syne Variable', Syne, sans-serif;
+  font-weight: 800;
+  font-size: clamp(2.6rem, 9vw, 6rem);
+  line-height: 0.98;
+  color: #f2ede8;
+  letter-spacing: -0.01em;
+}
+
+.j-title em {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-weight: 400;
+  color: #fe0000;
+}
+
+.j-sub {
+  margin-top: 18px;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: clamp(1rem, 2.4vw, 1.25rem);
+  font-weight: 500;
+  color: #8a847e;
+  max-width: 34ch;
+}
+
+.j-note {
+  margin-top: 26px;
+  max-width: 420px;
+}
+
+.j-end {
+  position: relative;
+  z-index: 1;
+  min-height: 60svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 16px;
+  padding: 48px 24px;
+  background: linear-gradient(to bottom, transparent, #000 30%);
+}
+
+.j-end code {
+  color: #f2ede8;
+  font-size: 0.9em;
+}
+
+.j-back {
+  pointer-events: auto;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-weight: 600;
+  color: #f2ede8;
+  border-bottom: 1px solid #fe0000;
+  padding-bottom: 2px;
+}
+
+.j-fps {
+  position: fixed;
+  z-index: 50;
+  bottom: 12px;
+  left: 12px;
+  font: 600 12px/1.4 ui-monospace, monospace;
+  color: #2dce89;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid #242424;
+  border-radius: 8px;
+  padding: 6px 10px;
+  pointer-events: none;
+}
+
+/* ---- static fallback (reduced motion / no WebGL) ---- */
+
+.j-static {
+  background: #000;
+}
+
+.j-static-ch {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  gap: 8px;
+}
+
+.j-static-3 {
+  font-family: 'Syne Variable', Syne, sans-serif;
+  font-weight: 800;
+  font-size: clamp(8rem, 30vw, 18rem);
+  line-height: 1;
+  color: #fe0000;
+  text-shadow: 0 0 80px rgba(254, 0, 0, 0.45);
+}
+
+.j-static-names {
+  margin-top: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-width: 560px;
+}
+
+.j-static-names li {
+  list-style: none;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f2ede8;
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 10px;
+  padding: 8px 12px;
+}

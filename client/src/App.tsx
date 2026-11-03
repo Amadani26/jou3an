@@ -1,9 +1,14 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, HashRouter, Routes, Route } from 'react-router-dom'
 import { Analytics } from '@vercel/analytics/react'
 import Nav from './components/Nav'
 import Landing from './pages/Landing'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
+
+/* WEB V2 tech spike ("The journey of 3", chapters 1–3). Lazy: nothing of it
+   — three included — touches the live page's entry chunk. */
+const JourneyV2 = lazy(() => import('./v2/JourneyV2'))
 
 /* The artifact review build serves from a subpath with no rewrite rules, so
    real pathnames can never match — hashes can. Production stays on paths. */
@@ -26,6 +31,14 @@ export function Shell() {
               hit — see vercel.json's SPA rewrite. */}
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
+          <Route
+            path="/v2"
+            element={
+              <Suspense fallback={<div style={{ height: '100svh', background: '#000' }} />}>
+                <JourneyV2 />
+              </Suspense>
+            }
+          />
         </Routes>
       </main>
     </>
