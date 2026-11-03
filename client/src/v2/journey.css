@@ -165,3 +165,149 @@
   border-radius: 10px;
   padding: 8px 12px;
 }
+
+/* ---- ch4+ch5: the answers frame ---- */
+
+.j-answers-frame {
+  justify-content: flex-start;
+  padding-top: calc(10svh);
+  gap: 0;
+}
+
+/* two headline blocks stacked; data-copy crossfades them */
+.j-copy-stack {
+  position: relative;
+  min-height: 190px;
+  width: 100%;
+  display: grid;
+}
+
+.j-copy {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+.j-copy-5 { opacity: 0; transform: translateY(10px); pointer-events: none; }
+.j-answers[data-copy='5'] .j-copy-4 { opacity: 0; transform: translateY(-10px); }
+.j-answers[data-copy='5'] .j-copy-5 { opacity: 1; transform: none; }
+
+/* the card grid — the HTML side of the handoff */
+.jp-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(92vw, 400px);
+  margin-top: 3svh;
+}
+
+@media (min-width: 768px) {
+  .jp-grid {
+    flex-direction: row;
+    align-items: stretch;
+    width: min(92vw, 1020px);
+    gap: 18px;
+  }
+}
+
+.jp-slot { position: relative; flex: 1; }
+
+.jp-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: #111;
+  border: 1px solid #242424;
+  border-radius: 16px;
+  padding: 14px 16px;
+  text-align: left;
+  min-height: 118px;
+}
+
+.jp-rank {
+  font-family: 'Syne Variable', Syne, sans-serif;
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1;
+  color: #fe0000;
+}
+
+.jp-name {
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  color: #f2ede8;
+  line-height: 1.25;
+}
+
+.jp-meta {
+  margin-top: 3px;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #8a847e;
+}
+
+.jp-rating {
+  margin-top: 4px;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #8a847e;
+}
+
+.jp-star { color: #ffb547; }
+
+.jp-reason {
+  margin-top: 8px;
+  display: inline-block;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-style: italic;
+  color: #ff5d5d;
+  background: rgba(254, 0, 0, 0.08);
+  border: 1px solid rgba(254, 0, 0, 0.28);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+/* hidden until the 3D cards settle onto them; data-handoff flips it.
+   The grid keeps layout (visibility, not display) so the scene can
+   measure the rects before the reveal. */
+.j-answers .jp-card {
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.j-answers[data-handoff='1'] .jp-card { opacity: 1; transform: none; }
+.j-answers[data-handoff='1'] .jp-slot:nth-child(2) .jp-card { transition-delay: 0.06s; }
+.j-answers[data-handoff='1'] .jp-slot:nth-child(3) .jp-card { transition-delay: 0.12s; }
+
+/* ch5: the middle card swipes away (the app's left-swipe, acted out once)
+   and a replacement REAL restaurant arrives beneath it */
+.jp-in {
+  position: absolute;
+  inset: 0;
+  opacity: 0 !important;
+  transform: translateY(14px) !important;
+}
+.j-answers[data-swipe='1'] .jp-out {
+  opacity: 0 !important;
+  transform: translateX(130%) rotate(9deg) !important;
+  transition: opacity 0.6s ease, transform 0.65s cubic-bezier(0.5, 0, 0.75, 0.4) !important;
+}
+.j-answers[data-swipe='1'] .jp-in {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: opacity 0.45s ease 0.42s, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.42s !important;
+}
+
+.j-note-answers { margin-top: 2.5svh; max-width: 460px; }
+.j-note-answers .venue-note { font-size: 10.5px; }
+
+/* static fallback grid */
+.jp-grid.is-static { margin-top: 20px; }
+.jp-grid.is-static .jp-card { opacity: 1; transform: none; }

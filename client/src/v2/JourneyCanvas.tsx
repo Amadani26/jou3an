@@ -1,33 +1,25 @@
 /**
- * The persistent WebGL layer of the journey — chapters 1→3 of the spike.
+ * The persistent WebGL layer of the journey — chapters 1→5.
  *
- * ONE canvas, fixed behind the HTML layer, driven by a single scroll
- * progress value (0..1 over the whole runway) written into a ref by
- * ScrollTrigger — no React state per frame, no re-renders while scrolling.
+ * ONE canvas fixed behind the HTML layer, driven by one scroll-progress
+ * number in a ref (ScrollTrigger scrub → ref → useFrame). No React state
+ * on the scroll path. Chapter boundaries come from timeline.ts — the HTML
+ * layer sizes its sections from the same module.
  *
- *   p 0.00–0.30  ch1 — darkness; the "3" lights up red and idles
- *   p 0.30–0.68  ch2 — the camera flies down a tunnel of real restaurant
- *                 cards while the 3 recedes to the tunnel's end
- *   p 0.68–1.00  ch3 — the tunnel collapses inward; every card is pulled
- *                 into the 3; a light burst; the 3 settles, bright
+ *   ch1  darkness; the lacquer "3" ignites (scrubbed)
+ *   ch2  camera flies a tunnel of real restaurant cards (scrubbed)
+ *   ch3  tunnel collapses into the 3 (scrubbed) + light burst (ONE-SHOT,
+ *        time-based — fired crossing BURST_AT, re-armed by scrolling back)
+ *   ch4  the 3 splits: three REAL answer cards orbit, settle onto the
+ *        measured rects of their HTML twins, and hand off — readable
+ *        content never lives in the canvas
+ *   ch5  one card swipes away (HTML/CSS, one-shot); the lacquer itself
+ *        shifts hue/glow as "taste" builds (scrubbed — see looks.ts)
  *
- * PREMIUM PASS (phase 1.5):
- *   - MeshPhysicalMaterial looks (?look=1 glass / 2 metal / 3 lacquer) in
- *     looks.ts — the scroll story drives each differently.
- *   - Studio lighting GENERATED IN CODE: drei <Environment> with
- *     <Lightformer> panels (no HDR file, nothing to licence) — a key
- *     softbox, two side strips and a low red rim strip, baked once; the
- *     reflections sweep because the 3 rotates, not because the rig moves.
- *   - Post: Bloom gated by a high luminance threshold (in this black scene
- *     only the hot red core and specular hits cross it — selective in
- *     effect), SMAA (gl antialias stays off), subtle grain + vignette
- *     (grain desktop-only). DPR stays capped at 1.5 phone / 2 desktop.
- *   - Licensed Higgsfield atmosphere clips as in-scene video planes
- *     (additive): embers under ch1's ignition, a radial burst under ch3's
- *     flash. Both optional — the scene must work with no clips at all.
- *
- * iPhone budget: DPR cap, 14 shared canvas textures for 42 planes, one
- * point light + env, no shadows, SMAA not MSAA, env resolution 128.
+ * Material: the chosen red lacquer (looks.ts). Studio lighting generated
+ * in code (drei Lightformers, no HDR to licence). Post: high-threshold
+ * Bloom (selective in effect in a black scene), SMAA, vignette, grain on
+ * desktop only. DPR 1.5 phone / 2 desktop.
  */
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -35,22 +27,46 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment, Lightformer } from '@react-three/drei'
 import { EffectComposer, Bloom, Noise, Vignette, SMAA } from '@react-three/postprocessing'
 import { buildGlyphGeometry } from './glyph3'
-import { makeCardTexture } from './cardTexture'
-import { materialPropsFor, updateForStory, redLightScale, type LookId } from './looks'
+import { makeCardTexture, makePickTexture } from './cardTexture'
+import { lacquerProps, updateLacquer, RED_LIGHT_PEAK } from './looks'
+import {
+  P1, P2, P3,
+  IGNITE_START, IGNITE_DUR,
+  COLLAPSE_DUR, BURST_AT, BURST_REARM_BELOW, BURST_SECONDS,
+  SPLIT_END, SETTLE_END, HANDOFF_END, TASTE_START, TASTE_END,
+} from './timeline'
 import type { LivePick } from '../lib/live'
 
 const CARD_COUNT = 42
 const TUNNEL_START = -6
 const TUNNEL_STEP = 1.35
 const THREE_END_Z = TUNNEL_START - CARD_COUNT * TUNNEL_STEP - 4 // past the last card
-
-const CH1_END = 0.3
-const CH2_END = 0.68
+const CAM_END_Z = THREE_END_Z + 7.5
+const PICK_PLANE_Z = CAM_END_Z - 6.5 // where the answer cards live & settle
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (1 - t) * (1 - t) * 2)
 const easeIn = (t: number) => t * t
+const easeOut = (t: number) => 1 - (1 - t) * (1 - t)
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+
+/** Viewport-px → world units on the z-plane the answer cards settle on. */
+function worldPerPxAt(dist: number, fovDeg: number, innerH: number): number {
+  return (2 * dist * Math.tan((fovDeg * Math.PI) / 360)) / innerH
+}
+
+export interface CardRectTargets {
+  /** The HTML answer cards to settle onto; filled by JourneyV2. */
+  els: (HTMLElement | null)[]
+}
+
+/** Per-frame cross-component story state (written by Journey, read by the
+ *  atmosphere planes). A plain mutable object — never React state. */
+interface Fx {
+  ignite: number
+  burstEnv: number
+  p: number
+}
 
 function makeGlowTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas')
@@ -65,7 +81,6 @@ function makeGlowTexture(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(c)
 }
 
-/** A muted <video> ready for use as a texture; sources attached in order. */
 function makeSceneVideo(sources: { src: string; type: string }[]): HTMLVideoElement {
   const v = document.createElement('video')
   v.muted = true
@@ -91,11 +106,11 @@ const BURST_SOURCES = [
   { src: '/v2/burst-h264.mp4', type: 'video/mp4' },
 ]
 
-/** The licensed Higgsfield atmosphere clips as additive in-scene planes.
- *  Playback is gated to each clip's chapter window so at most one video
- *  decodes at a time; a failed/missing file just leaves the plane black
- *  (additive black = invisible), so the scene never depends on them. */
-function AtmosphereVideos({ progress }: { progress: { current: number } }) {
+/** Licensed Higgsfield atmosphere clips as additive in-scene planes —
+ *  embers under ch1's ignition, the radial burst under ch3's one-shot
+ *  flash. Playback gated per window; a missing file leaves the plane
+ *  black, and additive black is invisible, so nothing depends on them. */
+function AtmosphereVideos({ fx }: { fx: Fx }) {
   const embers = useMemo(() => makeSceneVideo(EMBERS_SOURCES), [])
   const burst = useMemo(() => makeSceneVideo(BURST_SOURCES), [])
   const embersTex = useMemo(() => {
@@ -120,10 +135,9 @@ function AtmosphereVideos({ progress }: { progress: { current: number } }) {
   }, [embers, burst, embersTex, burstTex])
 
   useFrame(() => {
-    const p = clamp01(progress.current)
+    const p = fx.p
 
-    // ch1 window — embers behind the 3, fading out as the flight starts
-    const emberOn = p < CH1_END + 0.06
+    const emberOn = p < P1 + 0.03
     if (emberOn !== playing.current.embers) {
       playing.current.embers = emberOn
       if (emberOn) void embers.play().catch(() => {})
@@ -131,14 +145,11 @@ function AtmosphereVideos({ progress }: { progress: { current: number } }) {
     }
     if (embersRef.current) {
       const m = embersRef.current.material as THREE.MeshBasicMaterial
-      const ignite = clamp01((p - 0.04) / 0.18)
-      m.opacity = 0.5 * ignite * clamp01((CH1_END + 0.06 - p) / 0.06)
+      m.opacity = 0.5 * fx.ignite * clamp01((P1 + 0.03 - p) / 0.03)
       embersRef.current.visible = m.opacity > 0.01
     }
 
-    // ch3 window — the radial burst plate under the collapse's flash
-    const burstT = clamp01((p - CH2_END) / (1 - CH2_END))
-    const burstOn = burstT > 0.3 && burstT < 0.95
+    const burstOn = fx.burstEnv > 0.02
     if (burstOn !== playing.current.burst) {
       playing.current.burst = burstOn
       if (burstOn) {
@@ -148,8 +159,7 @@ function AtmosphereVideos({ progress }: { progress: { current: number } }) {
     }
     if (burstRef.current) {
       const m = burstRef.current.material as THREE.MeshBasicMaterial
-      const bell = Math.exp(-Math.pow((burstT - 0.62) * 4.2, 2))
-      m.opacity = 0.38 * bell
+      m.opacity = 0.38 * fx.burstEnv
       burstRef.current.visible = m.opacity > 0.01
       burstRef.current.position.set(0, 0, THREE_END_Z - 4)
     }
@@ -159,33 +169,18 @@ function AtmosphereVideos({ progress }: { progress: { current: number } }) {
     <>
       <mesh ref={embersRef} position={[0, 0, -8]} scale={[26, 15, 1]} visible={false}>
         <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial
-          map={embersTex}
-          transparent
-          opacity={0}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          toneMapped={false}
-        />
+        <meshBasicMaterial map={embersTex} transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </mesh>
       <mesh ref={burstRef} scale={[15, 8.5, 1]} visible={false}>
         <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial
-          map={burstTex}
-          transparent
-          opacity={0}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          toneMapped={false}
-        />
+        <meshBasicMaterial map={burstTex} transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </mesh>
     </>
   )
 }
 
-/** The code-built studio: a key softbox above, two side strips for the
- *  sweeping reflections, one low red strip for the brand rim. Baked once
- *  (frames=1); the sweep comes from the 3's own rotation. */
+/** The code-built studio: key softbox, two side strips, a low red rim.
+ *  Baked once; the sweep comes from the 3's own rotation. */
 function Studio({ isPhone }: { isPhone: boolean }) {
   return (
     <Environment resolution={isPhone ? 128 : 256} frames={1} background={false}>
@@ -200,105 +195,188 @@ function Studio({ isPhone }: { isPhone: boolean }) {
 
 function Journey({
   picks,
+  wall,
   progress,
-  look,
+  rects,
+  isPhone,
+  fx,
 }: {
   picks: LivePick[]
+  wall: LivePick[]
   progress: { current: number }
-  look: LookId
+  rects: CardRectTargets
+  isPhone: boolean
+  fx: Fx
 }) {
   const camera = useThree((s) => s.camera)
 
   const glyphGeo = useMemo(() => buildGlyphGeometry(), [])
   const glowTex = useMemo(() => makeGlowTexture(), [])
-  const textures = useMemo(() => picks.map((p) => makeCardTexture(p)), [picks])
-  const matProps = useMemo(() => materialPropsFor(look), [look])
+  const wallTextures = useMemo(() => wall.map((p) => makeCardTexture(p)), [wall])
+  const pickTextures = useMemo(() => picks.map((p, i) => makePickTexture(p, i + 1)), [picks])
 
-  // Helix of card slots: angle, radius, z — precomputed once.
+  // Helix of tunnel slots — precomputed once.
   const slots = useMemo(() => {
     const out: { x: number; y: number; z: number; rz: number; tex: number }[] = []
     for (let i = 0; i < CARD_COUNT; i++) {
-      const angle = i * 2.39996 // golden angle: no visible repeats
+      const angle = i * 2.39996
       const r = 2.3 + ((i * 7) % 10) / 9
       out.push({
         x: Math.cos(angle) * r,
         y: Math.sin(angle) * r * 0.72,
         z: TUNNEL_START - i * TUNNEL_STEP,
         rz: Math.sin(i * 12.9898) * 0.12,
-        tex: i % Math.max(1, picks.length),
+        tex: i % Math.max(1, wall.length),
       })
     }
     return out
-  }, [picks.length])
+  }, [wall.length])
 
   const threeRef = useRef<THREE.Mesh>(null)
   const matRef = useRef<THREE.MeshPhysicalMaterial>(null)
   const glowRef = useRef<THREE.Sprite>(null)
   const lightRef = useRef<THREE.PointLight>(null)
   const cardRefs = useRef<(THREE.Mesh | null)[]>([])
+  const pickRefs = useRef<(THREE.Mesh | null)[]>([])
+
+  // One-shot burst state + measured DOM targets (world units).
+  const burstState = useRef({ armed: true, t0: -1 })
+  const domTargets = useRef<{ x: number; y: number; w: number; h: number }[] | null>(null)
+  const measureTick = useRef(0)
 
   useFrame((state) => {
     if (document.hidden) return
     const p = clamp01(progress.current)
     const t = state.clock.elapsedTime
+    fx.p = p
 
-    // --- camera ---
-    const flight = clamp01((p - CH1_END) / (CH2_END - CH1_END))
-    const camZ = lerp(6, THREE_END_Z + 7.5, easeInOut(flight))
-    camera.position.set(
-      Math.sin(t * 0.3) * 0.08, // idle breath, never still
-      Math.cos(t * 0.23) * 0.06,
-      camZ,
-    )
+    // --- chapter scalars ---
+    const flight = clamp01((p - P1) / (P2 - P1))
+    const ignite = easeInOut(clamp01((p - IGNITE_START) / IGNITE_DUR))
+    const collapse = clamp01((p - P2) / COLLAPSE_DUR)
+    const splitT = easeInOut(clamp01((p - P3) / (SPLIT_END - P3)))
+    const settleT = easeInOut(clamp01((p - SPLIT_END) / (SETTLE_END - SPLIT_END)))
+    const handoffT = clamp01((p - SETTLE_END) / (HANDOFF_END - SETTLE_END))
+    const tasteT = easeInOut(clamp01((p - TASTE_START) / (TASTE_END - TASTE_START)))
+    fx.ignite = ignite
+
+    // --- one-shot burst (time-based once triggered; re-armed well below) ---
+    const bs = burstState.current
+    if (!bs.armed && p < BURST_REARM_BELOW) bs.armed = true
+    if (bs.armed && p >= BURST_AT) {
+      bs.armed = false
+      bs.t0 = t
+    }
+    let burst = 0
+    if (bs.t0 >= 0) {
+      const bt = (t - bs.t0) / BURST_SECONDS
+      if (bt <= 1.4) burst = Math.exp(-Math.pow((bt - 0.45) * 3.4, 2))
+    }
+    fx.burstEnv = burst
+
+    // --- camera: breathing dies as the cards settle (they must sit
+    //     pixel-still under their HTML twins) ---
+    const breathe = 1 - settleT
+    const camZ = lerp(6, CAM_END_Z, easeInOut(flight))
+    camera.position.set(Math.sin(t * 0.3) * 0.08 * breathe, Math.cos(t * 0.23) * 0.06 * breathe, camZ)
     camera.lookAt(0, 0, camZ - 10)
 
     // --- the 3 ---
     const three = threeRef.current
     const mat = matRef.current
     if (three && mat) {
-      // ch1 at origin; recedes to the tunnel end ahead of the camera in ch2.
       const zz = lerp(0, THREE_END_Z, easeInOut(flight))
-      three.position.set(0, 0, zz)
+      // ch4: steps up and back while the answers take the stage;
+      // ch5: leans back in as the taste shift becomes the subject.
+      const upX = isPhone ? 0.0 : 1.7
+      const upY = isPhone ? 1.95 : 1.15
+      three.position.set(upX * splitT, upY * splitT, zz)
       three.rotation.y = t * 0.15 + p * 3.2
       three.rotation.x = Math.sin(t * 0.2) * 0.06
-
-      // light-up ramp in ch1 → dim through the tunnel → burst in ch3
-      const ignite = easeInOut(clamp01((p - 0.04) / 0.18))
-      const burstT = clamp01((p - CH2_END) / (1 - CH2_END))
-      const burst = Math.exp(-Math.pow((burstT - 0.62) * 4.2, 2)) // bell around the collapse's end
-      updateForStory(look, mat, ignite, flight, burst)
-      const scale = 1 + burst * 0.18
+      updateLacquer(mat, { ignite, flight, burst, split: splitT, taste: tasteT })
+      const scale = (1 + burst * 0.18) * lerp(1, isPhone ? 0.42 : 0.5, splitT) * lerp(1, 1.22, tasteT)
       three.scale.setScalar(scale)
 
       if (glowRef.current) {
         glowRef.current.position.copy(three.position)
-        const g = 1.5 * lerp(0.1, 1, ignite) * lerp(1, 0.5, flight) + burst * 4.5
+        const g = (1.5 * lerp(0.1, 1, ignite) * lerp(1, 0.5, flight) + burst * 4.5) * lerp(1, 0.55, splitT) * lerp(1, 1.5, tasteT)
         glowRef.current.scale.set(g, g, 1)
         const smat = glowRef.current.material as THREE.SpriteMaterial
-        // the bloom pass amplifies the hot core now, so the sprite stays quieter
-        smat.opacity = 0.26 * lerp(0.05, 1, ignite) * lerp(1, 0.55, flight) + burst * 0.4
+        smat.opacity = 0.26 * lerp(0.05, 1, ignite) * lerp(1, 0.55, flight) + burst * 0.4 + tasteT * 0.1
       }
       if (lightRef.current) {
-        lightRef.current.position.set(0, 0.6, zz + 2.2)
-        lightRef.current.intensity = redLightScale(look) * lerp(0.05, 1, ignite) + burst * 34
+        lightRef.current.position.set(three.position.x, three.position.y + 0.6, zz + 2.2)
+        lightRef.current.intensity = RED_LIGHT_PEAK * lerp(0.05, 1, ignite) + burst * 34
       }
     }
 
     // --- tunnel cards: fly past in ch2, collapse into the 3 in ch3 ---
-    const collapse = clamp01((p - CH2_END) / (0.26))
     for (let i = 0; i < slots.length; i++) {
       const m = cardRefs.current[i]
       if (!m) continue
       const s = slots[i]
-      // staggered pull: nearer cards leave first
       const ct = easeIn(clamp01(collapse * 1.35 - (i / slots.length) * 0.35))
       m.position.set(lerp(s.x, 0, ct), lerp(s.y, 0, ct), lerp(s.z, THREE_END_Z, ct))
       m.rotation.z = s.rz * (1 - ct)
       const sc = Math.max(0.001, 1 - ct)
       m.scale.set(1.6 * sc, 0.9 * sc, 1)
       const cm = m.material as THREE.MeshBasicMaterial
-      cm.opacity = p < CH1_END ? clamp01((p - CH1_END + 0.06) / 0.06) : 1 - ct * 0.9
-      m.visible = ct < 0.995 && p > CH1_END - 0.08
+      cm.opacity = p < P1 ? clamp01((p - P1 + 0.03) / 0.03) : 1 - ct * 0.9
+      m.visible = ct < 0.995 && p > P1 - 0.05 && p < SPLIT_END
+    }
+
+    // --- ch4: the three answers — split out, orbit, settle onto the DOM ---
+    const showPicks = p > P3 - 0.01 && handoffT < 0.999
+    // Re-measure the HTML twins while approaching/at the settle (the frame
+    // is sticky-pinned there, so viewport rects are stable). Every ~12
+    // frames is plenty and keeps layout reads off the hot path.
+    if (showPicks && settleT > 0 && handoffT < 1 && measureTick.current++ % 12 === 0) {
+      const els = rects.els
+      if (els[0] && els[1] && els[2]) {
+        const wpp = worldPerPxAt(Math.abs(camZ - PICK_PLANE_Z), 50, window.innerHeight)
+        domTargets.current = els.map((el) => {
+          const r = el!.getBoundingClientRect()
+          return {
+            x: (r.left + r.width / 2 - window.innerWidth / 2) * wpp,
+            y: -(r.top + r.height / 2 - window.innerHeight / 2) * wpp,
+            w: r.width * wpp,
+            h: r.height * wpp,
+          }
+        })
+      }
+    }
+
+    const orbitR = isPhone ? 1.15 : 2.5
+    const baseW = isPhone ? 1.5 : 2.3
+    for (let i = 0; i < pickRefs.current.length; i++) {
+      const m = pickRefs.current[i]
+      if (!m) continue
+      if (!showPicks) {
+        m.visible = false
+        continue
+      }
+      m.visible = true
+      const angle = i * 2.0944 + 1.25 + (p - P3) * 9 * (1 - settleT)
+      const ox = Math.cos(angle) * orbitR * easeOut(splitT)
+      const oy = Math.sin(angle) * orbitR * 0.5 * easeOut(splitT) - 0.35
+      const oz = PICK_PLANE_Z + Math.sin(angle) * 0.9 * (1 - settleT)
+      const dom = domTargets.current?.[i]
+      const tx = dom ? dom.x : (i - 1) * (isPhone ? 0 : 2.4)
+      const ty = dom ? dom.y : isPhone ? (1 - i) * 1.05 - 0.2 : -0.45
+      const px = lerp(ox, tx, settleT)
+      const py = lerp(oy, ty, settleT)
+      const pz = lerp(oz, PICK_PLANE_Z, settleT)
+      // during the split the cards emerge FROM the 3 (origin = its chest)
+      const emerge = easeOut(splitT)
+      m.position.set(lerp(0, px, emerge), lerp(0, py, emerge), lerp(THREE_END_Z + 0.4, pz, emerge))
+      const w = dom ? lerp(baseW, dom.w, settleT) : baseW
+      const h = dom ? lerp(baseW * 0.4531, dom.h, settleT) : baseW * 0.4531
+      const es = lerp(0.12, 1, emerge)
+      m.scale.set(w * es, h * es, 1)
+      m.rotation.y = (1 - settleT) * Math.sin(angle) * 0.32
+      m.rotation.z = (1 - settleT) * Math.cos(angle) * 0.06
+      const pm = m.material as THREE.MeshBasicMaterial
+      pm.opacity = easeOut(splitT) * (1 - handoffT)
     }
   })
 
@@ -310,7 +388,7 @@ function Journey({
       <pointLight ref={lightRef} color="#FE0000" intensity={0} distance={30} decay={1.6} />
 
       <mesh ref={threeRef} geometry={glyphGeo}>
-        <meshPhysicalMaterial ref={matRef} {...matProps} />
+        <meshPhysicalMaterial ref={matRef} {...lacquerProps()} />
       </mesh>
 
       <sprite ref={glowRef} scale={[0.2, 0.2, 1]}>
@@ -318,33 +396,38 @@ function Journey({
       </sprite>
 
       {slots.map((s, i) => (
-        <mesh
-          key={i}
-          ref={(el) => { cardRefs.current[i] = el }}
-          position={[s.x, s.y, s.z]}
-          scale={[1.6, 0.9, 1]}
-        >
+        <mesh key={i} ref={(el) => { cardRefs.current[i] = el }} position={[s.x, s.y, s.z]} scale={[1.6, 0.9, 1]}>
           <planeGeometry args={[1, 1]} />
-          <meshBasicMaterial map={textures[s.tex]} transparent opacity={0} toneMapped={false} />
+          <meshBasicMaterial map={wallTextures[s.tex]} transparent opacity={0} toneMapped={false} />
         </mesh>
       ))}
 
-      <AtmosphereVideos progress={progress} />
+      {picks.map((_, i) => (
+        <mesh key={'pick' + i} ref={(el) => { pickRefs.current[i] = el }} visible={false}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial map={pickTextures[i]} transparent opacity={0} toneMapped={false} depthWrite={false} />
+        </mesh>
+      ))}
+
+      <AtmosphereVideos fx={fx} />
     </>
   )
 }
 
 export default function JourneyCanvas({
   picks,
+  wall,
   progress,
+  rects,
   isPhone,
-  look,
 }: {
   picks: LivePick[]
+  wall: LivePick[]
   progress: { current: number }
+  rects: CardRectTargets
   isPhone: boolean
-  look: LookId
 }) {
+  const fx = useRef<Fx>({ ignite: 0, burstEnv: 0, p: 0 }).current
   return (
     <Canvas
       dpr={[1, isPhone ? 1.5 : 2]}
@@ -352,14 +435,18 @@ export default function JourneyCanvas({
       gl={{ antialias: false, powerPreference: 'high-performance', alpha: false }}
       style={{ position: 'absolute', inset: 0 }}
     >
-      <Journey picks={picks} progress={progress} look={look} />
+      <Journey picks={picks} wall={wall} progress={progress} rects={rects} isPhone={isPhone} fx={fx} />
       <Studio isPhone={isPhone} />
-      {/* Bloom's high luminance threshold makes it selective in practice:
-          in this black scene only the red-hot core and the brightest
-          specular hits cross it. Grain is desktop-only (it costs fill rate
-          and reads as noise on small bright-mode screens anyway). */}
+      {/* Bloom's high threshold keeps it selective in this black scene; the
+          phone drops grain and (via props below) runs a lighter bloom. */}
       <EffectComposer multisampling={0}>
-        <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.72} luminanceSmoothing={0.2} radius={0.72} />
+        <Bloom
+          mipmapBlur
+          intensity={isPhone ? 0.7 : 0.85}
+          luminanceThreshold={0.72}
+          luminanceSmoothing={0.2}
+          radius={isPhone ? 0.6 : 0.72}
+        />
         <SMAA />
         {isPhone ? <></> : <Noise premultiply opacity={0.05} />}
         <Vignette eskil={false} offset={0.22} darkness={0.42} />

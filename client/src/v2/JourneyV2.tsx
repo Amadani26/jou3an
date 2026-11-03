@@ -1,36 +1,42 @@
 /**
- * WEB V2 TECH SPIKE — "The journey of 3", chapters 1→3 only.
+ * WEB V2 — "The journey of 3", chapters 1→5 (phase 2 checkpoint).
  * Storyboard + tech plan: docs/web-v2-storyboard.md (repo root).
  *
- * Architecture under test:
+ * Architecture (unchanged from the approved spike):
  *   - ONE persistent R3F canvas FIXED behind an HTML layer; every word and
- *     control is HTML (accessible, selectable, SEO-visible) — the canvas is
- *     scenery, never the copy.
- *   - Lenis smooth scroll + GSAP ScrollTrigger scrub writing ONE progress
- *     number into a ref; the scene reads it in useFrame. No React state on
- *     the scroll path.
- *   - 3D lazy-mounts AFTER first paint (requestIdleCallback), so the HTML
- *     chapter stack is the LCP, not the WebGL bundle.
- *   - Static fallback (no canvas, no Lenis) for reduced-motion or no-WebGL
- *     visitors: the same chapters as plain readable sections.
+ *     control is HTML. Readable content never lives in the canvas — ch4's
+ *     orbiting cards settle onto, and hand off to, their real HTML twins.
+ *   - Lenis + GSAP ScrollTrigger scrub → ONE progress number in a ref.
+ *     State the CSS needs (handoff, chapter copy, the ch5 swipe) is
+ *     written as data-attributes straight onto the section — no React
+ *     state on the scroll path.
+ *   - 3D lazy-mounts on first scroll intent; static fallback (no canvas,
+ *     no Lenis) for reduced-motion / no-WebGL with every chapter readable.
  *
- * REAL DATA ONLY: tunnel cards are the live showcase's wall rows (real
- * names, real Google ratings with attribution or none) via the same
- * useShowcase() the production page uses — snapshot first, live replaces.
+ * REAL DATA ONLY: the showcase picks/wall via useShowcase() — real names,
+ * real Google ratings with attribution or none, real prices or omitted,
+ * the engine's own reason lines. VenueNote wherever real venues appear.
  *
- * ?fps=1 overlays a frame-time meter (dev/measurement aid).
+ * ?fps=1 overlays a frame-time meter.
  */
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Lenis from 'lenis'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useShowcase } from '../lib/useShowcase'
+import { metaLine, type LivePick } from '../lib/live'
 import { prefersReducedMotion } from '../lib/reveal'
 import VenueNote from '../components/VenueNote'
+import {
+  CHAPTER_VH, P3, SETTLE_END, HANDOFF_END, CH5_COPY_AT, SWIPE_AT,
+} from './timeline'
+import type { CardRectTargets } from './JourneyCanvas'
 import '../v2/journey.css'
 
 const JourneyCanvas = lazy(() => import('./JourneyCanvas'))
+
+const HANDOFF_FLIP = (SETTLE_END + HANDOFF_END) / 2
 
 function webglOK(): boolean {
   try {
@@ -41,7 +47,7 @@ function webglOK(): boolean {
   }
 }
 
-/** Frame-time meter for the spike's measurements (?fps=1). */
+/** Frame-time meter for measurements (?fps=1). */
 function FpsMeter() {
   const [stats, setStats] = useState('—')
   useEffect(() => {
@@ -65,19 +71,53 @@ function FpsMeter() {
   return <div className="j-fps">{stats}</div>
 }
 
+/** One REAL answer as HTML — the thing the 3D card hands off to. Name,
+ *  cuisine · area · price (metaLine omits what is null), the real Google
+ *  rating with attribution or nothing, and the engine's reason line. */
+function PickCard({
+  pick,
+  rank,
+  cardRef,
+  className,
+}: {
+  pick: LivePick
+  rank: number
+  cardRef?: (el: HTMLDivElement | null) => void
+  className?: string
+}) {
+  return (
+    <div ref={cardRef} className={'jp-card' + (className ? ' ' + className : '')}>
+      <span className="jp-rank">{rank}</span>
+      <div className="jp-body">
+        <p className="jp-name">{pick.name}</p>
+        <p className="jp-meta">{metaLine(pick)}</p>
+        {pick.rating != null ? (
+          <p className="jp-rating">
+            <span className="jp-star">★</span> {pick.rating.toFixed(1)}
+            {pick.ratingCount != null ? ` (${pick.ratingCount.toLocaleString('en-US')})` : ''} · Google
+          </p>
+        ) : null}
+        {pick.reason ? <p className="jp-reason">{pick.reason}</p> : null}
+      </div>
+    </div>
+  )
+}
+
 function Chapter({
+  heightVh,
   kicker,
   title,
   sub,
   children,
 }: {
+  heightVh: number
   kicker: string
   title: React.ReactNode
   sub: string
   children?: React.ReactNode
 }) {
   return (
-    <section className="j-chapter">
+    <section className="j-chapter" style={{ height: `${heightVh}svh` }}>
       <div className="j-sticky">
         <p className="j-kicker">{kicker}</p>
         <h2 className="j-title">{title}</h2>
@@ -88,8 +128,9 @@ function Chapter({
   )
 }
 
-/** Reduced-motion / no-WebGL fallback: the same story as readable sections. */
-function StaticJourney({ names }: { names: string[] }) {
+/** Reduced-motion / no-WebGL / no-JS-adjacent fallback: every chapter's
+ *  content as plain readable sections. */
+function StaticJourney({ picks, names }: { picks: LivePick[]; names: string[] }) {
   return (
     <div className="j-static">
       <section className="j-static-ch">
@@ -113,26 +154,49 @@ function StaticJourney({ names }: { names: string[] }) {
         </h2>
         <p className="j-sub">Exactly 3 answers.</p>
       </section>
+      <section className="j-static-ch">
+        <h2 className="j-title">Exactly 3 answers.</h2>
+        <p className="j-sub">Where you are. What you feel like. What you spend.</p>
+        <div className="jp-grid is-static">
+          {picks.map((p, i) => (
+            <div className="jp-slot" key={p.id}>
+              <PickCard pick={p} rank={i + 1} />
+            </div>
+          ))}
+        </div>
+        <VenueNote />
+      </section>
+      <section className="j-static-ch">
+        <h2 className="j-title">It learns you.</h2>
+        <p className="j-sub">Swipe to teach it.</p>
+      </section>
     </div>
   )
 }
 
 export default function JourneyV2() {
   const { data } = useShowcase()
-  const picks = data.wall.length ? data.wall : data.picks
+  const picks = useMemo(() => data.picks.slice(0, 3), [data])
+  const wall = data.wall.length ? data.wall : data.picks
+  /** ch5's replacement card: a real wall restaurant that is not already a
+   *  pick. Excluded by id AND name — picks and wall rows are built
+   *  separately server-side, so the same venue must never slip through on
+   *  an id mismatch and "replace" itself. */
+  const replacement = useMemo(
+    () => wall.find((w) => !picks.some((p) => p.id === w.id || p.name === w.name)) ?? null,
+    [wall, picks],
+  )
 
   const [mode, setMode] = useState<'pending' | 'full' | 'static'>('pending')
   const [mount3d, setMount3d] = useState(false)
   const progress = useRef(0)
   const runwayRef = useRef<HTMLDivElement>(null)
+  const answersRef = useRef<HTMLElement>(null)
+  const swiped = useRef(false)
+  const rects = useRef<CardRectTargets>({ els: [null, null, null] }).current
 
   const showFps = typeof window !== 'undefined' && window.location.search.includes('fps=1')
   const isPhone = typeof window !== 'undefined' && window.innerWidth < 768
-  // Premium-material variants under review: ?look=1 (dark glass) /
-  // 2 (polished metal) / 3 (red lacquer). Default 1.
-  const lookParam =
-    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('look') : null
-  const look = (lookParam === '2' || lookParam === '3' ? lookParam : '1') as '1' | '2' | '3'
 
   useEffect(() => {
     setMode(prefersReducedMotion() || !webglOK() ? 'static' : 'full')
@@ -154,16 +218,26 @@ export default function JourneyV2() {
       end: 'bottom bottom',
       scrub: true,
       onUpdate: (self) => {
-        progress.current = self.progress
+        const p = self.progress
+        progress.current = p
+        // CSS-side chapter state as data-attributes — no React re-renders.
+        const sec = answersRef.current
+        if (sec) {
+          sec.dataset.handoff = p >= HANDOFF_FLIP ? '1' : '0'
+          sec.dataset.copy = p >= CH5_COPY_AT ? '5' : '4'
+          // the swipe is one-shot-feeling: fired crossing SWIPE_AT, only
+          // re-armed by leaving the whole answers section backwards.
+          if (p >= SWIPE_AT) swiped.current = true
+          else if (p < P3) swiped.current = false
+          sec.dataset.swipe = swiped.current ? '1' : '0'
+        }
       },
     })
 
-    // The scene mounts when the JOURNEY starts — first scroll/touch intent —
-    // not at load: chapter 1's resting state is darkness and the ignition
-    // only begins ~24vh in, so the ~300ms of three parse/compile happens
-    // while the visitor is still reading the headline. A 6s timer catches
-    // the visitor who waits. (This is also what keeps the WebGL bundle's
-    // main-thread cost out of first load entirely.)
+    // The scene mounts when the journey starts — first scroll/touch intent
+    // (ch1's resting state is darkness; ignition begins ~25vh in, so the
+    // three parse/compile happens while the visitor reads). 6s timer for
+    // the visitor who waits.
     const arm = () => setMount3d(true)
     const opts = { once: true, passive: true } as const
     window.addEventListener('wheel', arm, opts)
@@ -184,7 +258,7 @@ export default function JourneyV2() {
     }
   }, [mode])
 
-  if (mode === 'static') return <StaticJourney names={picks.map((p) => p.name)} />
+  if (mode === 'static') return <StaticJourney picks={picks} names={wall.map((p) => p.name)} />
 
   return (
     <div className="j-root">
@@ -192,39 +266,81 @@ export default function JourneyV2() {
       <div className="j-canvas" aria-hidden="true">
         {mode === 'full' && mount3d ? (
           <Suspense fallback={null}>
-            <JourneyCanvas picks={picks} progress={progress} isPhone={isPhone} look={look} />
+            <JourneyCanvas picks={picks} wall={wall} progress={progress} rects={rects} isPhone={isPhone} />
           </Suspense>
         ) : null}
       </div>
 
-      {/* The HTML story. 600vh runway: three chapters, 200vh each. */}
+      {/* The HTML story. Section heights come from timeline.ts — the scene
+          reads the same boundaries. */}
       <div ref={runwayRef} className="j-runway">
-        <Chapter kicker="Chapter 1" title={<>Hungry?</>} sub="A food decision engine for Dubai." />
-        <Chapter
-          kicker="Chapter 2"
-          title={<>Too many options.</>}
-          sub="All of them open. All of them plausible."
-        >
+        <Chapter heightVh={CHAPTER_VH.ch1} kicker="Chapter 1" title={<>Hungry?</>} sub="A food decision engine for Dubai." />
+        <Chapter heightVh={CHAPTER_VH.ch2} kicker="Chapter 2" title={<>Too many options.</>} sub="All of them open. All of them plausible.">
           <div className="j-note">
             <VenueNote />
           </div>
         </Chapter>
         <Chapter
+          heightVh={CHAPTER_VH.ch3}
           kicker="Chapter 3"
-          title={
-            <>
-              Jou3an <em>decides</em>.
-            </>
-          }
+          title={<>Jou3an <em>decides</em>.</>}
           sub="Exactly 3 answers."
         />
+
+        {/* ch4 + ch5 share ONE sticky frame: the answer cards must survive
+            the chapter change. The headline block crossfades via
+            data-copy; the cards appear via data-handoff; the middle card
+            swipes away via data-swipe. */}
+        <section
+          ref={answersRef}
+          className="j-chapter j-answers"
+          style={{ height: `${CHAPTER_VH.answers}svh` }}
+          data-handoff="0"
+          data-copy="4"
+          data-swipe="0"
+        >
+          <div className="j-sticky j-answers-frame">
+            <div className="j-copy-stack">
+              <header className="j-copy j-copy-4">
+                <p className="j-kicker">Chapter 4</p>
+                <h2 className="j-title">Exactly 3 answers.</h2>
+                <p className="j-sub">Where you are. What you feel like. What you spend.</p>
+              </header>
+              <header className="j-copy j-copy-5" aria-hidden="true">
+                <p className="j-kicker">Chapter 5</p>
+                <h2 className="j-title">It learns you.</h2>
+                <p className="j-sub">Swipe to teach it.</p>
+              </header>
+            </div>
+
+            <div className="jp-grid">
+              {picks.map((p, i) => (
+                <div className="jp-slot" key={p.id}>
+                  <PickCard
+                    pick={p}
+                    rank={i + 1}
+                    cardRef={(el) => { rects.els[i] = el }}
+                    className={i === 1 ? 'jp-out' : undefined}
+                  />
+                  {i === 1 && replacement ? (
+                    <PickCard pick={replacement} rank={2} className="jp-in" />
+                  ) : null}
+                </div>
+              ))}
+            </div>
+
+            <div className="j-note j-note-answers">
+              <VenueNote />
+            </div>
+          </div>
+        </section>
       </div>
 
       <section className="j-end">
-        <p className="j-kicker">End of the tech spike</p>
+        <p className="j-kicker">End of the phase-2 checkpoint</p>
         <p className="j-sub">
-          Chapters 4–7 — the three answers, the taste shift, the live demo and the waitlist — are
-          storyboarded in <code>docs/web-v2-storyboard.md</code>.
+          Chapters 6–7 — the live demo and the waitlist — come after this review. The full plan
+          lives in <code>docs/web-v2-storyboard.md</code>.
         </p>
         <Link className="j-back" to="/">
           ← Back to the live site
