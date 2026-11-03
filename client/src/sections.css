@@ -1,0 +1,2454 @@
+/* ==================================================================== */
+/* Section variants (?hero=a|b, ?problem=a|b)                           */
+/* ==================================================================== */
+/*
+ * Every animation here is transform + opacity only. The two problem variants
+ * are choreographed with per-element transition-delays and ONE class flip on
+ * their container rather than per-frame JS, because thirty elements driven
+ * from the main thread will not hold 60fps on a phone.
+ *
+ * The springs are curves, not physics engines: a back-out cubic overshoots
+ * slightly and settles, which is what gives the cards weight.
+ */
+
+:root {
+  /* Overshoots to ~1.09 then settles. Used wherever something must arrive
+     with weight rather than simply appear. */
+  --ease-spring: cubic-bezier(0.34, 1.42, 0.64, 1);
+}
+
+/* -------------------------------------------------------------------- */
+/* Shared: the mini result card                                          */
+/* -------------------------------------------------------------------- */
+
+.mini {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #111111;
+  border-radius: 14px;
+  padding: 10px;
+  width: 100%;
+}
+
+.mini-panel {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  /* Stands in for the photo the app's own card carries. Flat red-tinted field
+     rather than imagery: see the note in ResultCardMini.tsx. */
+  background: rgba(254, 0, 0, 0.13);
+}
+
+.mini-panel-grey { background: #222222; }
+
+.mini-rank {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  color: var(--red);
+  line-height: 1;
+}
+
+.mini-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+
+.mini-name {
+  color: var(--text-primary);
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-meta {
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-dot {
+  width: 3px; height: 3px; border-radius: 50%;
+  background: var(--text-muted); flex: none;
+}
+
+.mini-reason {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(254, 0, 0, 0.13);
+  color: var(--red);
+  white-space: nowrap;
+}
+
+/* sizes */
+.mini-sm { padding: 8px; gap: 8px; }
+.mini-sm .mini-panel { width: 34px; height: 34px; }
+.mini-sm .mini-rank { font-size: 15px; }
+.mini-sm .mini-name { font-size: 12.5px; }
+.mini-sm .mini-meta { font-size: 10.5px; }
+.mini-sm .mini-reason { font-size: 9.5px; }
+
+.mini-md .mini-panel { width: 46px; height: 46px; }
+.mini-md .mini-rank { font-size: 21px; }
+.mini-md .mini-name { font-size: 15px; }
+.mini-md .mini-meta { font-size: 12px; }
+.mini-md .mini-reason { font-size: 11px; }
+
+.mini-lg { padding: 13px; gap: 13px; }
+.mini-lg .mini-panel { width: 58px; height: 58px; }
+.mini-lg .mini-rank { font-size: 27px; }
+.mini-lg .mini-name { font-size: 18px; }
+.mini-lg .mini-meta { font-size: 13px; }
+
+.mini-text-only { padding: 9px 11px; }
+.mini-cuisine, .mini-area { overflow: hidden; text-overflow: ellipsis; }
+.mini-area { color: var(--text-muted); }
+
+/* schematic — a blank app-shaped card standing for "some app, any app".
+   A step lighter than the page on purpose: at #141414 on black the pile
+   disappeared into a smear. */
+.mini-sch {
+  width: 100%;
+  background: #1c1c1c;
+  border-radius: 14px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.mini-sch-head {
+  height: 84px;
+  border-radius: 9px;
+  background: #2b2b2b;
+}
+.mini-sch-bars { display: flex; flex-direction: column; gap: 6px; }
+.mini-bar { height: 8px; border-radius: 4px; background: #3a3a3a; display: block; }
+.mini-bar-thin { height: 6px; background: #2e2e2e; }
+
+/* ==================================================================== */
+/* HERO — 3D device (locked)                                            */
+/* ==================================================================== */
+
+.hero-live {
+  justify-content: flex-start;
+  padding-top: calc(66px + env(safe-area-inset-top));
+}
+
+.hero-glow-product { top: -42vw; right: -20vw; }
+
+.product-copy {
+  position: relative;
+  z-index: 2;
+  padding: 0 18px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.product-h { font-size: min(10vw, 60px); }
+.product-sub { font-size: 14.5px; max-width: 34ch; text-align: center; }
+
+.product-cta {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 14px 18px calc(22px + env(safe-area-inset-bottom));
+}
+
+/* The scroll cue — phone widths only, where the first frame is copy alone.
+   A label and a thin pulsing line; fades out as the device beat approaches.
+   --enter defaults to 1 (no JS wrote it), which also hides the cue — a page
+   with no choreography has nothing to prompt for. */
+.hero-scrollcue {
+  display: none;
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  opacity: calc(1 - min(1, var(--enter, 1) * 2.4));
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.hero-scrollcue i {
+  width: 1px;
+  height: 30px;
+  background: linear-gradient(to bottom, var(--text-muted), transparent);
+  transform-origin: top;
+  animation: cuePulse 2.2s var(--ease-in-out) infinite;
+}
+@keyframes cuePulse {
+  0%, 100% { transform: scaleY(0.45); opacity: 0.5; }
+  50%      { transform: scaleY(1); opacity: 1; }
+}
+
+/* ---- phone widths: the hero is TWO BEATS. Beat 1 is the copy alone (the
+   device must not be on the first frame); beat 2 is the device's own
+   viewport, which it floats up into on scroll (--enter, written by
+   HeroLive's rAF listener; default 1 keeps no-JS and reduced motion
+   static-but-complete). The in-flow CTA is replaced by the floating
+   waitlist button mid-journey. ---- */
+@media (max-width: 767.98px) {
+  /* .hero-live-qualified: the stage's base rule sits LATER in this file, so
+     these need the extra specificity to win, not just source order. */
+  .hero-live .product-copy {
+    min-height: calc(100svh - 66px - env(safe-area-inset-top));
+    justify-content: center;
+    padding-bottom: 64px;
+  }
+  .hero-scrollcue { display: flex; }
+  .hero-live .hero-live-stage { min-height: 100svh; flex: none; }
+  .hero-live .product-cta { display: none; }
+  .dev-tilt {
+    transform:
+      translate3d(0, calc((1 - var(--enter, 1)) * 16svh), 0)
+      scale(calc(0.9 + var(--enter, 1) * 0.1));
+    opacity: calc(0.15 + var(--enter, 1) * 0.85);
+  }
+}
+
+
+/* ==================================================================== */
+/* The live device (both hero variants)                                 */
+/* ==================================================================== */
+
+.hero-live-stage {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 300px;
+  margin-top: 12px;
+  display: grid;
+  place-items: center;
+}
+
+.dev-wrap { position: relative; width: var(--pw, min(66vw, 272px)); }
+
+/* The float: slow, scripted, interruptible by nothing. */
+.dev-float {
+  animation: devFloat 8s var(--ease-in-out) infinite;
+  will-change: transform;
+}
+@keyframes devFloat {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, -10px, 0); }
+}
+
+/* One perspective parent, one fixed cinematic tilt. The canvas and the DOM
+   screen share this transform, so they can never drift apart. */
+.dev-tilt { perspective: 1200px; }
+.dev-stage {
+  position: relative;
+  aspect-ratio: 1.08 / 2.26;
+  /* --seq-turn: the sequence turns the device a few degrees with the orbit
+     (written per-frame by HeroLive), returning to 0 as the cards lock. */
+  transform: rotateY(calc(-7deg + var(--seq-turn, 0deg))) rotateX(2.5deg);
+  transform-style: preserve-3d;
+}
+
+/*
+ * The body. Gradient metal, a bevel ring, and the red key light catching the
+ * top-right edge — all inset shadows, no blur filters. The GL canvas paints a
+ * richer version of this same body over it when it is live.
+ */
+.dev-body {
+  position: absolute;
+  inset: 4%;
+  border-radius: 11% / 5.3%;
+  background: linear-gradient(145deg, #262626, #101010 52%, #1b1b1b);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset -5px 5px 10px -5px rgba(254, 0, 0, 0.55),
+    inset 5px -5px 12px -8px rgba(255, 255, 255, 0.07),
+    0 44px 80px -38px rgba(0, 0, 0, 0.9);
+}
+
+.dev-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 700ms var(--ease-out);
+}
+.dev-canvas[data-live='yes'] { opacity: 1; }
+
+/* The screen opening — geometry shared exactly with the GL slab's face. */
+.dev-face {
+  position: absolute;
+  left: 9.97%;
+  top: 10.31%;
+  width: 80.07%;
+  height: 79.38%;
+  border-radius: 7.5% / 3.6%;
+  overflow: hidden;
+  background: #070707;
+  container-type: size;
+}
+
+/* Glass: a soft highlight strip sweeping across on a long loop. */
+.dev-sheen {
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: -70%;
+  width: 55%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.055), transparent);
+  transform: skewX(-16deg) translateX(0);
+  animation: devSheen 7s var(--ease-in-out) infinite;
+  pointer-events: none;
+}
+@keyframes devSheen {
+  0%, 52%   { transform: skewX(-16deg) translateX(-30%); }
+  86%, 100% { transform: skewX(-16deg) translateX(470%); }
+}
+
+/* The screen brightening as the streaks arrive — a red bloom over the glass
+   that swells through the 'in' beat and lets go once the cards deal. */
+.dev-glowup {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 46%, rgba(254, 0, 0, 0.38), rgba(254, 0, 0, 0.08) 58%, transparent 76%);
+  opacity: 0;
+  transition: opacity 600ms var(--ease-out);
+  pointer-events: none;
+}
+.hero-live-stage[data-seq='in'] .dev-glowup {
+  opacity: 1;
+  transition: opacity 1300ms var(--ease-in-out);
+}
+
+.dev-shadow {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: -6.5%;
+  height: 7%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.7), transparent 68%);
+  pointer-events: none;
+}
+
+/* ---- the live screen ---- */
+
+.pscreen {
+  position: absolute;
+  inset: 0;
+  color: var(--text-primary);
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+.ps-top {
+  position: absolute;
+  z-index: 3; /* above the route map — the brand never gets covered */
+  top: 3.4cqh;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+}
+.ps-brand {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 6cqw;
+  letter-spacing: -0.03em;
+}
+.ps-brand b { color: var(--red); }
+
+.ps-view {
+  position: absolute;
+  inset: 0;
+  /* Centred: the face is tall and a top-anchored stack left a dead third at
+     the bottom of the glass. The brand strip stays absolute above. */
+  padding: 10cqh 6cqw 6cqh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 380ms var(--ease-out);
+  pointer-events: none;
+}
+.pscreen[data-phase='idle'] .ps-home,
+.pscreen[data-phase='tap'] .ps-home { opacity: 1; }
+.pscreen[data-phase='deciding'] .ps-deciding { opacity: 1; }
+.pscreen[data-phase='results'] .ps-results,
+.pscreen[data-phase='select'] .ps-results,
+.pscreen[data-phase='hold'] .ps-results { opacity: 1; }
+
+.ps-ask {
+  margin: 0 0 4.4cqh;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 7.6cqw;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.ps-chip {
+  position: relative;
+  display: block;
+  margin-bottom: 3.4cqw;
+  padding: 4.6cqw 5cqw;
+  background: #151515;
+  border: 1px solid #242424;
+  border-radius: 4.4cqw;
+  font-size: 4.9cqw;
+  font-weight: 600;
+  transition: background 220ms linear, border-color 220ms linear;
+}
+.pscreen[data-phase='tap'] .ps-chip:first-child {
+  background: rgba(254, 0, 0, 0.16);
+  border-color: var(--red);
+}
+
+.ps-ring {
+  position: absolute;
+  right: 5cqw;
+  top: 50%;
+  width: 9cqw;
+  height: 9cqw;
+  margin-top: -4.5cqw;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  opacity: 0;
+}
+.pscreen[data-phase='tap'] .ps-chip:first-child .ps-ring { animation: psTap 760ms var(--ease-out) both; }
+.pscreen[data-phase='select'] .ps-ring-card { animation: psTap 760ms var(--ease-out) both; }
+@keyframes psTap {
+  0%   { opacity: 0; transform: scale(1.7); }
+  35%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(0.72); }
+}
+
+.ps-deciding {
+  align-items: center;
+  justify-content: center;
+  gap: 2.6cqh;
+}
+.ps-deciding::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 42%, rgba(254, 0, 0, 0.16), transparent 70%);
+}
+.ps-deciding p {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 7.6cqw;
+  letter-spacing: -0.02em;
+  color: var(--red);
+}
+.ps-dots i {
+  display: inline-block;
+  width: 3cqw;
+  height: 3cqw;
+  margin: 0 1.3cqw;
+  border-radius: 50%;
+  background: var(--red);
+  animation: psDot 900ms ease-in-out infinite;
+}
+.ps-dots i:nth-child(2) { animation-delay: 150ms; }
+.ps-dots i:nth-child(3) { animation-delay: 300ms; }
+@keyframes psDot {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50%      { opacity: 1; transform: translateY(-1.2cqh); }
+}
+
+.ps-eyebrow {
+  margin: 0 0 2.2cqh;
+  text-align: center;
+  font-size: 3.4cqw;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+
+.ps-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 3.4cqw;
+  margin-bottom: 3.2cqw;
+  padding: 3.8cqw;
+  background: #121212;
+  border-radius: 4.2cqw;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  opacity: 0;
+  transform: translate3d(0, 4.5cqh, 0);
+  transition:
+    opacity 400ms var(--ease-out) calc(var(--i) * 130ms),
+    transform 540ms var(--ease-spring) calc(var(--i) * 130ms),
+    outline-color 240ms linear,
+    background-color 240ms linear;
+}
+.pscreen[data-phase='results'] .ps-card,
+.pscreen[data-phase='select'] .ps-card,
+.pscreen[data-phase='hold'] .ps-card { opacity: 1; transform: none; }
+.pscreen[data-phase='select'] .ps-card:first-child,
+.pscreen[data-phase='hold'] .ps-card:first-child {
+  outline-color: var(--red);
+  background: #1a0d0d;
+}
+
+.ps-rank {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 6.6cqw;
+  line-height: 1;
+  color: var(--red);
+}
+.ps-cardbody { display: flex; flex-direction: column; min-width: 0; }
+.ps-cardbody strong {
+  font-size: 4.6cqw;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ps-cardbody small {
+  margin-top: 0.8cqw;
+  font-size: 3.3cqw;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ps-cardbody em {
+  margin-top: 1.6cqw;
+  align-self: flex-start;
+  font-style: normal;
+  font-size: 3cqw;
+  font-weight: 600;
+  color: var(--red);
+  background: rgba(254, 0, 0, 0.13);
+  border-radius: 999px;
+  padding: 0.9cqw 2.8cqw;
+  white-space: nowrap;
+}
+.ps-score {
+  margin-left: auto;
+  flex: none;
+  font-size: 3.4cqw;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: #1d1d1d;
+  border-radius: 999px;
+  padding: 1.1cqw 2.6cqw;
+}
+
+/* Live ratings on the glass are Google's — say so, quietly. */
+.ps-attr {
+  margin: 1.4cqh 0 0;
+  text-align: center;
+  font-size: 2.6cqw;
+  color: var(--text-muted);
+}
+
+/* ---- the in-phone story: Beats B–D (select → detail → route) ---- */
+
+.pscreen:is([data-phase='select'], [data-phase='detail'], [data-phase='detailtap'], [data-phase='route'])
+  .ps-home { opacity: 0; }
+.pscreen:is([data-phase='detail'], [data-phase='detailtap']) .ps-detail { opacity: 1; transform: none; }
+.pscreen[data-phase='route'] .ps-route { opacity: 1; }
+
+/* Beat C — the detail view expands out of result #1's part of the glass:
+   a scale from the row's origin reads as the shared-element open. */
+.ps-detail {
+  padding: 8cqh 5cqw 5cqh;
+  justify-content: flex-start;
+  transform: scale(0.82);
+  transform-origin: 50% 26%;
+  transition: opacity 360ms var(--ease-out), transform 460ms var(--ease-out);
+}
+
+.psd-hero {
+  position: relative;
+  height: 30cqh;
+  border-radius: 4.5cqw;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  padding: 3.6cqw;
+  flex: none;
+}
+.psd-scrim {
+  position: absolute;
+  inset: 0;
+  /* Heavy on purpose: the cuisine tone is a tint behind the name, not a
+     bright slab — same restraint as the wall's colour fields. */
+  background: linear-gradient(180deg, rgba(8, 8, 8, 0.45) 0%, rgba(8, 8, 8, 0.82) 100%);
+}
+.psd-name {
+  position: relative;
+  margin: 0;
+  font-weight: 800;
+  font-size: 6cqw;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.psd-meta {
+  margin: 2.2cqh 0 0;
+  font-size: 3.5cqw;
+  color: var(--text-secondary);
+}
+.psd-rating {
+  margin: 1.4cqh 0 0;
+  font-size: 4cqw;
+  font-weight: 700;
+}
+.psd-star { color: #ffb547; }
+.psd-count { color: var(--text-secondary); font-weight: 400; }
+.psd-on { color: var(--text-muted); font-weight: 400; font-size: 3cqw; }
+.psd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.8cqw;
+  margin-top: 2cqh;
+}
+.psd-reason {
+  align-self: flex-start;
+  margin-top: 2cqh;
+  padding: 1.2cqw 3.2cqw;
+  border-radius: 999px;
+  background: rgba(254, 0, 0, 0.13);
+  color: var(--red);
+  font-size: 3cqw;
+  font-weight: 600;
+}
+.psd-chip {
+  padding: 1.1cqw 3cqw;
+  border-radius: 999px;
+  background: #1a1a1a;
+  border: 1px solid #242424;
+  font-size: 3cqw;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+/* The three action tiles — the app's own language, NOT interactive: the
+   whole screen is aria-hidden showcase and nothing here links anywhere. */
+.psd-actions {
+  margin-top: auto;
+  display: flex;
+  gap: 2cqw;
+}
+.psd-btn {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1cqh;
+  padding: 2.2cqh 0;
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 3.6cqw;
+  font-size: 2.7cqw;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  overflow: hidden;
+  transition: border-color 240ms linear, background-color 240ms linear;
+}
+.psd-btn svg { width: 4.8cqw; height: 4.8cqw; color: var(--red); }
+
+/* Beat D's ripple on Directions. */
+.psd-ring {
+  right: auto;
+  left: 50%;
+  margin: -4.5cqw 0 0 -4.5cqw;
+}
+.pscreen[data-phase='detailtap'] .psd-btn[data-k='0'] {
+  border-color: var(--red);
+  background: rgba(254, 0, 0, 0.1);
+}
+.pscreen[data-phase='detailtap'] .psd-ring {
+  animation: psTap 760ms var(--ease-out) both;
+}
+
+/* ---- the final frame: "On your way", our own illustration ---- */
+
+.ps-route { padding: 0; }
+.psr-chip {
+  position: absolute;
+  top: 15cqh;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 1.8cqw;
+  padding: 1.7cqw 3.8cqw;
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.85);
+  border: 1px solid rgba(254, 0, 0, 0.5);
+  font-size: 3.4cqw;
+  font-weight: 600;
+  color: var(--text-primary);
+  transform: translate(-50%, -8px);
+  opacity: 0;
+  transition: opacity 400ms var(--ease-out) 1500ms, transform 500ms var(--ease-spring) 1500ms;
+}
+.psr-chip svg { width: 3.8cqw; height: 3.8cqw; color: var(--red); }
+.pscreen[data-phase='route'] .psr-chip { opacity: 1; transform: translate(-50%, 0); }
+
+.psr-map { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.psr-route {
+  stroke: var(--red);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+.pscreen[data-phase='route'] .psr-route {
+  animation: psrDraw 1300ms var(--ease-in-out) 300ms both;
+}
+@keyframes psrDraw {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+
+.psr-you { fill: #f2ede8; }
+
+.psr-dest { opacity: 0; }
+.pscreen[data-phase='route'] .psr-dest {
+  animation: psrArrive 200ms linear 1450ms both;
+}
+@keyframes psrArrive {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.psr-pulse {
+  fill: rgba(254, 0, 0, 0.45);
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+}
+.pscreen[data-phase='route'] .psr-pulse {
+  animation:
+    psrPulse 700ms var(--ease-out) 1550ms both,
+    psrBreathe 2.8s var(--ease-in-out) 2600ms infinite alternate;
+}
+@keyframes psrPulse {
+  0%   { opacity: 0.85; transform: scale(1); }
+  100% { opacity: 0; transform: scale(3.4); }
+}
+@keyframes psrBreathe {
+  from { opacity: 0.08; transform: scale(1.5); }
+  to   { opacity: 0.3; transform: scale(2.1); }
+}
+
+/* Final-frame economy: the pulses hold still while the hero is off-screen. */
+.hero-live-stage[data-live='no'] .psr-pulse { animation-play-state: paused; }
+
+/* ---- THE SEQUENCE: streaks in → deal → flip → orbit → settle ----
+ *
+ * Geometry is fractions of the device width, published here as --pw and
+ * mirrored by HeroLive's timeline constants — the JS final frame and the
+ * CSS static pose (reduced motion / no-JS / remount) are the same numbers.
+ * The stage (z-index 1, line above) is the one stacking context: the clip
+ * sits at 10, the device at 50, and each card's per-frame z-index swings
+ * around 50 so it genuinely passes in front of and behind the phone.
+ */
+/* Sized so the detail beat's type is legible at 375/393/430. */
+.hero-live-stage { --pw: min(66vw, 272px); }
+/* The ending: the cards are back inside, the device takes the stage. */
+.hero-live-stage .dev-wrap {
+  z-index: 50;
+  transition: transform 750ms var(--ease-out);
+}
+.hero-live-stage[data-seq='settled'] .dev-wrap { transform: scale(1.06); }
+
+/* The payoff line under the device — arrives with the final frame. */
+.hero-tagline {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: calc(50% + var(--pw) * 1.12);
+  z-index: 60;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
+  transition: opacity 600ms var(--ease-out) 1600ms, transform 600ms var(--ease-out) 1600ms;
+  pointer-events: none;
+}
+.hero-live-stage[data-screen='route'] .hero-tagline { opacity: 1; transform: none; }
+
+/* The hero shows real restaurants → the disclaimer sits with it. */
+.hero-live-stage .venue-note {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 8px;
+  z-index: 60;
+  margin: 0 auto; /* auto: the 52ch cap must centre, not hug the left */
+  font-size: 10.5px;
+}
+@media (min-width: 768px) {
+  /* Desktop: the device fills the stage's height, so the payoff line and
+     the disclaimer take the empty bottom-left instead of the centre. */
+  .hero-tagline {
+    top: auto;
+    bottom: 56px;
+    left: 44px;
+    right: auto;
+    max-width: 300px;
+    text-align: left;
+  }
+  .hero-live-stage .venue-note {
+    left: 44px;
+    right: auto;
+    bottom: 16px;
+    max-width: 360px;
+    text-align: left;
+    margin: 0;
+  }
+}
+
+/* The Higgsfield clip — behind the device, edge-masked into the black.
+   Visible only through the 'in' beat; "the streaks stop" is this fade. */
+.seq-video {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(125vw, 700px);
+  height: min(86svh, 700px);
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 650ms var(--ease-out);
+  pointer-events: none;
+}
+.hero-live-stage[data-seq='in'] .seq-video {
+  opacity: 1;
+  transition: opacity 350ms var(--ease-out);
+}
+.hero-live-stage[data-video='off'] .seq-video { display: none; }
+.seq-video video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-mask-image: radial-gradient(ellipse 48% 48% at center, #000 50%, transparent 76%);
+  mask-image: radial-gradient(ellipse 48% 48% at center, #000 50%, transparent 76%);
+}
+
+/* The clip's stand-in when autoplay is refused (Low Power Mode) or no
+   source decodes: a red bloom swelling behind the glass on the same beat. */
+.seq-bloom {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(120vw, 680px);
+  height: min(120vw, 680px);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0.55);
+  background: radial-gradient(circle, rgba(254, 0, 0, 0.24), rgba(254, 0, 0, 0.06) 46%, transparent 70%);
+  opacity: 0;
+  z-index: 10;
+  pointer-events: none;
+  transition: opacity 500ms var(--ease-out), transform 1400ms var(--ease-in-out);
+}
+.hero-live-stage[data-video='off'][data-seq='in'] .seq-bloom {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* The card layer. ⚠️ No z-index/transform/opacity on the layer itself —
+   it must NOT open a stacking context, or the slots' z-index could never
+   interleave with the device's. */
+.seq-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* A slot is a zero-size anchor at the stage centre; the mover inside it is
+   what the timeline writes transform/opacity to. Hidden before the deal
+   and after the return — the final frame has NO cards, only the device. */
+.seq-slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+
+.seq-move {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* The two faces. The mover owns position/scale; this element owns only the
+   flip, so perspective stays local to each card. */
+.seq-card3d {
+  position: relative;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.seq-fc {
+  display: flex;
+  flex-direction: column;
+  width: calc(var(--pw) * 0.68);
+  padding: 11px 13px 12px;
+  background: #121212;
+  border-radius: 14px;
+  box-shadow: 0 26px 50px -22px rgba(0, 0, 0, 0.95);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Face-down: black back, the small red 3 — the deck being dealt. */
+.seq-back {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #0b0b0b;
+  border: 1px solid #242424;
+  border-radius: 14px;
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.seq-back span {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 26px;
+  color: var(--red);
+}
+
+/* The red under-glow, lit as each card reveals; rides with the mover. */
+.seq-glow {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  width: 150%;
+  height: 80%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse at center, rgba(254, 0, 0, 0.38), transparent 68%);
+  opacity: 0;
+  transition: opacity 700ms var(--ease-out);
+  pointer-events: none;
+}
+.seq-slot[data-lit='yes'] .seq-glow { opacity: 0.6; }
+
+/* Card type. The NAME may wrap to two lines and may never truncate —
+   "Chicken shawa…" reads as a bug. Everything secondary stays small. */
+.seq-fc-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+.seq-rank {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 21px;
+  line-height: 1;
+  color: var(--red);
+}
+.seq-score {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #1c1c1c;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.seq-name {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 14.5px;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  white-space: normal;
+  text-wrap: balance;
+}
+.seq-meta {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.seq-reason {
+  align-self: flex-start;
+  margin-top: 7px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(254, 0, 0, 0.14);
+  color: var(--red);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+
+@media (min-width: 768px) {
+  .seq-fc { width: calc(var(--pw) * 0.97); padding: 14px 16px 15px; }
+  .seq-rank { font-size: 25px; }
+  .seq-name { font-size: 17px; }
+  .seq-meta { font-size: 12.5px; }
+  .seq-reason { font-size: 11.5px; }
+  .seq-score { font-size: 12px; }
+
+}
+
+/* ---- ?debug=1 overlay ---- */
+
+.hero-debug {
+  position: fixed;
+  left: 10px;
+  bottom: 10px;
+  z-index: 99;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid #333;
+  border-radius: 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #9f9;
+}
+
+/* ---- nav states ---- */
+
+.nav-bar {
+  background: transparent;
+  transition: background-color 320ms var(--ease-out), box-shadow 320ms var(--ease-out);
+}
+.nav-bar[data-scrolled='yes'] {
+  background: rgba(8, 8, 8, 0.97);
+  box-shadow: 0 1px 0 0 #1c1c1c;
+}
+
+/* ==================================================================== */
+/* PROBLEM — the wall of appetite                                       */
+/* ==================================================================== */
+
+/* One viewport, no pin: the collapse is TIME-BASED (see ProblemWall.tsx),
+   so the section needs no scroll runway and never traps the scroll. */
+.wall-section { position: relative; height: 100svh; }
+
+.wall-sticky {
+  position: relative;
+  height: 100svh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #000;
+}
+
+/* One perspective for the whole wall, so the tilt reads as a plane in a
+   room rather than five rows individually skewed. */
+.wall-perspective {
+  position: absolute;
+  inset: 0;
+  perspective: 1100px;
+  perspective-origin: 50% 30%;
+  overflow: hidden;
+}
+
+.wall-plane {
+  position: absolute;
+  inset: -4% -12%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  transform-origin: 50% 20%;
+  will-change: transform;
+  transition: transform 950ms var(--ease-out);
+}
+/* Before the timeline starts the plane waits tilted away into the dark;
+   data-play flips and it flattens toward the viewer as the story's first
+   beat. JS-gated so no-JS (and the played/reduced states) sit flat. */
+html.js .wall-sticky[data-play='no'] .wall-plane {
+  transform: rotateX(34deg) translate3d(0, -72px, 0) scale(0.82);
+}
+
+.wall-row { overflow: visible; }
+
+.wall-track {
+  display: flex;
+  width: max-content;
+  animation: wallDrift var(--rowdur) linear infinite;
+  will-change: transform;
+}
+.wall-row[data-dir='rtl'] .wall-track { animation-direction: reverse; }
+
+@keyframes wallDrift {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+
+.wall-set { display: flex; gap: 10px; padding-right: 10px; }
+
+/* ---- the poster cards ---- */
+
+.wcard {
+  position: relative;
+  flex: none;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #101010;
+}
+
+.wcard-lg { width: 212px; height: 160px; }
+.wcard-md { width: 156px; height: 160px; }
+.wcard-sm { width: 128px; height: 160px; }
+
+.wcard-photo,
+.wcard-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.wcard-field { opacity: 0.38; }
+
+/* Legibility over photos without a blur in sight. */
+.wcard-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.12) 30%, rgba(0,0,0,0.78) 100%);
+}
+
+.wcard-body {
+  position: absolute;
+  inset: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.wcard-score {
+  position: absolute;
+  top: 9px; right: 9px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(8,8,8,0.72);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.wcard-name {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.wcard-sm .wcard-name { font-size: 13px; font-family: 'DM Sans', sans-serif; font-weight: 700; }
+
+.wcard-meta {
+  margin: 3px 0 0;
+  font-size: 10.5px;
+  color: rgba(242, 237, 232, 0.78);
+}
+
+.wcard-price {
+  margin: 1px 0 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* The dark the tilted plane recedes into — a flat field, not a blur. */
+.wall-haze {
+  position: absolute;
+  inset: -2% 0 auto;
+  height: 34%;
+  background: linear-gradient(180deg, #000 12%, transparent 100%);
+  pointer-events: none;
+}
+
+/* ---- copy over the wall ---- */
+
+.wall-copy {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding: 0 20px;
+  max-width: 620px;
+  margin: 0 auto;
+  transition: opacity 500ms var(--ease-out), transform 500ms var(--ease-out);
+}
+/* The headline yields the stage to the waves. */
+.wall-sticky:not([data-stage='wall']) .wall-copy {
+  opacity: 0;
+  transform: translate3d(0, -20px, 0);
+}
+
+.wall-line {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(10.4vw, 58px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+  text-shadow: 0 2px 30px rgba(0,0,0,0.95), 0 0 80px rgba(0,0,0,0.85);
+}
+
+.wall-sub {
+  margin: 12px auto 0;
+  max-width: 36ch;
+  font-size: 15px;
+  line-height: 1.55;
+  /* White, not secondary — "All of them open. All of them plausible." and
+     the line under the 3 results both read at full strength (ruling). */
+  color: var(--text-primary);
+  text-shadow: 0 1px 14px rgba(0,0,0,0.9);
+}
+
+/* ---- the collapse: Budget -> Nearby -> Your taste -> scan -> 3 ---- */
+
+/*
+ * Each wave's exit applies from its own stage ONWARD, so a card that fell in
+ * the Budget wave stays gone through every later stage, and scrolling back up
+ * replays the whole story in reverse — the transitions are symmetric.
+ */
+.wcard {
+  transition:
+    transform 640ms var(--ease-in-out) var(--wd),
+    opacity 460ms linear var(--wd);
+}
+
+/* Spend: DIM AND DROP BACK — not removed. In the engine spend is a soft
+   score, never a filter, so the wall shows these receding, still there. */
+.wall-sticky:is([data-stage='budget'], [data-stage='nearby'], [data-stage='taste'], [data-stage='scan'], [data-stage='resolved'])
+  .wcard.f-budget {
+  transform: translate3d(0, 16px, 0) scale(0.95);
+  opacity: 0.16;
+}
+
+/* Nearby: SWEEP out the side the row is already drifting toward. */
+.wall-sticky:is([data-stage='nearby'], [data-stage='taste'], [data-stage='scan'], [data-stage='resolved'])
+  .wall-row[data-dir='ltr'] .wcard.f-nearby {
+  transform: translate3d(-180px, 0, 0) rotate(-4deg);
+  opacity: 0;
+}
+.wall-sticky:is([data-stage='nearby'], [data-stage='taste'], [data-stage='scan'], [data-stage='resolved'])
+  .wall-row[data-dir='rtl'] .wcard.f-nearby {
+  transform: translate3d(180px, 0, 0) rotate(4deg);
+  opacity: 0;
+}
+
+/* Your taste: SHRINK away in place. */
+.wall-sticky:is([data-stage='taste'], [data-stage='scan'], [data-stage='resolved'])
+  .wcard.f-taste {
+  transform: scale(0.55);
+  opacity: 0;
+}
+
+/* Survivors brighten as the field empties, and take the scan's light. */
+.wall-sticky:is([data-stage='scan'], [data-stage='resolved']) .wcard.f-keep {
+  outline: 2px solid rgba(254, 0, 0, 0.6);
+  outline-offset: -2px;
+}
+
+/* The drift pauses once the field starts thinning — a wall being judged
+   should hold still, and the three survivors must still be ON screen when
+   the scan passes over them. */
+.wall-sticky:is([data-stage='taste'], [data-stage='scan'], [data-stage='resolved']) .wall-track {
+  animation-play-state: paused;
+}
+
+/* The judged wall recedes behind the answer. */
+.wall-perspective { transition: opacity 700ms var(--ease-out); }
+.wall-sticky[data-stage='resolved'] .wall-perspective { opacity: 0.1; }
+
+/* ---- the wave chip ---- */
+
+.wall-wavechip {
+  position: absolute;
+  top: calc(12svh + env(safe-area-inset-top));
+  left: 50%;
+  z-index: 3;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: rgba(254, 0, 0, 0.14);
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transform: translateX(-50%);
+  animation: wavePop 420ms var(--ease-spring) both;
+}
+.wall-wavechip[data-deciding='yes'] {
+  background: var(--red);
+  color: #fff;
+}
+
+@keyframes wavePop {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.86); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+/* ---- the scan ---- */
+
+.wall-scanline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -18%;
+  width: 16%;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(254, 0, 0, 0.16) 35%,
+    rgba(254, 0, 0, 0.5) 50%,
+    rgba(254, 0, 0, 0.16) 65%,
+    transparent
+  );
+}
+.wall-sticky[data-stage='scan'] .wall-scanline {
+  animation: scanSweep 1100ms var(--ease-in-out) both;
+}
+
+@keyframes scanSweep {
+  0%   { opacity: 0; transform: translate3d(0, 0, 0); }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(740%, 0, 0); }
+}
+
+/* ---- the answer ---- */
+
+.wall-final {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 0 20px;
+  pointer-events: none;
+}
+
+/* White with ONLY the 3 in red (ruling) — the number is the brand beat,
+   the sentence is not a warning sign. */
+.wall-line-final {
+  color: var(--text-primary);
+  opacity: 0;
+  transform: translate3d(0, 24px, 0);
+  transition: opacity 420ms var(--ease-out), transform 520ms var(--ease-spring);
+}
+.wall-line-final b { color: var(--red); font-weight: inherit; }
+
+.wall-final-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 430px;
+}
+
+.fcard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #121212;
+  border-radius: 16px;
+  padding: 14px 16px;
+  opacity: 0;
+  transform: translate3d(0, 34px, 0) scale(0.92);
+  transition:
+    opacity 420ms var(--ease-out) var(--fd),
+    transform 560ms var(--ease-spring) var(--fd);
+}
+
+.wall-sticky[data-stage='resolved'] .wall-line-final,
+.wall-sticky[data-stage='resolved'] .wall-sub-final { opacity: 1; transform: none; }
+.wall-sticky[data-stage='resolved'] .fcard { opacity: 1; transform: none; }
+
+.fcard-rank {
+  flex: none;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--red);
+}
+
+.fcard-body { min-width: 0; flex: 1; }
+
+.fcard-name {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.08;
+}
+
+.fcard-meta {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.fcard-reason {
+  display: inline-block;
+  margin-top: 7px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(254, 0, 0, 0.14);
+  color: var(--red);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.fcard-score {
+  flex: none;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #1c1c1c;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.wall-sub-final {
+  opacity: 0;
+  transform: translate3d(0, 16px, 0);
+  transition: opacity 420ms var(--ease-out) 320ms, transform 420ms var(--ease-out) 320ms;
+}
+
+@media (min-width: 768px) {
+  .wcard-lg { width: 300px; height: 198px; }
+  .wcard-md { width: 216px; height: 198px; }
+  .wcard-sm { width: 172px; height: 198px; }
+  .wcard-name { font-size: 19px; }
+  .wall-plane { gap: 14px; }
+  .wall-set { gap: 14px; padding-right: 14px; }
+}
+
+/* ==================================================================== */
+/* DECIDE -> ACT — the departure board                                  */
+/* The real-restaurant disclaimer — every live-venue section carries it. */
+.venue-note {
+  margin: 18px auto 0;
+  max-width: 52ch;
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+.venue-note a {
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Live photo attribution — required wherever the image shows. */
+.demo-card-attr {
+  position: absolute;
+  top: 54px; /* under the rank numeral */
+  left: 16px;
+  z-index: 2;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.62);
+  color: rgba(242, 237, 232, 0.82);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+/* ==================================================================== */
+/* THE LIVE DEMO — chips morph into a swipeable deck                    */
+/* ==================================================================== */
+
+.demo-section {
+  position: relative;
+  padding: clamp(80px, 14svh, 150px) 20px;
+}
+
+.demo-head {
+  max-width: 620px;
+  margin: 0 auto 34px;
+  text-align: center;
+}
+
+.demo-title {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(10vw, 52px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+}
+
+.demo-sub {
+  margin: 14px auto 0;
+  max-width: 42ch;
+  font-size: 15px;
+  line-height: 1.55;
+  /* White like the page's other supporting lines (ruling). */
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* A closed pick says so — honest, quiet, never hidden. */
+.demo-card-opens {
+  display: inline-block;
+  margin: 6px 8px 0 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 181, 71, 0.14);
+  color: #ffb547;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.demo-stage {
+  position: relative;
+  max-width: 430px;
+  margin: 0 auto;
+  /* Reserved: chips, the beat and the deck all live inside the same box, so
+     switching states never moves the page below (CLS 0). */
+  min-height: 430px;
+}
+
+.demo-chips {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 6px;
+}
+
+.demo-chip {
+  display: block;
+  width: 100%;
+  padding: 16px 20px;
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 16px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 200ms linear;
+}
+@media (hover: hover) and (pointer: fine) {
+  .demo-chip:hover { border-color: rgba(254, 0, 0, 0.5); }
+}
+
+.demo-chip-active {
+  border-color: var(--red);
+  background: rgba(254, 0, 0, 0.14);
+  color: #fff;
+  text-align: center;
+}
+
+.demo-deciding {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+}
+.demo-dots i { width: 9px; height: 9px; margin: 0 5px; }
+
+.demo-deck {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.demo-card {
+  position: absolute;
+  width: min(84vw, 380px);
+  aspect-ratio: 380 / 300;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #121212;
+  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.95);
+  cursor: grab;
+}
+.demo-card:active { cursor: grabbing; }
+
+.demo-card-photo,
+.demo-card-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.demo-card-field { opacity: 0.4; }
+
+.demo-card-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.12) 22%, rgba(0, 0, 0, 0.84) 100%);
+}
+
+.demo-card-rank {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 34px;
+  line-height: 1;
+  color: var(--red);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+}
+
+.demo-card-score {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.72);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-card-body {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 16px 18px;
+}
+.demo-card-body h3 {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.demo-card-body p {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: rgba(242, 237, 232, 0.82);
+}
+.demo-card-body em {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: rgba(254, 0, 0, 0.16);
+  color: var(--red);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-style: normal;
+}
+
+.demo-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+.demo-done p {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--text-primary);
+}
+
+.demo-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  min-height: 44px;
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 999px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 200ms linear, transform var(--dur-press) var(--ease-out);
+}
+.demo-reset:active { transform: scale(0.96); }
+.demo-reset svg { color: var(--red); }
+
+.demo-footrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 26px;
+}
+.demo-hint { margin: 0; font-size: 13px; color: var(--text-muted); }
+.demo-reset-quiet { padding: 8px 14px; min-height: 40px; font-size: 13px; }
+
+.demo-card-static {
+  position: relative;
+  width: min(84vw, 380px);
+  margin-bottom: 12px;
+}
+
+@media (min-width: 768px) {
+  .demo-stage { min-height: 470px; }
+}
+
+/* ==================================================================== */
+/* FEATURES — the vignette rail                                         */
+/* ==================================================================== */
+
+.feat-section {
+  padding: clamp(90px, 15svh, 160px) 0;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.feat-head { padding: 0 20px; }
+
+.feat-title {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(10vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+  text-wrap: balance;
+}
+
+.feat-lede {
+  margin: 12px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--red);
+}
+
+/* The rail: swipeable snap row with a peeking next card on phones; a grid
+   from 900px up. Scrollbar hidden but scrolling untouched. */
+.feat-rail {
+  display: flex;
+  gap: 12px;
+  margin-top: clamp(30px, 5svh, 48px);
+  padding: 0 20px 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.feat-rail::-webkit-scrollbar { display: none; }
+
+.feat-card {
+  flex: 0 0 76%;
+  max-width: 330px;
+  scroll-snap-align: center;
+  background: #111111;
+  border-radius: 18px;
+  padding: 14px 14px 16px;
+}
+
+@media (min-width: 900px) {
+  .feat-rail {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: visible;
+    padding-bottom: 0;
+  }
+  .feat-card { max-width: none; }
+}
+
+.feat-label {
+  margin: 12px 0 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.feat-caption {
+  margin: clamp(22px, 4svh, 34px) 20px 0;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+/* ---- the vignette stages ---- */
+/* Every loop's 0% frame is a complete scene: the reduced-motion still. All
+   animations gate on the section's data-play, so off-screen costs nothing. */
+
+.vig-stage {
+  position: relative;
+  height: 150px;
+  border-radius: 12px;
+  background: #0b0b0b;
+  overflow: hidden;
+}
+
+.feat-section[data-play='no'] .vig-stage *,
+.feat-section[data-play='no'] .vig-stage *::after {
+  animation-play-state: paused;
+}
+
+/* V1 — tell it your vibe: ring taps the chip, chip lights, dots think. */
+.vg-chip {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  padding: 11px 13px;
+  background: #161616;
+  border: 1px solid #242424;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.vg-chip-1 { top: 16px; animation: vgChipOn 4.4s infinite; }
+.vg-chip-2 { top: 62px; opacity: 0.55; }
+
+@keyframes vgChipOn {
+  0%, 18%  { background: #161616; border-color: #242424; }
+  28%, 72% { background: rgba(254, 0, 0, 0.15); border-color: var(--red); }
+  82%, 100% { background: #161616; border-color: #242424; }
+}
+
+.vg-ring {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  opacity: 0;
+  animation: vgTap 4.4s infinite;
+}
+@keyframes vgTap {
+  0%, 14%  { opacity: 0; transform: scale(1.6); }
+  22%      { opacity: 1; transform: scale(1); }
+  30%, 100% { opacity: 0; transform: scale(0.7); }
+}
+
+.vg-dots {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+}
+.vg-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  opacity: 0.25;
+  animation: vgDot 4.4s infinite;
+}
+.vg-dots i:nth-child(2) { animation-delay: 140ms; }
+.vg-dots i:nth-child(3) { animation-delay: 280ms; }
+@keyframes vgDot {
+  0%, 30%   { opacity: 0.25; transform: none; }
+  40%       { opacity: 1; transform: translateY(-4px); }
+  52%, 100% { opacity: 0.25; transform: none; }
+}
+
+/* V2 — exactly 3: rows land staggered, rest, leave. */
+.vg-row {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #151515;
+  border-radius: 10px;
+}
+.vg-row b {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--red);
+}
+.vg-line {
+  flex: 1;
+  height: 7px;
+  border-radius: 4px;
+  background: #2b2b2b;
+}
+.vg-row em {
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--red);
+  background: rgba(254, 0, 0, 0.13);
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.vig-three .vg-row-1 { top: 14px; }
+.vig-three .vg-row-2 { top: 60px; }
+.vig-three .vg-row-3 { top: 106px; }
+.vig-three .vg-row { animation: vgLand 4.6s infinite both; }
+.vig-three .vg-row-2 { animation-delay: 120ms; }
+.vig-three .vg-row-3 { animation-delay: 240ms; }
+@keyframes vgLand {
+  0%        { opacity: 1; transform: none; }
+  74%, 82%  { opacity: 1; transform: none; }
+  90%       { opacity: 0; transform: translateY(10px); }
+  92%       { opacity: 0; transform: translateY(14px); }
+  100%      { opacity: 1; transform: none; }
+}
+
+/* V3 — swipe to teach: the card slides off right; a taste note pops. */
+.vg-deckcard {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  width: 110px;
+  height: 104px;
+  margin-left: -55px;
+  border-radius: 12px;
+  background: #171717;
+  border: 1px solid #262626;
+}
+.vg-under { transform: scale(0.92) translateY(6px); opacity: 0.6; }
+.vg-mover {
+  padding: 8px;
+  animation: vgSwipe 4.2s var(--ease-in-out) infinite;
+}
+.vg-photo {
+  display: block;
+  height: 58px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3a2a20, #24180f);
+}
+.vg-bar {
+  display: block;
+  margin-top: 8px;
+  height: 7px;
+  width: 70%;
+  border-radius: 4px;
+  background: #2b2b2b;
+}
+@keyframes vgSwipe {
+  0%, 30%   { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+  55%, 70%  { transform: translate3d(90px, -8px, 0) rotate(10deg); opacity: 0; }
+  71%       { transform: translate3d(0, 10px, 0) scale(0.95); opacity: 0; }
+  85%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+}
+.vg-learn {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--red);
+  background: rgba(254, 0, 0, 0.13);
+  padding: 4px 10px;
+  border-radius: 999px;
+  opacity: 0;
+  animation: vgLearn 4.2s infinite;
+}
+@keyframes vgLearn {
+  0%, 48%   { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  58%, 80%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+  92%, 100% { opacity: 0; transform: translateX(-50%) translateY(6px); }
+}
+
+/* V4 — the three action buttons, each taking its tap in turn. The 0% frame
+   is a complete scene (all three pills, the first one lit), which is the
+   reduced-motion still. */
+.vg-action {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 12px;
+  border-radius: 999px;
+  background: #151515;
+  border: 1px solid #262626;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  animation: vgActTap 6s infinite;
+}
+/* Negative delays: every pill is mid-cycle from the first frame, so exactly
+   ONE is lit at any moment (a positive delay holds the 0% lit frame while
+   waiting, which lit all three at once). */
+.vig-act .vg-action-1 { top: 26px; animation-delay: 0s; }
+.vig-act .vg-action-2 { top: 72px; animation-delay: -4s; }
+.vig-act .vg-action-3 { top: 118px; animation-delay: -2s; }
+@keyframes vgActTap {
+  /* lit for this pill's third of the loop, quiet for the rest */
+  0%, 26% {
+    background: rgba(254, 0, 0, 0.16);
+    border-color: var(--red);
+    color: var(--text-primary);
+    transform: scale(1.02);
+  }
+  33%, 100% {
+    background: #151515;
+    border-color: #262626;
+    color: var(--text-secondary);
+    transform: none;
+  }
+}
+
+/* ==================================================================== */
+/* FAQ — compact accordion                                              */
+/* ==================================================================== */
+
+.faq-section {
+  padding: clamp(80px, 13svh, 150px) 20px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.faq-title {
+  margin: 0 0 clamp(26px, 4svh, 40px);
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(9.4vw, 48px);
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+}
+
+.faq-item {
+  background: #101010;
+  border-radius: 14px;
+  margin-bottom: 8px;
+}
+.faq-item[data-open='yes'] { background: #141414; }
+
+.faq-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 56px;
+  padding: 15px 18px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16.5px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.faq-btn svg {
+  flex: none;
+  color: var(--text-secondary);
+  transition: transform 280ms var(--ease-out);
+}
+.faq-item[data-open='yes'] .faq-btn svg {
+  transform: rotate(45deg);
+  color: var(--red);
+}
+
+/* Height without measuring: 0fr -> 1fr. */
+.faq-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 320ms var(--ease-in-out);
+}
+.faq-item[data-open='yes'] .faq-fold { grid-template-rows: 1fr; }
+.faq-fold-in { overflow: hidden; }
+.faq-fold-in p {
+  margin: 0;
+  padding: 0 18px 16px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+/* ==================================================================== */
+/* CTA BAND — the whole band is the form                                */
+/* ==================================================================== */
+
+.cta-band {
+  background: var(--red);
+  color: #000;
+  padding: clamp(70px, 12svh, 130px) 22px;
+  scroll-margin-top: 20px;
+}
+
+.cta-form,
+.cta-done {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.cta-line {
+  margin: 0;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(12vw, 76px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  color: #000;
+}
+
+.cta-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  margin-top: clamp(26px, 5svh, 44px);
+}
+
+.cta-field { position: relative; flex: 1; min-width: 0; }
+
+.cta-field input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 10px 2px 12px;
+  font-family: inherit;
+  /* 17px: above iOS Safari's 16px auto-zoom floor. */
+  font-size: 17px;
+  font-weight: 600;
+  color: #000;
+  caret-color: #000;
+  border-radius: 0;
+}
+.cta-field input::placeholder { color: rgba(0, 0, 0, 0.45); }
+
+/* The underline draws itself on focus — the band's focus animation. */
+.cta-field::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.35);
+}
+.cta-underline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: #000;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform 420ms var(--ease-out);
+}
+.cta-field:focus-within .cta-underline { transform: scaleX(1); }
+
+/* "Join" — the sentence's last word, in the display face. */
+.cta-join {
+  flex: none;
+  background: none;
+  border: none;
+  padding: 0 2px 6px;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: min(8vw, 40px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #000;
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out), opacity 200ms linear;
+}
+.cta-join:active { transform: scale(0.95); }
+.cta-band[data-status='submitting'] .cta-join { opacity: 0.45; }
+
+.cta-note {
+  margin: 18px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.72);
+}
+.cta-band[data-status='invalid'] .cta-note,
+.cta-band[data-status='error'] .cta-note { color: #000; }
+
+/* Our counter renders muted-on-black elsewhere; on red it goes ink. */
+.cta-count,
+.cta-count span { color: rgba(0, 0, 0, 0.72) !important; }
+.cta-count { margin-top: 6px; }
+
+/* -------------------------------------------------------------------- */
+/* The floating waitlist button — phone widths only                      */
+/* -------------------------------------------------------------------- */
+
+/* 19px/700 so white-on-#FE0000 (4.03:1) qualifies as LARGE text under AA —
+   the same ruling as the hero CTA. 48px min height clears the 44pt tap
+   floor; the bottom offset rides the home indicator's safe area. */
+.float-cta {
+  position: fixed;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 60;
+  display: none;
+  min-height: 48px;
+  padding: 13px 28px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-family: inherit;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    0 10px 28px -8px rgba(254, 0, 0, 0.5),
+    0 16px 34px -14px rgba(0, 0, 0, 0.75);
+  opacity: 0;
+  transform: translate3d(-50%, calc(100% + 28px + env(safe-area-inset-bottom)), 0);
+  pointer-events: none;
+  transition: transform 460ms var(--ease-spring), opacity 280ms var(--ease-out);
+}
+.float-cta[data-show='yes'] {
+  opacity: 1;
+  transform: translate3d(-50%, 0, 0);
+  pointer-events: auto;
+}
+.float-cta:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+}
+@media (max-width: 767.98px) {
+  .float-cta { display: block; }
+}
+
+/* Success: the check pops with a spring curve, the line lands after it. */
+.cta-check {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 20px;
+  border-radius: 50%;
+  background: #000;
+  color: var(--red);
+  animation: ctaPop 520ms var(--ease-spring) both;
+}
+.cta-done .cta-line { animation: ctaRise 480ms var(--ease-out) 120ms both; }
+.cta-done .cta-note { animation: ctaRise 480ms var(--ease-out) 220ms both; }
+
+@keyframes ctaPop {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes ctaRise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ==================================================================== */
+/* FOOTER — the name returns at full width                              */
+/* ==================================================================== */
+
+.site-footer {
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  padding-top: clamp(60px, 10svh, 110px);
+  /* Written by the footer's rAF scroll listener: 0 arriving, 1 fully in. */
+  --fp: 1;
+}
+
+.foot-top {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.foot-tag { margin: 0; font-size: 14px; color: var(--text-secondary); }
+
+.foot-links {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.foot-links a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 6px 2px; /* comfortable tap targets */
+  transition: color 200ms linear;
+}
+.foot-links a:hover,
+.foot-links a:focus-visible { color: var(--text-primary); }
+.foot-links span { color: var(--text-muted); }
+
+.foot-legal { margin: 0 0 6px; font-size: 12.5px; color: var(--text-muted); }
+
+/* The monument returns: edge-to-edge type, rising its last 44px as the
+   footer scrolls in. Fitted to the word, MEASURED: "Jou3an" in Syne 800 at
+   -0.045em tracking is 5.864em wide (document.fonts.ready, WebKit), so
+   96vw / 5.864 = 16.37vw fills the width with a 2vw margin each side. The
+   first guess (26.4vw) was an estimate, and the word ran off the screen. */
+.foot-mark {
+  position: relative;
+  margin-top: clamp(28px, 5svh, 56px);
+  text-align: center;
+  line-height: 0.82;
+  transform: translate3d(0, calc((1 - var(--fp)) * 44px), 0);
+  will-change: transform;
+}
+
+.foot-ar {
+  display: block;
+  font-size: clamp(18px, 4.6vw, 44px);
+  color: var(--red);
+  margin-bottom: 1.2vw;
+}
+
+.foot-word {
+  display: block;
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 16.37vw;
+  letter-spacing: -0.045em;
+  color: var(--text-primary);
+  white-space: nowrap;
+  /* LIFTED (ruling): the mark used to translate down 0.1em so the page edge
+     cropped its feet — which cut the red 3 at every width. It now sits
+     whole; line-height 0.9 plus the padding keeps every glyph's bottom
+     inside the footer's overflow:hidden at any viewport width. */
+  line-height: 0.9;
+  padding-bottom: 0.04em;
+}
+.foot-word b { color: var(--red); font-weight: 800; }
+
+/* -------------------------------------------------------------------- */
+/* Reduced motion — keep every composition, drop every journey            */
+/* -------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  /* The device holds still on its final frame: no float, no sheen, no dots.
+     The screen renders its selected state statically (the component side). */
+  .dev-float,
+  .dev-sheen,
+  .ps-dots i { animation: none; }
+  /* The sequence rests on its final frame (HeroLive mounts settled under
+     reduced motion and never mounts the clip): the device alone, scaled,
+     results on the glass. No deal, no flip, no orbit, no return. */
+  .seq-move,
+  .seq-glow { transition: none; }
+  .hero-live-stage .dev-wrap { transition: none; }
+  /* The scroll cue has no journey to prompt and the floating button appears
+     and disappears without travelling. */
+  .hero-scrollcue i { animation: none; }
+  .float-cta { transition: opacity 180ms linear; }
+
+  /* The hero's in-phone story rests on its final frame: the "On your way"
+     screen, route drawn, pin lit, tagline in place. No ripples, no draw. */
+  .ps-detail,
+  .ps-route,
+  .psr-chip,
+  .hero-tagline { transition: none; }
+  .psr-route { animation: none; stroke-dashoffset: 0; }
+  .psr-dest { animation: none; opacity: 1; }
+  .psr-pulse { animation: none; }
+  .hero-tagline { opacity: 1; transform: none; }
+
+  /* Vignettes hold their complete 0% frame; the accordion cuts instantly. */
+  .vig-stage *,
+  .vig-stage *::after { animation: none; }
+  .faq-fold,
+  .faq-btn svg { transition: none; }
+  .cta-check,
+  .cta-done .cta-line,
+  .cta-done .cta-note { animation: none; }
+  .cta-underline { transition: none; }
+  .foot-mark { transform: none; }
+
+  /* The wall holds still: composition kept, drift and tilt dropped. The
+     collapse still TELLS its story stage by stage — cards leave and the three
+     arrive — but as instant cuts, not journeys. */
+  .wall-track { animation: none; }
+  .wall-plane { transform: none; }
+  .wcard { transition: opacity 180ms linear; }
+  .fcard,
+  .wall-line-final,
+  .wall-sub-final { transition: opacity 180ms linear; }
+  .wall-wavechip { animation: none; }
+  .wall-scanline { display: none; }
+  /* The 3D stage never mounts under reduced motion (the shell checks), so
+     the poster simply stays — no rule needed, but the fade must not linger. */
+  .hero3d-poster { transition: none; }
+}

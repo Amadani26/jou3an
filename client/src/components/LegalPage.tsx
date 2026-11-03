@@ -58,7 +58,7 @@ export default function LegalPage({
 
         <hr className="mt-16 border-border-soft" />
         <p className="mt-6 text-xs text-text-muted">
-          Jou3an FZ-LLC · Dubai, United Arab Emirates
+          Jou3an · Dubai, United Arab Emirates
         </p>
       </article>
     </div>

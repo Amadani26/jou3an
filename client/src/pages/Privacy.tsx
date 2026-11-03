@@ -19,8 +19,8 @@ export default function Privacy() {
       <p>
         This policy explains what Jou3an collects, why, and what you can do
         about it. &ldquo;Jou3an&rdquo;, &ldquo;we&rdquo; and &ldquo;us&rdquo;
-        mean Jou3an FZ-LLC, Dubai, United Arab Emirates. It covers the Jou3an
-        mobile app and the website at jou3an.me.
+        mean the Jou3an project, Dubai, United Arab Emirates. It covers the
+        Jou3an mobile app and the website at jou3an.me.
       </p>
       <p>
         We have tried to write this in plain English and to describe what the
@@ -53,8 +53,28 @@ export default function Privacy() {
       <h3>If you join the waitlist on the website</h3>
       <p>
         Only your <strong>email address</strong>, the date you joined, and which
-        page it came from. Nothing else — the website has no account system, no
-        analytics and no advertising tags.
+        page it came from. Nothing else — the website has no account system and
+        no advertising tags.
+      </p>
+      <h3>If you visit the website</h3>
+      <p>
+        The live site uses <strong>Vercel Web Analytics</strong> to count
+        visits: which pages are viewed, roughly where from (country level) and
+        on what kind of device. It is <strong>cookieless</strong> — it sets no
+        cookies, stores nothing on your device, and does not identify or
+        follow you across other sites. When someone joins the waitlist we also
+        count that it happened — <strong>the count carries no email address
+        and nothing about the person</strong>. None of this runs on preview
+        versions of the site.
+      </p>
+      <p>
+        The website also shows <strong>live restaurant results and, in the
+        demo, live restaurant photos</strong>. Visiting those sections
+        triggers requests to <strong>Google</strong> for that restaurant data
+        and those photos — but the requests are made <em>by our server</em>:
+        your browser talks only to us, and{' '}
+        <strong>no personal data of yours is sent to Google</strong>. These
+        demo requests create no account, no session and no record about you.
       </p>
 
       <h3>Location</h3>
@@ -171,6 +191,11 @@ export default function Privacy() {
           <strong>No user data is sent to it</strong> — only facts about the
           restaurant that we already hold.
         </li>
+        <li>
+          <strong>Vercel</strong> hosts the website and provides its
+          cookieless visit counts, described under &ldquo;If you visit the
+          website&rdquo; above.
+        </li>
       </ul>
 
       <h2>What we do not do</h2>
@@ -181,8 +206,10 @@ export default function Privacy() {
             not in any form.
           </li>
           <li>
-            <strong>We do not show ads</strong> and we carry no advertising or
-            analytics trackers.
+            <strong>We do not show ads</strong> and we carry no advertising
+            trackers. The only analytics anywhere is the cookieless visit
+            counting described above — no cookies, no profiles, no following
+            you around the web.
           </li>
           <li>
             <strong>We do not take money to change your results.</strong> No

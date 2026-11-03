@@ -24,7 +24,18 @@ export function useReveal<T extends HTMLElement = HTMLDivElement>() {
 
   useEffect(() => {
     const el = ref.current
-    if (!el || shown) return
+    if (!el) return
+
+    // Already on screen when we mounted? Show it now and never hide it.
+    // Without this, anything above the fold paints at opacity 0 and waits a
+    // frame for the observer to tell it what it could already have known —
+    // which reads as a flicker on exactly the content the visitor is looking at.
+    if (!shown && el.getBoundingClientRect().top < window.innerHeight) {
+      setShown(true)
+      return
+    }
+
+    if (shown) return
 
     const io = new IntersectionObserver(
       (entries) => {
@@ -45,44 +56,3 @@ export function useReveal<T extends HTMLElement = HTMLDivElement>() {
   return { ref, shown }
 }
 
-/**
- * Light parallax: translates the element by `scrollY * speed` pixels.
- *
- * rAF-throttled, passive listener, transform-only (no layout, nothing repainted
- * off the compositor). Disabled outright under reduced motion. A negative speed
- * moves the element against the scroll.
- */
-export function useParallax<T extends HTMLElement = HTMLDivElement>(
-  speed: number,
-) {
-  const ref = useRef<T | null>(null)
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el || prefersReducedMotion()) return
-
-    let frame = 0
-
-    const apply = () => {
-      frame = 0
-      el.style.transform = `translate3d(0, ${window.scrollY * speed}px, 0)`
-    }
-
-    const onScroll = () => {
-      // Coalesce bursts of scroll events into one style write per frame.
-      if (frame) return
-      frame = window.requestAnimationFrame(apply)
-    }
-
-    apply()
-    window.addEventListener('scroll', onScroll, { passive: true })
-
-    return () => {
-      window.removeEventListener('scroll', onScroll)
-      if (frame) window.cancelAnimationFrame(frame)
-      el.style.transform = ''
-    }
-  }, [speed])
-
-  return ref
-}

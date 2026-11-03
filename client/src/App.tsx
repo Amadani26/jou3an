@@ -1,12 +1,22 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Routes, Route } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 import Nav from './components/Nav'
 import Landing from './pages/Landing'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 
-export default function App() {
+/* The artifact review build serves from a subpath with no rewrite rules, so
+   real pathnames can never match — hashes can. Production stays on paths. */
+const Router = import.meta.env.VITE_ARTIFACT === '1' ? HashRouter : BrowserRouter
+
+/**
+ * The app without a router — so the prerender script can wrap it in a
+ * StaticRouter while the browser build keeps its own. See
+ * scripts/prerender.mjs for why this split exists.
+ */
+export function Shell() {
   return (
-    <BrowserRouter>
+    <>
       <Nav />
       <main className="pt-[calc(56px_+_env(safe-area-inset-top))] md:pt-[62px]">
         <Routes>
@@ -18,6 +28,20 @@ export default function App() {
           <Route path="/terms" element={<Terms />} />
         </Routes>
       </main>
-    </BrowserRouter>
+    </>
+  )
+}
+
+export default function App() {
+  return (
+    <Router>
+      <Shell />
+      {/* Vercel Web Analytics — cookieless, aggregate page counts, no
+          personal data. PRODUCTION ONLY by design: preview deployments are
+          review traffic, not visitors, so the script never loads there
+          (vite.config.ts forwards VERCEL_ENV as VITE_VERCEL_ENV). The
+          privacy policy describes exactly this — keep the two in step. */}
+      {import.meta.env.VITE_VERCEL_ENV === 'production' ? <Analytics /> : null}
+    </Router>
   )
 }

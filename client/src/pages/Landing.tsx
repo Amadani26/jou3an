@@ -1,343 +1,75 @@
-import { Link } from 'react-router-dom'
-import AppPreview from '../components/AppPreview'
+import { Suspense, lazy } from 'react'
+import CTABand from '../components/CTABand'
 import FAQ from '../components/FAQ'
-import Logo from '../components/Logo'
-import PhoneMockup from '../components/PhoneMockup'
-import Reveal from '../components/Reveal'
-import WaitlistCTA from '../components/WaitlistCTA'
-import WaitlistForm from '../components/WaitlistForm'
-import WhatIsJou3an from '../components/WhatIsJou3an'
-import { PRIVACY_EMAIL } from '../lib/legal'
-import { useParallax } from '../lib/reveal'
+import Features from '../components/Features'
+import FloatingCTA from '../components/FloatingCTA'
+import Footer from '../components/Footer'
+import HeroLive from '../components/hero/HeroLive'
 
-/** The app's real flow, in three beats. */
-const STEPS = [
-  {
-    n: '01',
-    title: 'Tell it your vibe',
-    body: 'Pick your area and the cuisines you want — or just say what you’re craving.',
-  },
-  {
-    n: '02',
-    title: 'Swipe or let Jou3an decide',
-    body: 'Swipe through one card at a time, or skip straight to an instant decision.',
-  },
-  {
-    n: '03',
-    title: 'Get your 3',
-    body: 'Exactly three options with directions, call or reserve, or order. Decided in under 10 seconds.',
-  },
-]
-
-/**
- * Vertical timeline step — a numbered rail with a connecting line, matching
- * the mobile Home screen's StepRow. No boxes: the three read as one flow.
+/*
+ * The page is the product's story, in order: the device deciding (hero) →
+ * too many options (the wall) → the engine's filters resolving to 3 → the
+ * payoff (decide → act) → try it yourself (the demo) → what it does
+ * (features) → questions → join → the name, full width.
+ *
+ * Everything above the fold is motion-library-free and rides in the entry
+ * chunk; the scroll-choreographed sections are lazy, with fallbacks that
+ * reserve their exact height so a late chunk cannot shift the page (CLS 0).
+ *
+ * The old How It Works timeline and The 3 Rule sections are gone AS SECTIONS
+ * — their claims (the brief, "never more than 3") live on as Features lines,
+ * because the new story already ACTS OUT what those sections used to state.
  */
-function StepRow({
-  n,
-  title,
-  body,
-  last,
-}: {
-  n: string
-  title: string
-  body: string
-  last?: boolean
-}) {
-  return (
-    <div className="flex gap-5">
-      {/* Rail */}
-      <div className="flex flex-col items-center" style={{ width: 46 }}>
-        <span
-          className="font-display font-extrabold leading-none"
-          style={{ fontSize: 28, color: 'var(--red)' }}
-        >
-          {n}
-        </span>
-        {!last && (
-          <span
-            className="flex-1 w-px mt-3"
-            style={{ background: 'var(--border)', minHeight: 34 }}
-          />
-        )}
-      </div>
-
-      {/* Copy */}
-      <div className={last ? 'pb-0' : 'pb-9'}>
-        <h3 className="font-display font-bold text-text-primary text-lg md:text-xl">
-          {title}
-        </h3>
-        <p className="mt-1.5 text-text-secondary text-[15px] leading-relaxed max-w-[460px]">
-          {body}
-        </p>
-      </div>
-    </div>
-  )
-}
+const ProblemWall = lazy(() => import('../components/problem/ProblemWall'))
+const DemoSection = lazy(() => import('../components/DemoSection'))
 
 export default function Landing() {
-  // Light hero parallax: the two orbs drift at different rates as the page
-  // scrolls away, and the copy lags just slightly behind it. Transform-only,
-  // rAF-throttled, and switched off entirely under prefers-reduced-motion.
-  const redOrb = useParallax<HTMLSpanElement>(0.22)
-  const goldOrb = useParallax<HTMLSpanElement>(-0.14)
-  const heroCopy = useParallax<HTMLDivElement>(0.06)
-
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative overflow-x-clip">
       {/* ============================================================ */}
-      {/* SECTION 1 — HERO                                             */}
+      {/* SECTION 1 — HERO (CSS device, locked)                        */}
       {/* ============================================================ */}
-      <section className="relative min-h-[100svh] flex flex-col items-center justify-center text-center px-5 md:px-8">
-        {/* Gradient orbs */}
-        <span
-          ref={redOrb}
-          className="pointer-events-none absolute top-0 -left-16 w-80 h-80 rounded-full"
-          style={{
-            background:
-              'radial-gradient(circle, rgba(254,0,0,0.28), transparent 70%)',
-            filter: 'blur(70px)',
-          }}
-        />
-        <span
-          ref={goldOrb}
-          className="pointer-events-none absolute bottom-0 -right-16 w-96 h-96 rounded-full"
-          style={{
-            background:
-              'radial-gradient(circle, rgba(255,181,71,0.20), transparent 70%)',
-            filter: 'blur(80px)',
-          }}
-        />
-
-        <div ref={heroCopy} className="relative flex flex-col items-center w-full">
-          <p
-            className="text-red uppercase font-bold fade-up"
-            style={{
-              // 11 -> 13 with the longer "First" wording, then the whole
-              // clamp scaled +15% (11/3.1/13 x 1.15). The vw term leads so the
-              // line shrinks on phones instead of wrapping: a fixed cap plus
-              // 0.14em tracking would break this 34-char line in two.
-              fontSize: 'clamp(12.65px, 3.57vw, 14.95px)',
-              letterSpacing: '0.14em',
-              // REQUIRED, not insurance. This <p> is a flex item under
-              // `items-center`, so it sizes to max-content and would OVERFLOW
-              // — clipped by the hero's overflow-hidden — instead of wrapping.
-              // Measured 346px at the 14.95px cap: one line down to ~340pt,
-              // and at 320pt it needs 293px against 280px, so it WRAPS there.
-              // Without this it would clip instead, which is the bug the h1
-              // above already hit once.
-              maxWidth: '100%',
-              marginBottom: 20,
-            }}
-          >
-            Dubai&apos;s First Food Decision Engine
-          </p>
-
-          <h1
-            className="font-display font-extrabold uppercase text-text-primary fade-up"
-            style={{
-              // The vw term has to LEAD on phones: with a 3.2rem floor the
-              // minimum won on every handset (9vw is only ~36px at 402pt), so
-              // "HUNGRY?" rendered wider than the padded viewport and clipped
-              // at both edges. 10.5vw keeps it inside with headroom down to
-              // 320pt, and the 6.5rem cap keeps desktop exactly as it was.
-              fontSize: 'clamp(2rem, 10.5vw, 6.5rem)',
-              lineHeight: 0.95,
-              animationDelay: '0.05s',
-            }}
-          >
-            Hungry?
-            <br />
-            We{' '}
-            <em className="font-serif italic normal-case font-normal text-red">
-              decide
-            </em>
-          </h1>
-
-          {/* Section lede — white + bold, the weight below the headline. */}
-          <p
-            className="mt-6 max-w-[480px] text-white font-bold fade-up"
-            style={{ animationDelay: '0.15s' }}
-          >
-            Tell us what you&apos;re craving. We&apos;ll give you exactly 3
-            options. No menus. No scrolling. Just a decision.
-          </p>
-
-          <WaitlistCTA
-            className="mt-9 w-full max-w-[340px] fade-up"
-            label="Join the Waitlist"
-          />
-
-          <p
-            className="mt-5 text-text-muted text-sm fade-up"
-            style={{ animationDelay: '0.28s' }}
-          >
-            Launching in Dubai · Invites in batches
-          </p>
-        </div>
-
-        {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
-          <span className="material-symbols-outlined text-text-muted bounce-dot text-[28px]">
-            keyboard_arrow_down
-          </span>
-        </div>
-      </section>
+      <HeroLive />
 
       {/* ============================================================ */}
-      {/* SECTION 2 — HOW IT WORKS (vertical timeline)                 */}
+      {/* SECTION 2 — PROBLEM (the wall that collapses, locked)        */}
       {/* ============================================================ */}
-      <section className="relative max-w-[860px] mx-auto px-5 md:px-8 py-24 md:py-32">
-        <Reveal>
-          <p className="text-xs uppercase tracking-[0.2em] text-red mb-4">
-            How It Works
-          </p>
-          <h2
-            className="font-display font-extrabold text-text-primary"
-            style={{ fontSize: 'clamp(2rem, 5vw, 3.25rem)', lineHeight: 1.02 }}
-          >
-            From hungry to decided in{' '}
-            <em className="font-serif italic font-normal text-red">
-              10 seconds
-            </em>
-          </h2>
-        </Reveal>
-
-        <div className="mt-12">
-          {STEPS.map((s, i) => (
-            // Each step trails the one above it, so the rail draws downward.
-            <Reveal key={s.n} delay={i * 110}>
-              <StepRow
-                n={s.n}
-                title={s.title}
-                body={s.body}
-                last={i === STEPS.length - 1}
-              />
-            </Reveal>
-          ))}
-        </div>
-      </section>
+      {/* 100svh matches .wall-section exactly — the wall went time-based and
+          one-viewport (no pin), so the old 320svh scroll-runway reservation
+          was a ~220svh collapse when the lazy chunk resolved. */}
+      <Suspense fallback={<div style={{ height: '100svh' }} aria-hidden="true" />}>
+        <ProblemWall />
+      </Suspense>
 
       {/* ============================================================ */}
-      {/* SECTION 3 — THE 3 RULE                                       */}
+      {/* SECTION 4 — THE LIVE DEMO (chips -> swipeable deck)          */}
       {/* ============================================================ */}
-      <section className="relative px-5 md:px-8 py-24 md:py-32 text-center">
-        <Reveal className="max-w-[760px] mx-auto flex flex-col items-center">
-          <h2
-            className="font-display font-extrabold text-text-primary"
-            style={{ fontSize: 'clamp(2.2rem, 6vw, 4rem)', lineHeight: 1.02 }}
-          >
-            Never more than{' '}
-            <em className="font-serif italic font-normal text-red">3</em>{' '}
-            options.
-          </h2>
-
-          <span
-            className="block mt-8 mb-8 h-[3px] w-20 rounded-full"
-            style={{ background: 'var(--red)' }}
-          />
-
-          <p className="max-w-[560px] text-white font-bold text-lg leading-relaxed">
-            Most food apps give you 500 choices and call it helpful. We give you
-            3. The right 3. Because the best decision engine isn&apos;t one that
-            shows you everything — it&apos;s one that knows what to cut.
-          </p>
-        </Reveal>
-      </section>
+      <Suspense fallback={<div style={{ minHeight: '80svh' }} aria-hidden="true" />}>
+        <DemoSection />
+      </Suspense>
 
       {/* ============================================================ */}
-      {/* SECTION 4 — INTERACTIVE APP PREVIEW (+ its own waitlist CTA) */}
+      {/* SECTION 5 — FEATURES (mask-reveal lines)                     */}
       {/* ============================================================ */}
-      <AppPreview />
+      <Features />
 
       {/* ============================================================ */}
-      {/* SECTION 5 — WAITLIST (+ phone mockup alongside the form)     */}
-      {/* ============================================================ */}
-      <section
-        id="waitlist"
-        className="relative px-5 md:px-8 py-24 md:py-32 scroll-mt-20"
-      >
-        {/* Form left, device right on desktop; device stacks below on mobile. */}
-        <div className="max-w-[1080px] mx-auto grid lg:grid-cols-[minmax(0,1fr)_auto] gap-14 lg:gap-16 items-center">
-          <Reveal className="flex flex-col items-center lg:items-start text-center lg:text-left">
-            <h2
-              className="font-display font-extrabold text-text-primary"
-              style={{
-                fontSize: 'clamp(2.2rem, 6vw, 3.75rem)',
-                lineHeight: 1.02,
-              }}
-            >
-              Be first in Dubai.
-            </h2>
-            <p className="mt-5 max-w-[460px] text-white font-bold text-lg leading-relaxed">
-              We&apos;re launching soon. Drop your email and we&apos;ll let you
-              know the moment Jou3an is live.
-            </p>
-
-            <WaitlistForm />
-
-            <p className="mt-4 text-text-muted text-sm">
-              No spam. Just one email when we launch.
-            </p>
-          </Reveal>
-
-          <Reveal delay={120} className="flex justify-center">
-            <PhoneMockup
-              src="/brand/app-screens/home-daily-top-3.webp"
-              alt="The Jou3an app showing today's Daily Top 3 picks in Dubai"
-            />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ============================================================ */}
-      {/* SECTION 6 — WHAT IS JOU3AN (+ feature grid)                  */}
-      {/* ============================================================ */}
-      <WhatIsJou3an />
-
-      {/* ============================================================ */}
-      {/* SECTION 7 — FAQ                                              */}
+      {/* SECTION 6 — FAQ (answers always open)                        */}
       {/* ============================================================ */}
       <FAQ />
 
       {/* ============================================================ */}
-      {/* SECTION 8 — FOOTER                                           */}
+      {/* SECTION 7 — CTA BAND (the band is the form)                  */}
       {/* ============================================================ */}
-      <footer className="relative px-5 md:px-8 pt-16 pb-14 border-t border-border-soft text-center">
-        <div className="max-w-[720px] mx-auto flex flex-col items-center gap-3">
-          {/* Footer sits on pure black — safe for the white wordmark */}
-          <Logo height={34} />
-          <div className="text-red text-sm" dir="rtl">
-            جوعان
-          </div>
-          <p className="text-text-secondary text-sm">
-            Dubai&apos;s food decision engine
-          </p>
+      <CTABand />
 
-          <div className="flex items-center gap-4 mt-2 text-sm text-text-secondary">
-            {/* Router <Link>, not <a href>: a full page load here would throw
-                away the service worker's warm start for no reason. */}
-            <Link to="/privacy" className="transition-colors hover:text-text-primary">
-              Privacy
-            </Link>
-            <span className="text-text-muted">·</span>
-            <Link to="/terms" className="transition-colors hover:text-text-primary">
-              Terms
-            </Link>
-            <span className="text-text-muted">·</span>
-            <a
-              href={`mailto:${PRIVACY_EMAIL}`}
-              className="transition-colors hover:text-text-primary"
-            >
-              Contact
-            </a>
-          </div>
+      {/* ============================================================ */}
+      {/* SECTION 8 — FOOTER (the name, full width)                    */}
+      {/* ============================================================ */}
+      <Footer />
 
-          <p className="mt-4 text-text-muted text-xs">
-            © 2026 Jou3an FZ-LLC · Dubai, UAE
-          </p>
-        </div>
-      </footer>
+      {/* Phone widths: the fixed join button that follows the journey. */}
+      <FloatingCTA />
     </div>
   )
 }

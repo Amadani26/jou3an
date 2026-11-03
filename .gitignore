@@ -47,3 +47,13 @@ mobile/web-build/
 # Candidate/approved files are one curation session's scratch, and rejected.json
 # is a local memory of what a human has already declined — none of it is code.
 server/imports/
+
+# taste-skill working output (screenshots, inspector reports)
+.taste-skill/
+
+# scratch assets for review artifacts
+client/.artifact-assets/
+
+# artifact review builds (published to claude.ai, never deployed)
+client/dist-artifact/
+client/dist-ssr/
