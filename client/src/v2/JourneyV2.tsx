@@ -1,26 +1,29 @@
 /**
- * WEB V2 — "The journey of 3", chapters 1→5 (phase 2 checkpoint).
- * Storyboard + tech plan: docs/web-v2-storyboard.md (repo root).
+ * WEB V2 — "The journey of 3", the full first draft (chapters 1→7).
+ * Storyboard + tech plan + polish backlog: docs/web-v2-storyboard.md.
  *
- * Architecture (unchanged from the approved spike):
- *   - ONE persistent R3F canvas FIXED behind an HTML layer; every word and
- *     control is HTML. Readable content never lives in the canvas — ch4's
- *     orbiting cards settle onto, and hand off to, their real HTML twins.
- *   - Lenis + GSAP ScrollTrigger scrub → ONE progress number in a ref.
- *     State the CSS needs (handoff, chapter copy, the ch5 swipe) is
- *     written as data-attributes straight onto the section — no React
- *     state on the scroll path.
- *   - 3D lazy-mounts on first scroll intent; static fallback (no canvas,
- *     no Lenis) for reduced-motion / no-WebGL with every chapter readable.
+ * Page anatomy:
+ *   [scrubbed runway: ch1 ignition → ch2 tunnel → ch3 collapse+burst →
+ *    ch4 split/settle/handoff → ch5 swipe + taste shift]
+ *   then NORMAL document flow, deliberately OUTSIDE the main scrub (so the
+ *   future chapter-snapping system only ever regulates the runway):
+ *   ch6 the EXISTING live demo (the 3 parks as a corner element) →
+ *   FAQ → ch7 the 3 glides into the HTML wordmark above the existing
+ *   CTA band → footer. The park and the glide are driven by live DOM
+ *   rects measured in the scene — no extra ScrollTriggers, immune to the
+ *   demo changing its own height mid-session.
  *
- * REAL DATA ONLY: the showcase picks/wall via useShowcase() — real names,
- * real Google ratings with attribution or none, real prices or omitted,
- * the engine's own reason lines. VenueNote wherever real venues appear.
+ * Carried over from the live site: DemoSection (area chips → 3 strictly
+ * in-area picks, photos with attribution, VenueNote), FAQ, CTABand
+ * (waitlist — Supabase direct, MOCKED on Vercel previews, the
+ * production-only waitlist_join analytics event), Footer (legal links,
+ * wordmark monument), FloatingCTA (phone-only, hides over #waitlist).
+ * Analytics/OG are app-/document-level and apply here unchanged.
  *
- * ?fps=1 overlays a frame-time meter.
+ * REAL DATA ONLY throughout; static fallback renders every chapter's
+ * content readable with zero WebGL. ?fps=1 overlays a frame meter.
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import Lenis from 'lenis'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -28,13 +31,18 @@ import { useShowcase } from '../lib/useShowcase'
 import { metaLine, type LivePick } from '../lib/live'
 import { prefersReducedMotion } from '../lib/reveal'
 import VenueNote from '../components/VenueNote'
+import FAQ from '../components/FAQ'
+import CTABand from '../components/CTABand'
+import Footer from '../components/Footer'
+import FloatingCTA from '../components/FloatingCTA'
 import {
   CHAPTER_VH, P3, SETTLE_END, HANDOFF_END, CH5_COPY_AT, SWIPE_AT,
 } from './timeline'
-import type { CardRectTargets } from './JourneyCanvas'
+import type { CardRectTargets, PostJourneyEls } from './JourneyCanvas'
 import '../v2/journey.css'
 
 const JourneyCanvas = lazy(() => import('./JourneyCanvas'))
+const DemoSection = lazy(() => import('../components/DemoSection'))
 
 const HANDOFF_FLIP = (SETTLE_END + HANDOFF_END) / 2
 
@@ -71,9 +79,7 @@ function FpsMeter() {
   return <div className="j-fps">{stats}</div>
 }
 
-/** One REAL answer as HTML — the thing the 3D card hands off to. Name,
- *  cuisine · area · price (metaLine omits what is null), the real Google
- *  rating with attribution or nothing, and the engine's reason line. */
+/** One REAL answer as HTML — the thing the 3D card hands off to. */
 function PickCard({
   pick,
   rank,
@@ -128,8 +134,32 @@ function Chapter({
   )
 }
 
-/** Reduced-motion / no-WebGL / no-JS-adjacent fallback: every chapter's
- *  content as plain readable sections. */
+/** ch7's join block: the wordmark the 3 glides into, above the existing
+ *  waitlist band. The "3" span starts coal-dark; the scene lights it the
+ *  moment the lacquer 3 lands (data-lit), then the canvas bows out. */
+function JoinSection({
+  wm3Ref,
+  lit,
+}: {
+  wm3Ref?: (el: HTMLSpanElement | null) => void
+  lit?: boolean
+}) {
+  return (
+    <section className="j-join">
+      <p className="j-kicker">Chapter 7</p>
+      <p className="j-wordmark" aria-label="Jou3an">
+        Jou
+        <span ref={wm3Ref} className="j-wm3" data-lit={lit ? '1' : '0'}>
+          3
+        </span>
+        an
+      </p>
+    </section>
+  )
+}
+
+/** Reduced-motion / no-WebGL fallback: every chapter readable, the demo
+ *  and waitlist fully functional. */
 function StaticJourney({ picks, names }: { picks: LivePick[]; names: string[] }) {
   return (
     <div className="j-static">
@@ -179,9 +209,8 @@ export default function JourneyV2() {
   const picks = useMemo(() => data.picks.slice(0, 3), [data])
   const wall = data.wall.length ? data.wall : data.picks
   /** ch5's replacement card: a real wall restaurant that is not already a
-   *  pick. Excluded by id AND name — picks and wall rows are built
-   *  separately server-side, so the same venue must never slip through on
-   *  an id mismatch and "replace" itself. */
+   *  pick (excluded by id AND name — the live payload can carry the same
+   *  venue in both arrays under different ids). */
   const replacement = useMemo(
     () => wall.find((w) => !picks.some((p) => p.id === w.id || p.name === w.name)) ?? null,
     [wall, picks],
@@ -194,6 +223,7 @@ export default function JourneyV2() {
   const answersRef = useRef<HTMLElement>(null)
   const swiped = useRef(false)
   const rects = useRef<CardRectTargets>({ els: [null, null, null] }).current
+  const post = useRef<PostJourneyEls>({ demoEl: null, wm3El: null, canvasWrapEl: null }).current
 
   const showFps = typeof window !== 'undefined' && window.location.search.includes('fps=1')
   const isPhone = typeof window !== 'undefined' && window.innerWidth < 768
@@ -220,13 +250,10 @@ export default function JourneyV2() {
       onUpdate: (self) => {
         const p = self.progress
         progress.current = p
-        // CSS-side chapter state as data-attributes — no React re-renders.
         const sec = answersRef.current
         if (sec) {
           sec.dataset.handoff = p >= HANDOFF_FLIP ? '1' : '0'
           sec.dataset.copy = p >= CH5_COPY_AT ? '5' : '4'
-          // the swipe is one-shot-feeling: fired crossing SWIPE_AT, only
-          // re-armed by leaving the whole answers section backwards.
           if (p >= SWIPE_AT) swiped.current = true
           else if (p < P3) swiped.current = false
           sec.dataset.swipe = swiped.current ? '1' : '0'
@@ -234,10 +261,6 @@ export default function JourneyV2() {
       },
     })
 
-    // The scene mounts when the journey starts — first scroll/touch intent
-    // (ch1's resting state is darkness; ignition begins ~25vh in, so the
-    // three parse/compile happens while the visitor reads). 6s timer for
-    // the visitor who waits.
     const arm = () => setMount3d(true)
     const opts = { once: true, passive: true } as const
     window.addEventListener('wheel', arm, opts)
@@ -258,21 +281,58 @@ export default function JourneyV2() {
     }
   }, [mode])
 
-  if (mode === 'static') return <StaticJourney picks={picks} names={wall.map((p) => p.name)} />
+  // Everything after the runway: the live demo, FAQ, the join (wordmark +
+  // waitlist band) and the footer — identical in full and static modes,
+  // only the wordmark's 3 differs (scene-lit vs always lit).
+  const tail = (
+    <div className="j-tail">
+      <section
+        className="j-demo"
+        ref={(el) => { post.demoEl = el }}
+      >
+        <Suspense fallback={<div style={{ minHeight: '80svh' }} aria-hidden="true" />}>
+          <DemoSection />
+        </Suspense>
+      </section>
+      <FAQ />
+      <JoinSection
+        wm3Ref={mode === 'full' ? (el) => { post.wm3El = el } : undefined}
+        lit={mode !== 'full'}
+      />
+      <CTABand />
+      <Footer />
+      <FloatingCTA />
+    </div>
+  )
+
+  if (mode === 'static') {
+    return (
+      <div className="j-root">
+        <StaticJourney picks={picks} names={wall.map((p) => p.name)} />
+        {tail}
+      </div>
+    )
+  }
 
   return (
     <div className="j-root">
       {/* The persistent scene, behind everything. */}
-      <div className="j-canvas" aria-hidden="true">
+      <div className="j-canvas" aria-hidden="true" ref={(el) => { post.canvasWrapEl = el }}>
         {mode === 'full' && mount3d ? (
           <Suspense fallback={null}>
-            <JourneyCanvas picks={picks} wall={wall} progress={progress} rects={rects} isPhone={isPhone} />
+            <JourneyCanvas
+              picks={picks}
+              wall={wall}
+              progress={progress}
+              rects={rects}
+              post={post}
+              isPhone={isPhone}
+            />
           </Suspense>
         ) : null}
       </div>
 
-      {/* The HTML story. Section heights come from timeline.ts — the scene
-          reads the same boundaries. */}
+      {/* The scrubbed story. Section heights come from timeline.ts. */}
       <div ref={runwayRef} className="j-runway">
         <Chapter heightVh={CHAPTER_VH.ch1} kicker="Chapter 1" title={<>Hungry?</>} sub="A food decision engine for Dubai." />
         <Chapter heightVh={CHAPTER_VH.ch2} kicker="Chapter 2" title={<>Too many options.</>} sub="All of them open. All of them plausible.">
@@ -287,10 +347,6 @@ export default function JourneyV2() {
           sub="Exactly 3 answers."
         />
 
-        {/* ch4 + ch5 share ONE sticky frame: the answer cards must survive
-            the chapter change. The headline block crossfades via
-            data-copy; the cards appear via data-handoff; the middle card
-            swipes away via data-swipe. */}
         <section
           ref={answersRef}
           className="j-chapter j-answers"
@@ -336,16 +392,7 @@ export default function JourneyV2() {
         </section>
       </div>
 
-      <section className="j-end">
-        <p className="j-kicker">End of the phase-2 checkpoint</p>
-        <p className="j-sub">
-          Chapters 6–7 — the live demo and the waitlist — come after this review. The full plan
-          lives in <code>docs/web-v2-storyboard.md</code>.
-        </p>
-        <Link className="j-back" to="/">
-          ← Back to the live site
-        </Link>
-      </section>
+      {tail}
 
       {showFps ? <FpsMeter /> : null}
     </div>

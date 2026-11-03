@@ -311,3 +311,51 @@
 /* static fallback grid */
 .jp-grid.is-static { margin-top: 20px; }
 .jp-grid.is-static .jp-card { opacity: 1; transform: none; }
+
+/* ---- ch6/ch7 + the content tail ---- */
+
+/* everything after the runway must paint ABOVE the fixed canvas (position
+   static would paint under it) while keeping the canvas visible through
+   transparent backgrounds */
+.j-tail {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.j-demo {
+  position: relative;
+  padding: 10svh 0 6svh;
+}
+
+/* ch7: the wordmark the 3 glides into */
+.j-join {
+  min-height: 92svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 10svh 24px 6svh;
+}
+
+.j-wordmark {
+  font-family: 'Syne Variable', Syne, sans-serif;
+  font-weight: 800;
+  font-size: clamp(3.4rem, 14vw, 10rem);
+  line-height: 1;
+  color: #f2ede8;
+  letter-spacing: -0.01em;
+  user-select: none;
+}
+
+/* the 3 starts coal-dark — a socket waiting for the lacquer 3 to land.
+   data-lit flips the moment the glide completes (written by the scene). */
+.j-wm3 {
+  color: #242424;
+  transition: color 0.45s ease, text-shadow 0.45s ease;
+}
+.j-wm3[data-lit='1'] {
+  color: #fe0000;
+  text-shadow: 0 0 42px rgba(254, 0, 0, 0.4);
+}

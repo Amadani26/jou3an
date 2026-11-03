@@ -60,6 +60,17 @@ export interface CardRectTargets {
   els: (HTMLElement | null)[]
 }
 
+/** Post-runway DOM hooks (ch6 park + ch7 wordmark glide). Filled by
+ *  JourneyV2; the scene reads their LIVE rects each frame (throttled), so
+ *  the demo changing its own height can never leave stale positions —
+ *  and no extra ScrollTriggers exist for the future snapping system to
+ *  fight with. */
+export interface PostJourneyEls {
+  demoEl: HTMLElement | null
+  wm3El: HTMLElement | null
+  canvasWrapEl: HTMLElement | null
+}
+
 /** Per-frame cross-component story state (written by Journey, read by the
  *  atmosphere planes). A plain mutable object — never React state. */
 interface Fx {
@@ -198,6 +209,7 @@ function Journey({
   wall,
   progress,
   rects,
+  post,
   isPhone,
   fx,
 }: {
@@ -205,6 +217,7 @@ function Journey({
   wall: LivePick[]
   progress: { current: number }
   rects: CardRectTargets
+  post: PostJourneyEls
   isPhone: boolean
   fx: Fx
 }) {
@@ -241,6 +254,15 @@ function Journey({
 
   // One-shot burst state + measured DOM targets (world units).
   const burstState = useRef({ armed: true, t0: -1 })
+  // ch6/ch7: park + wordmark-glide state, driven by live DOM rects.
+  const postState = useRef({
+    tick: 0,
+    park: 0,
+    glide: 0,
+    frozenRot: null as number | null,
+    hidden: false,
+    wm: null as { cx: number; cy: number; h: number } | null,
+  })
   const domTargets = useRef<{ x: number; y: number; w: number; h: number }[] | null>(null)
   const measureTick = useRef(0)
 
@@ -281,6 +303,42 @@ function Journey({
     camera.position.set(Math.sin(t * 0.3) * 0.08 * breathe, Math.cos(t * 0.23) * 0.06 * breathe, camZ)
     camera.lookAt(0, 0, camZ - 10)
 
+    // --- ch6/ch7: park through the demo+FAQ, glide into the wordmark ---
+    const pm = postState.current
+    if (p > 0.985 && (post.demoEl || post.wm3El)) {
+      if (pm.tick++ % 6 === 0) {
+        const vh = window.innerHeight
+        if (post.demoEl) {
+          const top = post.demoEl.getBoundingClientRect().top
+          pm.park = clamp01((vh - top) / (vh * 0.85))
+        }
+        if (post.wm3El) {
+          const r = post.wm3El.getBoundingClientRect()
+          pm.wm = { cx: r.left + r.width / 2, cy: r.top + r.height / 2, h: r.height }
+          pm.glide = clamp01((vh * 0.92 - r.top) / (vh * 0.5))
+        }
+      }
+    } else {
+      pm.park = 0
+      pm.glide = 0
+      pm.tick = 0
+    }
+    const parkE = easeInOut(pm.park)
+    const glideE = easeInOut(pm.glide)
+    // the wordmark's 3 lights the moment the lacquer lands; the canvas
+    // bows out just after (direct DOM writes, only on change)
+    if (post.wm3El) {
+      const lit = pm.glide > 0.93 ? '1' : '0'
+      if (post.wm3El.dataset.lit !== lit) post.wm3El.dataset.lit = lit
+    }
+    if (post.canvasWrapEl) {
+      const hide = pm.glide > 0.97
+      if (hide !== pm.hidden) {
+        pm.hidden = hide
+        post.canvasWrapEl.style.visibility = hide ? 'hidden' : 'visible'
+      }
+    }
+
     // --- the 3 ---
     const three = threeRef.current
     const mat = matRef.current
@@ -294,15 +352,51 @@ function Journey({
       three.rotation.y = t * 0.15 + p * 3.2
       three.rotation.x = Math.sin(t * 0.2) * 0.06
       updateLacquer(mat, { ignite, flight, burst, split: splitT, taste: tasteT })
-      const scale = (1 + burst * 0.18) * lerp(1, isPhone ? 0.42 : 0.5, splitT) * lerp(1, 1.22, tasteT)
+      let scale = (1 + burst * 0.18) * lerp(1, isPhone ? 0.42 : 0.5, splitT) * lerp(1, 1.22, tasteT)
+
+      // ch6: park top-right as a corner element while the demo runs
+      if (parkE > 0) {
+        const dist = 6.5
+        const visH = 2 * dist * Math.tan((50 * Math.PI) / 360)
+        const visW = visH * (window.innerWidth / window.innerHeight)
+        const cx = visW / 2 - (isPhone ? 0.5 : 0.95)
+        const cy = visH / 2 - (isPhone ? 0.62 : 0.8)
+        const cz = camZ - dist
+        three.position.set(
+          lerp(three.position.x, cx, parkE),
+          lerp(three.position.y, cy, parkE),
+          lerp(three.position.z, cz, parkE),
+        )
+        scale = lerp(scale, isPhone ? 0.26 : 0.34, parkE)
+      }
+      // ch7: glide onto the wordmark's "3", unwinding to face-on
+      if (glideE > 0 && pm.wm) {
+        const dist = 6.5
+        const wpp = worldPerPxAt(dist, 50, window.innerHeight)
+        const wx = (pm.wm.cx - window.innerWidth / 2) * wpp
+        const wy = -(pm.wm.cy - window.innerHeight / 2) * wpp
+        const cz = camZ - dist
+        three.position.set(
+          lerp(three.position.x, wx, glideE),
+          lerp(three.position.y, wy, glideE),
+          cz,
+        )
+        scale = lerp(scale, Math.max(0.05, (pm.wm.h * wpp) / 1.4), glideE)
+        if (pm.frozenRot == null) pm.frozenRot = three.rotation.y
+        const rotTarget = Math.round(pm.frozenRot / (Math.PI * 2)) * Math.PI * 2
+        three.rotation.y = lerp(pm.frozenRot, rotTarget, glideE)
+        three.rotation.x *= 1 - glideE
+      } else {
+        pm.frozenRot = null
+      }
       three.scale.setScalar(scale)
 
       if (glowRef.current) {
         glowRef.current.position.copy(three.position)
-        const g = (1.5 * lerp(0.1, 1, ignite) * lerp(1, 0.5, flight) + burst * 4.5) * lerp(1, 0.55, splitT) * lerp(1, 1.5, tasteT)
+        const g = (1.5 * lerp(0.1, 1, ignite) * lerp(1, 0.5, flight) + burst * 4.5) * lerp(1, 0.55, splitT) * lerp(1, 1.5, tasteT) * lerp(1, 0.4, parkE) * (1 - glideE)
         glowRef.current.scale.set(g, g, 1)
         const smat = glowRef.current.material as THREE.SpriteMaterial
-        smat.opacity = 0.26 * lerp(0.05, 1, ignite) * lerp(1, 0.55, flight) + burst * 0.4 + tasteT * 0.1
+        smat.opacity = (0.26 * lerp(0.05, 1, ignite) * lerp(1, 0.55, flight) + burst * 0.4 + tasteT * 0.1) * (1 - parkE * 0.55) * (1 - glideE)
       }
       if (lightRef.current) {
         lightRef.current.position.set(three.position.x, three.position.y + 0.6, zz + 2.2)
@@ -419,12 +513,14 @@ export default function JourneyCanvas({
   wall,
   progress,
   rects,
+  post,
   isPhone,
 }: {
   picks: LivePick[]
   wall: LivePick[]
   progress: { current: number }
   rects: CardRectTargets
+  post: PostJourneyEls
   isPhone: boolean
 }) {
   const fx = useRef<Fx>({ ignite: 0, burstEnv: 0, p: 0 }).current
@@ -435,7 +531,7 @@ export default function JourneyCanvas({
       gl={{ antialias: false, powerPreference: 'high-performance', alpha: false }}
       style={{ position: 'absolute', inset: 0 }}
     >
-      <Journey picks={picks} wall={wall} progress={progress} rects={rects} isPhone={isPhone} fx={fx} />
+      <Journey picks={picks} wall={wall} progress={progress} rects={rects} post={post} isPhone={isPhone} fx={fx} />
       <Studio isPhone={isPhone} />
       {/* Bloom's high threshold keeps it selective in this black scene; the
           phone drops grain and (via props below) runs a lighter bloom. */}

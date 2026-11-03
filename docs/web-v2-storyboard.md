@@ -1,7 +1,8 @@
 # WEB V2 — "The journey of 3" · Storyboard + tech plan
 
-**Status: PHASE 1 (storyboard + tech spike). Nothing beyond chapters 1–3 is built.**
-The spike lives at `/v2` on the `web-v2` branch; the live site (`/` on main) is untouched.
+**Status: FULL FIRST DRAFT — all 7 chapters built at `/v2` on `web-v2`** (2026-11-03;
+look = the approved red lacquer). The live site (`/` on main) is untouched. Next: the
+owner's draft review, then the "Polish backlog" at the bottom of this file.
 
 One continuous scroll-driven 3D journey. One persistent hero object — a glowing 3D **"3"**
 (the 3 in Jou3an; "exactly 3 answers") — and the camera moves around it chapter by chapter.
@@ -240,3 +241,36 @@ layer, `VenueNote` in ch2, static fallback for reduced-motion/no-WebGL, FPS mete
 **Spike shortcuts to revisit in Phase 2**: no off-screen frame-loop stop (only
 `document.hidden`); no weak-device auto-downgrade; headline/3 overlap composition is
 unrefined; the burst is scrubbed rather than fire-once; `/v2` is not prerendered.
+
+---
+
+## Polish backlog (after first draft)
+
+Owner-reviewed on iPhone after the chapters 1–5 checkpoint (2026-11-03).
+**To be done AFTER all 7 chapters exist** — none of these block the first
+full draft, and several (1, 5) want the whole page in place first.
+
+1. **Scroll regulation.** Fast swipes can rip through the story. Plan
+   CHAPTER SNAPPING — a fast swipe advances to the next chapter boundary,
+   and key beats (the collapse, the split, the handoff) play at their own
+   pace rather than at flick speed — plus tuned Lenis smoothing
+   (`lerp`/`duration` per input type). Must feel controlled at ANY swipe
+   speed on iPhone. Chapters 6–7 were deliberately built OUTSIDE the main
+   scrub (rect-driven, no ScrollTrigger of their own) so a snapping system
+   over the ch1–5 runway can be added without reworking them.
+2. **Ch4 card sharpness.** The 3D answer cards look blurry before they
+   hand off to the HTML cards. Raise the canvas texture resolution /
+   render the card textures at device DPR (they are 512px-wide canvases
+   today, stretched to the DOM rect at settle) so they are crisp
+   throughout the orbit and settle.
+3. **Ch3 burst quality.** The radial-burst clip reads low-quality/blurry
+   at full bloom. Re-encode at higher resolution (the master is 1280×720,
+   shipped at 960 crf 30), regenerate at a higher quality tier, or replace
+   it with a particles-in-scene burst.
+4. **Ch5 swipe legibility.** The swipe isn't natural or noticeable yet.
+   Rework it so it clearly reads as the app's swipe gesture — bigger, more
+   physical (drag arc + rotation like the deck), and with a clearer
+   cause → effect on the 3's colour shift (the taste ramp should visibly
+   ANSWER the swipe, not merely coincide with it).
+5. **Ch4 general refinement pass** — orbit choreography, card spacing,
+   the 3's parked pose, the headline/cards vertical rhythm on phones.
