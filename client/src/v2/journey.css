@@ -1,13 +1,31 @@
-/* WEB V2 SPIKE — journey layout. Scoped under .j-* so nothing leaks into
-   the live page's styles (and vice versa). */
+/* WEB V2 — journey layout, stepped-chapter edition. Scoped under .j-* so
+   nothing leaks into the live page's styles (and vice versa).
+
+   The stage is ONE viewport; beats change only transforms and opacity via
+   the stage's data attributes (data-copy / data-field / data-swipe), so
+   there is no layout shift and nothing scroll-linked left on the story.
+
+   OVERFLOW RULE: every story animation that leaves the frame (tile sweeps,
+   the ch5 card swipe) is clipped by .j-stage, and .j-root carries an
+   overflow-x clip as the page-wide safety net — the iPhone "zoom-out"
+   bug was the document growing wider than the viewport when the ch5 card
+   translated 130% off-screen with nothing clipping it. */
 
 .j-root {
   position: relative;
   background: #000;
+  overflow-x: clip; /* safety net — causes no scroll container (clip, not hidden) */
+  /* cancel the Shell's nav padding: the stage IS the viewport. The fixed
+     nav paints over the scene like it does over the hero on the live page. */
+  margin-top: calc(-56px - env(safe-area-inset-top, 0px));
 }
 
-/* The persistent canvas sits behind the HTML story for the whole runway.
-   position: fixed, not sticky: the runway and the end section scroll over it. */
+@media (min-width: 768px) {
+  .j-root { margin-top: -62px; }
+}
+
+/* The persistent canvas sits behind the HTML story for the whole page.
+   position: fixed, not sticky: the stage and the tail scroll over it. */
 .j-canvas {
   position: fixed;
   /* under the fixed nav is fine — the scene is scenery */
@@ -15,36 +33,14 @@
   z-index: 0;
 }
 
-.j-runway {
+/* ---- the stepped stage (ch1–5) ---- */
+
+.j-stage {
   position: relative;
   z-index: 1;
-  pointer-events: none; /* scenery text only; the canvas never takes input either */
-}
-
-.j-chapter {
-  height: 200svh;
-}
-
-.j-sticky {
-  position: sticky;
-  top: 0;
   height: 100svh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 0 24px;
-}
-
-.j-kicker {
-  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: #7c766f;
-  margin-bottom: 14px;
+  overflow: clip; /* the CAUSE fix: fly-outs can never widen the document */
+  pointer-events: none; /* scenery; interactive children opt back in */
 }
 
 .j-title {
@@ -63,6 +59,11 @@
   color: #fe0000;
 }
 
+/* ch4/ch5 headline: shares the stage with the field, so a size down */
+.j-title-s {
+  font-size: clamp(1.4rem, 5.6vw, 3rem);
+}
+
 .j-sub {
   margin-top: 18px;
   font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
@@ -77,45 +78,449 @@
   max-width: 420px;
 }
 
-.j-end {
+/* ch1–3: one centered headline at a time, crossfaded by data-copy */
+.j-copy-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.j-copy {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.j-stage[data-copy='1'] .j-copy-1,
+.j-stage[data-copy='2'] .j-copy-2,
+.j-stage[data-copy='3'] .j-copy-3 {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- ch4+ch5: the narrowing field and the three answers ---- */
+
+.j-answers {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  /* starts just under the fixed nav; the whole column must fit 100svh on
+     a 667px iPhone WITH the refresh row and the venue note visible */
+  padding: calc(env(safe-area-inset-top, 0px) + 54px) 20px calc(env(safe-area-inset-bottom, 0px) + 40px);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+@media (min-width: 768px) {
+  .j-answers { padding-top: calc(env(safe-area-inset-top, 0px) + 9svh); }
+}
+
+.j-stage[data-field='0'] .j-answers { visibility: hidden; }
+.j-stage:not([data-field='0']) .j-answers { opacity: 1; visibility: visible; }
+
+/* ch4 ↔ ch5 headline crossfade (the old pattern, one level up) */
+.j-copy-stack {
   position: relative;
-  z-index: 1;
-  min-height: 60svh;
+  min-height: 58px;
+  width: 100%;
+  display: grid;
+}
+
+@media (min-width: 768px) {
+  .j-copy-stack { min-height: 86px; }
+}
+
+.j-stage[data-copy='5'] .j-copy-4 { opacity: 0; transform: translateY(-10px); }
+.j-stage[data-copy='4'] .j-copy-4,
+.j-stage[data-copy='5'] .j-copy-5 {
+  opacity: 1;
+  transform: none;
+}
+.j-copy-5 { pointer-events: none; }
+
+/* the four filter labels — lit one by one, counter-free */
+.j-filters {
+  margin-top: 9px;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: nowrap; /* one row even at 375 — the chip sizes below fit */
+}
+
+.j-filterchip {
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #57524d;
+  border: 1px solid #1c1c1c;
+  border-radius: 999px;
+  padding: 5px 9px;
+  transition: color 0.35s ease, border-color 0.35s ease, background 0.35s ease;
+}
+
+@media (min-width: 768px) {
+  .j-filters { gap: 8px; }
+  .j-filterchip { font-size: 11px; letter-spacing: 0.14em; padding: 6px 12px; }
+}
+
+.j-filterchip[data-state='active'] {
+  color: #f2ede8;
+  border-color: rgba(254, 0, 0, 0.55);
+  background: rgba(254, 0, 0, 0.1);
+}
+
+.j-filterchip[data-state='done'] {
+  color: #8a847e;
+  border-color: #242424;
+}
+
+/* the arena: the field and the answer grid share one cell, so the rise
+   can be measured between live rects and the stage never reflows */
+.j-arena {
+  position: relative;
+  display: grid;
+  width: min(94vw, 1020px);
+  margin-top: 10px;
+  flex: 1 0 auto; /* the field/cards centre in whatever height is left */
+  align-content: center;
+}
+
+@media (min-width: 768px) {
+  .j-arena { margin-top: 3svh; }
+}
+
+.j-arena > * { grid-area: 1 / 1; }
+
+/* -- the dense options field (REAL wall rows; pure DOM, crisp at DPR) -- */
+
+.j-field {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  align-content: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 768px) {
+  .j-field {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+  }
+}
+
+.j-tile {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  background: #121212;
+  border: 1px solid #242424;
+  border-radius: 10px;
+  padding: 9px 10px;
+  text-align: left;
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.55s ease, transform 0.6s cubic-bezier(0.5, 0, 0.75, 0.4);
+  will-change: transform, opacity;
+}
+
+.j-tile-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.j-tile-name {
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #d9d4cf;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* the field drops in with the chapter */
+.j-stage[data-field='0'] .j-tile { opacity: 0; transform: translateY(14px); }
+
+/* each filter's exit — distinct, transform/opacity only (60fps) */
+.j-tile[data-gone='1'][data-exit='sweep'] { opacity: 0; transform: translateX(-130%) rotate(-5deg); }
+.j-tile[data-gone='1'][data-exit='sweep']:nth-child(odd) { transform: translateX(130%) rotate(5deg); }
+.j-tile[data-gone='1'][data-exit='fall'] { opacity: 0; transform: translateY(72px) scale(0.95); }
+.j-tile[data-gone='1'][data-exit='fade'] { opacity: 0; transform: scale(0.92); }
+.j-tile[data-gone='1'][data-exit='shrink'] { opacity: 0; transform: scale(0.55); }
+
+/* the handoff: survivors glide onto the cards (gsap moves them) while
+   fading; the resting hide is pure CSS so skip/back stay correct */
+.j-stage[data-field='6'] .j-tile {
+  opacity: 0;
+  transition: opacity 0.45s ease 0.25s, transform 0.6s ease;
+}
+
+/* -- the three answers (HTML, readable, crisp) -- */
+
+.jp-gridwrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  text-align: center;
-  gap: 16px;
-  padding: 48px 24px;
-  background: linear-gradient(to bottom, transparent, #000 30%);
+  gap: 10px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.4s ease;
 }
 
-.j-end code {
-  color: #f2ede8;
-  font-size: 0.9em;
-}
-
-.j-back {
+.j-stage[data-field='6'] .jp-gridwrap {
+  opacity: 1;
+  visibility: visible;
   pointer-events: auto;
-  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
-  font-weight: 600;
-  color: #f2ede8;
-  border-bottom: 1px solid #fe0000;
-  padding-bottom: 2px;
 }
 
-.j-fps {
-  position: fixed;
-  z-index: 50;
-  bottom: 12px;
-  left: 12px;
-  font: 600 12px/1.4 ui-monospace, monospace;
-  color: #2dce89;
-  background: rgba(0, 0, 0, 0.7);
+.jp-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(92vw, 400px);
+}
+
+@media (min-width: 768px) {
+  .jp-grid {
+    flex-direction: row;
+    align-items: stretch;
+    width: min(92vw, 1020px);
+    gap: 18px;
+  }
+}
+
+.jp-slot { position: relative; flex: 1; }
+
+.jp-body { min-width: 0; flex: 1; }
+
+/* compact by default (the whole ch4 stack must fit a 667px iPhone);
+   md+ restores the roomier cut */
+.jp-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: #111;
   border: 1px solid #242424;
-  border-radius: 8px;
-  padding: 6px 10px;
+  border-radius: 14px;
+  padding: 11px 13px;
+  text-align: left;
+  min-height: 88px;
+}
+
+.jp-rank {
+  font-family: 'Syne Variable', Syne, sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1;
+  color: #fe0000;
+}
+
+.jp-name {
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: #f2ede8;
+  line-height: 1.22;
+  /* one line on phones (the app's own ResultCard rule) — the ch4 stack
+     must fit a 667px viewport with the refresh row and note visible */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.jp-meta {
+  margin-top: 2px;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #8a847e;
+}
+
+.jp-rating {
+  margin-top: 3px;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #8a847e;
+}
+
+.jp-star { color: #ffb547; }
+
+.jp-reason {
+  margin-top: 6px;
+  display: inline-block;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-style: italic;
+  color: #ff5d5d;
+  background: rgba(254, 0, 0, 0.08);
+  border: 1px solid rgba(254, 0, 0, 0.28);
+  border-radius: 999px;
+  padding: 2px 9px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .jp-card { gap: 12px; border-radius: 16px; padding: 14px 16px; min-height: 112px; }
+  .jp-rank { font-size: 28px; }
+  .jp-name { font-size: 15px; white-space: normal; }
+  .jp-meta, .jp-rating { font-size: 12.5px; }
+  .jp-reason { font-size: 11.5px; padding: 3px 10px; margin-top: 8px; }
+}
+
+/* cards rise in as the survivors land on them */
+.j-answers .jp-card {
+  opacity: 0;
+  transform: translateY(10px) scale(0.985);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.j-stage[data-field='6'] .jp-card { opacity: 1; transform: none; }
+.j-stage[data-field='6'] .jp-slot:nth-child(2) .jp-card { transition-delay: 0.08s; }
+.j-stage[data-field='6'] .jp-slot:nth-child(3) .jp-card { transition-delay: 0.16s; }
+
+/* Refresh: the three leave together, the new three rise in */
+.j-stage[data-field='6'] .jp-grid[data-leaving='1'] .jp-card {
+  opacity: 0;
+  transform: translateY(14px) scale(0.98);
+  transition-delay: 0s;
+}
+
+.j-refresh-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  min-height: 42px; /* reserved — the cycled note can never shift the grid */
+}
+
+.j-cycled {
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #7c766f;
+}
+
+.j-refreshbtn {
+  pointer-events: auto;
+  min-height: 40px;
+  padding: 0 20px;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f2ede8;
+  background: #141414;
+  border: 1px solid #2e2e2e;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.25s ease, opacity 0.25s ease;
+}
+
+.j-refreshbtn:hover { border-color: rgba(254, 0, 0, 0.55); }
+.j-refreshbtn:disabled { opacity: 0.55; cursor: default; }
+
+/* the refresh row is only an offer while the answers are the subject */
+.j-stage[data-copy='5'] .j-refresh-row { opacity: 0; pointer-events: none; transition: opacity 0.35s ease; }
+.j-stage[data-copy='4'] .j-refresh-row { opacity: 1; transition: opacity 0.35s ease 0.3s; }
+
+/* ch5: the middle card swipes away (the app's left-swipe, acted out) and
+   a replacement REAL restaurant arrives beneath it */
+.jp-in {
+  position: absolute;
+  inset: 0;
+  opacity: 0 !important;
+  transform: translateY(14px) !important;
+}
+.j-stage[data-swipe='1'] .jp-out {
+  opacity: 0 !important;
+  transform: translateX(130%) rotate(9deg) !important;
+  transition: opacity 0.6s ease, transform 0.65s cubic-bezier(0.5, 0, 0.75, 0.4) !important;
+}
+.j-stage[data-swipe='1'] .jp-in {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: opacity 0.45s ease 0.42s, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.42s !important;
+}
+
+.j-note-answers { margin-top: 8px; max-width: 460px; }
+.j-note-answers .venue-note { font-size: 9.5px; }
+
+@media (min-width: 768px) {
+  .j-note-answers { margin-top: 2svh; }
+  .j-note-answers .venue-note { font-size: 10.5px; }
+}
+
+/* ---- stage chrome: the step hint and the skip link ---- */
+
+.j-stephint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 46px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #57524d;
+  animation: j-hintpulse 2.6s ease-in-out infinite;
+  transition: opacity 0.4s ease;
+}
+
+@keyframes j-hintpulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.j-stephint[data-hidden='1'] { opacity: 0; animation: none; }
+
+.j-skip {
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  transform: translateX(-50%);
+  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7c766f;
+  border-bottom: 1px solid #2e2e2e;
+  padding-bottom: 2px;
+  white-space: nowrap;
+  transition: opacity 0.4s ease, color 0.25s ease;
+}
+
+.j-skip:hover { color: #f2ede8; }
+
+.j-skip[data-hidden='1'] {
+  opacity: 0;
   pointer-events: none;
 }
 
@@ -166,155 +571,13 @@
   padding: 8px 12px;
 }
 
-/* ---- ch4+ch5: the answers frame ---- */
-
-.j-answers-frame {
-  justify-content: flex-start;
-  padding-top: calc(10svh);
-  gap: 0;
-}
-
-/* two headline blocks stacked; data-copy crossfades them */
-.j-copy-stack {
-  position: relative;
-  min-height: 190px;
-  width: 100%;
-  display: grid;
-}
-
-.j-copy {
-  grid-area: 1 / 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transition: opacity 0.45s ease, transform 0.45s ease;
-}
-
-.j-copy-5 { opacity: 0; transform: translateY(10px); pointer-events: none; }
-.j-answers[data-copy='5'] .j-copy-4 { opacity: 0; transform: translateY(-10px); }
-.j-answers[data-copy='5'] .j-copy-5 { opacity: 1; transform: none; }
-
-/* the card grid — the HTML side of the handoff */
-.jp-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: min(92vw, 400px);
-  margin-top: 3svh;
-}
-
-@media (min-width: 768px) {
-  .jp-grid {
-    flex-direction: row;
-    align-items: stretch;
-    width: min(92vw, 1020px);
-    gap: 18px;
-  }
-}
-
-.jp-slot { position: relative; flex: 1; }
-
-.jp-card {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  background: #111;
-  border: 1px solid #242424;
-  border-radius: 16px;
-  padding: 14px 16px;
-  text-align: left;
-  min-height: 118px;
-}
-
-.jp-rank {
-  font-family: 'Syne Variable', Syne, sans-serif;
-  font-weight: 800;
-  font-size: 28px;
-  line-height: 1;
-  color: #fe0000;
-}
-
-.jp-name {
-  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
-  font-weight: 700;
-  font-size: 15px;
-  color: #f2ede8;
-  line-height: 1.25;
-}
-
-.jp-meta {
-  margin-top: 3px;
-  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: #8a847e;
-}
-
-.jp-rating {
-  margin-top: 4px;
-  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #8a847e;
-}
-
-.jp-star { color: #ffb547; }
-
-.jp-reason {
-  margin-top: 8px;
-  display: inline-block;
-  font-family: 'DM Sans Variable', 'DM Sans', sans-serif;
-  font-size: 11.5px;
-  font-weight: 600;
-  font-style: italic;
-  color: #ff5d5d;
-  background: rgba(254, 0, 0, 0.08);
-  border: 1px solid rgba(254, 0, 0, 0.28);
-  border-radius: 999px;
-  padding: 3px 10px;
-}
-
-/* hidden until the 3D cards settle onto them; data-handoff flips it.
-   The grid keeps layout (visibility, not display) so the scene can
-   measure the rects before the reveal. */
-.j-answers .jp-card {
-  opacity: 0;
-  transform: translateY(5px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-.j-answers[data-handoff='1'] .jp-card { opacity: 1; transform: none; }
-.j-answers[data-handoff='1'] .jp-slot:nth-child(2) .jp-card { transition-delay: 0.06s; }
-.j-answers[data-handoff='1'] .jp-slot:nth-child(3) .jp-card { transition-delay: 0.12s; }
-
-/* ch5: the middle card swipes away (the app's left-swipe, acted out once)
-   and a replacement REAL restaurant arrives beneath it */
-.jp-in {
-  position: absolute;
-  inset: 0;
-  opacity: 0 !important;
-  transform: translateY(14px) !important;
-}
-.j-answers[data-swipe='1'] .jp-out {
-  opacity: 0 !important;
-  transform: translateX(130%) rotate(9deg) !important;
-  transition: opacity 0.6s ease, transform 0.65s cubic-bezier(0.5, 0, 0.75, 0.4) !important;
-}
-.j-answers[data-swipe='1'] .jp-in {
-  opacity: 1 !important;
-  transform: none !important;
-  transition: opacity 0.45s ease 0.42s, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.42s !important;
-}
-
-.j-note-answers { margin-top: 2.5svh; max-width: 460px; }
-.j-note-answers .venue-note { font-size: 10.5px; }
-
-/* static fallback grid */
+/* static grid: always-visible cards, normal flow */
 .jp-grid.is-static { margin-top: 20px; }
 .jp-grid.is-static .jp-card { opacity: 1; transform: none; }
 
-/* ---- ch6/ch7 + the content tail ---- */
+/* ---- the content tail (demo → FAQ → join → footer) ---- */
 
-/* everything after the runway must paint ABOVE the fixed canvas (position
+/* everything after the stage must paint ABOVE the fixed canvas (position
    static would paint under it) while keeping the canvas visible through
    transparent backgrounds */
 .j-tail {
@@ -328,7 +591,7 @@
   padding: 10svh 0 6svh;
 }
 
-/* ch7: the wordmark the 3 glides into */
+/* the join block: the wordmark the 3 glides into */
 .j-join {
   min-height: 92svh;
   display: flex;
@@ -422,4 +685,20 @@
 
 @media (min-width: 768px) {
   .j-joinpill { top: calc(env(safe-area-inset-top, 0px) + 9px); right: 22px; }
+}
+
+/* ---- misc ---- */
+
+.j-fps {
+  position: fixed;
+  z-index: 50;
+  bottom: 12px;
+  left: 12px;
+  font: 600 12px/1.4 ui-monospace, monospace;
+  color: #2dce89;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid #242424;
+  border-radius: 8px;
+  padding: 6px 10px;
+  pointer-events: none;
 }

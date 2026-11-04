@@ -8,6 +8,9 @@
  * exactly like the problem wall's live cards.
  *
  * 14 unique textures (one per wall row), shared across all tunnel meshes.
+ * (The old makePickTexture for ch4's 3D answer planes is GONE: the rebuilt
+ * ch4 is pure DOM — crisp at device DPR — so nothing readable is ever
+ * rasterised into a canvas texture any more.)
  */
 import * as THREE from 'three'
 import type { LivePick } from '../lib/live'
@@ -65,57 +68,6 @@ export function makeCardTexture(pick: LivePick): THREE.CanvasTexture {
     ctx.fillStyle = '#FFB547'
     ctx.font = '600 24px "DM Sans Variable", "DM Sans", sans-serif'
     ctx.fillText(`★ ${pick.rating.toFixed(1)} · Google`, 28, y + 40)
-  }
-
-  const tex = new THREE.CanvasTexture(canvas)
-  tex.anisotropy = 2
-  tex.colorSpace = THREE.SRGBColorSpace
-  return tex
-}
-
-const PW = 512
-const PH = 232
-
-/** Wider, rank-carrying texture for the three ANSWER cards (ch4's orbit).
- *  Same no-invented-data rules as the tunnel cards; the matching HTML card
- *  takes over at the handoff, so this face only needs to read mid-flight. */
-export function makePickTexture(pick: LivePick, rank: number): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas')
-  canvas.width = PW
-  canvas.height = PH
-  const ctx = canvas.getContext('2d')!
-
-  ctx.fillStyle = '#111111'
-  ctx.fillRect(0, 0, PW, PH)
-  const tone = cuisineTone(pick.cuisine)
-  const grad = ctx.createLinearGradient(0, 0, PW, 0)
-  grad.addColorStop(0, tone + 'B3')
-  grad.addColorStop(0.55, '#121212')
-  ctx.fillStyle = grad
-  ctx.fillRect(0, 0, PW, PH)
-  ctx.strokeStyle = '#2E2E2E'
-  ctx.lineWidth = 4
-  ctx.strokeRect(2, 2, PW - 4, PH - 4)
-
-  // rank numeral, brand red
-  ctx.fillStyle = '#FE0000'
-  ctx.font = '800 64px "Syne Variable", Syne, sans-serif'
-  ctx.textBaseline = 'top'
-  ctx.fillText(String(rank), 26, 20)
-
-  ctx.fillStyle = '#F2EDE8'
-  ctx.font = '700 30px "DM Sans Variable", "DM Sans", sans-serif'
-  const name = pick.name.length > 26 ? pick.name.slice(0, 25).trimEnd() + '…' : pick.name
-  ctx.fillText(name, 92, 34)
-
-  ctx.fillStyle = '#8A847E'
-  ctx.font = '500 22px "DM Sans Variable", "DM Sans", sans-serif'
-  ctx.fillText(`${pick.cuisine} · ${pick.area}`, 92, 76)
-
-  if (pick.rating != null) {
-    ctx.fillStyle = '#FFB547'
-    ctx.font = '600 22px "DM Sans Variable", "DM Sans", sans-serif'
-    ctx.fillText(`★ ${pick.rating.toFixed(1)} · Google`, 92, 110)
   }
 
   const tex = new THREE.CanvasTexture(canvas)

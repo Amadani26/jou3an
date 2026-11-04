@@ -114,6 +114,25 @@ export function getDemo(area: string): Promise<DemoPayload | null> {
   return demoP.get(area)!
 }
 
+export interface RefreshPayload {
+  picks: LivePick[]
+  /** True when the exclusions had to be dropped — the visitor has seen
+   *  everything this surface can offer and the engine is back at the top. */
+  cycled: boolean
+}
+
+/**
+ * The v2 journey's "Refresh": three NEW real picks with the already-shown
+ * rows excluded — the app's own Refresh mechanism, read-only. Deliberately
+ * NOT memoised (every call is a new exclusion set); null on any failure and
+ * every caller must survive it (the wall rows are the offline fallback).
+ */
+export async function getRefresh(excludeIds: string[]): Promise<RefreshPayload | null> {
+  const exclude = encodeURIComponent(excludeIds.slice(-30).join(','))
+  const d = await get<RefreshPayload>(`/api/public/refresh?exclude=${exclude}`)
+  return d && Array.isArray(d.picks) && d.picks.length === 3 ? d : null
+}
+
 /** The ~400px live photo for a demo card. Browser-only; nothing is stored. */
 export const demoPhotoUrl = (placeId: string) =>
   `${API}/api/public/demo-photo/${encodeURIComponent(placeId)}`

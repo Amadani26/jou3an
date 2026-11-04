@@ -274,3 +274,51 @@ full draft, and several (1, 5) want the whole page in place first.
    ANSWER the swipe, not merely coincide with it).
 5. **Ch4 general refinement pass** — orbit choreography, card spacing,
    the 3's parked pose, the headline/cards vertical rhythm on phones.
+
+## 2026-11-04 — stepped chapters + ch4 rebuild (owner's iPhone review)
+
+Backlog items 1 and 2 above are RESOLVED, by replacement rather than
+tuning:
+
+- **Stepped chapters replaced scroll entirely on ch1–5.** Lenis,
+  ScrollTrigger and the snap pass are GONE from the journey. The stage is
+  ONE 100svh section; while the story plays the page does not scroll at
+  all — one swipe / wheel flick / keypress advances exactly one beat
+  (`timeline.ts` BEATS), each a time-based gsap tween on the scene's
+  progress number (~1–2s, the same for everyone). Input during a
+  transition queues at most one step; back-gestures step back one beat.
+  After the last beat the page unlocks and the tail (demo → FAQ → join →
+  footer) scrolls natively; an upward gesture at the very top re-enters
+  the story one beat back. "Skip to the live demo" + the header Join pill
+  work at any beat. Reduced motion / no WebGL: the static fallback under
+  normal scrolling, unchanged.
+- **Ch4 is rebuilt as pure DOM** ("From all the options, exactly 3"): a
+  dense field of REAL wall restaurants is narrowed by four labelled beats
+  — Area → Budget → Open now → Your taste (choreography of the engine's
+  real stages; no per-venue claims, same rule as the live page's problem
+  wall) — until the 3 survivors rise (FLIP-lite onto live rects) into the
+  readable HTML answer cards. The 3D pick planes and `makePickTexture`
+  are DELETED — nothing readable is rasterised into the canvas any more,
+  which is what fixes the blurriness at device DPR.
+- **Refresh under the 3**: `GET /api/public/refresh?exclude=…` (new,
+  read-only, no DB writes, engine `excludeIds` + `cycled` — the app's own
+  Refresh mechanism). Client accumulates shown ids, animates the swap,
+  falls back to cycling un-shown wall rows offline, and resets with a
+  quiet "Back to our top picks" when the pool runs dry. ⚠️ The endpoint
+  must be deployed to Railway (it lives in `server/src/routes/public.ts`)
+  — until then production falls back to wall-row cycling.
+- **iPhone zoom-out bug fixed at the cause**: ch5's card swipe
+  (`translateX(130%)`) had nothing clipping it, so the document grew
+  wider than the viewport and Safari zoomed out to fit. The stage now
+  clips (`overflow: clip`) and `.j-root` carries `overflow-x: clip` as
+  the page-wide safety net. Verified in WebKit at 375/393/430:
+  `document.scrollWidth === innerWidth` at every beat, mid-transition,
+  and through the whole tail.
+- "Chapter N" kickers removed everywhere.
+- QA (2026-11-04, production-shape build): Lighthouse mobile /v2 **84
+  perf, CLS 0**, FCP 0.8s; zero console errors; full beat walk + refresh
+  + skip + re-entry verified in WebKit at all three phone widths.
+
+Backlog items 3 (burst clip quality), 4 (ch5 swipe legibility) and 5
+(general ch4/ch5 polish) remain, and ch5 is explicitly awaiting its own
+rework pass.

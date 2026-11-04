@@ -10,11 +10,11 @@
  *   ch2  camera flies a tunnel of real restaurant cards (scrubbed)
  *   ch3  tunnel collapses into the 3 (scrubbed) + light burst (ONE-SHOT,
  *        time-based — fired crossing BURST_AT, re-armed by scrolling back)
- *   ch4  the 3 splits: three REAL answer cards orbit, settle onto the
- *        measured rects of their HTML twins, and hand off — readable
- *        content never lives in the canvas
+ *   ch4  the 3 steps up and back while the DOM options field takes the
+ *        stage — the field, the filters and the answer cards are ALL HTML
+ *        now (crisp at device DPR; nothing readable lives in the canvas)
  *   ch5  one card swipes away (HTML/CSS, one-shot); the lacquer itself
- *        shifts hue/glow as "taste" builds (scrubbed — see looks.ts)
+ *        shifts hue/glow as "taste" builds (see looks.ts)
  *
  * Material: the chosen red lacquer (looks.ts). Studio lighting generated
  * in code (drei Lightformers, no HDR to licence). Post: high-threshold
@@ -27,13 +27,13 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment, Lightformer } from '@react-three/drei'
 import { EffectComposer, Bloom, Noise, Vignette, SMAA } from '@react-three/postprocessing'
 import { buildGlyphGeometry } from './glyph3'
-import { makeCardTexture, makePickTexture } from './cardTexture'
+import { makeCardTexture } from './cardTexture'
 import { lacquerProps, updateLacquer, RED_LIGHT_PEAK } from './looks'
 import {
   P1, P2, P3,
   IGNITE_START, IGNITE_DUR,
   COLLAPSE_DUR, BURST_AT, BURST_REARM_BELOW, BURST_SECONDS,
-  SPLIT_END, SETTLE_END, HANDOFF_END, TASTE_START, TASTE_END,
+  RECEDE_END, TASTE_START, TASTE_END,
 } from './timeline'
 import type { LivePick } from '../lib/live'
 
@@ -42,7 +42,6 @@ const TUNNEL_START = -6
 const TUNNEL_STEP = 1.35
 const THREE_END_Z = TUNNEL_START - CARD_COUNT * TUNNEL_STEP - 4 // past the last card
 const CAM_END_Z = THREE_END_Z + 7.5
-const PICK_PLANE_Z = CAM_END_Z - 6.5 // where the answer cards live & settle
 
 /** The 3's base yaw. The committed poster (public/v2/three-poster.webp) is
  *  rendered at exactly this pose with ?freeze3=1, and the live scene STARTS
@@ -58,17 +57,11 @@ const FREEZE =
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (1 - t) * (1 - t) * 2)
 const easeIn = (t: number) => t * t
-const easeOut = (t: number) => 1 - (1 - t) * (1 - t)
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
 /** Viewport-px → world units on the z-plane the answer cards settle on. */
 function worldPerPxAt(dist: number, fovDeg: number, innerH: number): number {
   return (2 * dist * Math.tan((fovDeg * Math.PI) / 360)) / innerH
-}
-
-export interface CardRectTargets {
-  /** The HTML answer cards to settle onto; filled by JourneyV2. */
-  els: (HTMLElement | null)[]
 }
 
 /** Post-runway DOM hooks (ch6 park + ch7 wordmark glide). Filled by
@@ -216,19 +209,15 @@ function Studio({ isPhone }: { isPhone: boolean }) {
 }
 
 function Journey({
-  picks,
   wall,
   progress,
-  rects,
   post,
   isPhone,
   fx,
   onReady,
 }: {
-  picks: LivePick[]
   wall: LivePick[]
   progress: { current: number }
-  rects: CardRectTargets
   post: PostJourneyEls
   isPhone: boolean
   fx: Fx
@@ -255,7 +244,6 @@ function Journey({
   const glyphGeo = useMemo(() => buildGlyphGeometry(), [])
   const glowTex = useMemo(() => makeGlowTexture(), [])
   const wallTextures = useMemo(() => wall.map((p) => makeCardTexture(p)), [wall])
-  const pickTextures = useMemo(() => picks.map((p, i) => makePickTexture(p, i + 1)), [picks])
 
   // Helix of tunnel slots — precomputed once.
   const slots = useMemo(() => {
@@ -279,7 +267,6 @@ function Journey({
   const glowRef = useRef<THREE.Sprite>(null)
   const lightRef = useRef<THREE.PointLight>(null)
   const cardRefs = useRef<(THREE.Mesh | null)[]>([])
-  const pickRefs = useRef<(THREE.Mesh | null)[]>([])
 
   // One-shot burst state + measured DOM targets (world units).
   const burstState = useRef({ armed: true, t0: -1 })
@@ -292,8 +279,6 @@ function Journey({
     hidden: false,
     wm: null as { cx: number; cy: number; h: number } | null,
   })
-  const domTargets = useRef<{ x: number; y: number; w: number; h: number }[] | null>(null)
-  const measureTick = useRef(0)
 
   useFrame((state) => {
     if (document.hidden) return
@@ -309,9 +294,7 @@ function Journey({
     const flight = clamp01((p - P1) / (P2 - P1))
     const ignite = easeInOut(clamp01((p - IGNITE_START) / IGNITE_DUR))
     const collapse = clamp01((p - P2) / COLLAPSE_DUR)
-    const splitT = easeInOut(clamp01((p - P3) / (SPLIT_END - P3)))
-    const settleT = easeInOut(clamp01((p - SPLIT_END) / (SETTLE_END - SPLIT_END)))
-    const handoffT = clamp01((p - SETTLE_END) / (HANDOFF_END - SETTLE_END))
+    const recedeT = easeInOut(clamp01((p - P3) / (RECEDE_END - P3)))
     const tasteT = easeInOut(clamp01((p - TASTE_START) / (TASTE_END - TASTE_START)))
     fx.ignite = ignite
 
@@ -329,9 +312,9 @@ function Journey({
     }
     fx.burstEnv = burst
 
-    // --- camera: breathing dies as the cards settle (they must sit
-    //     pixel-still under their HTML twins) ---
-    const breathe = 1 - settleT
+    // --- camera: a constant subtle breathe (the readable DOM layer sits
+    //     above; nothing in the scene needs to be pixel-still any more) ---
+    const breathe = 1
     const camZ = lerp(6, CAM_END_Z, easeInOut(flight))
     camera.position.set(Math.sin(t * 0.3) * 0.08 * breathe, Math.cos(t * 0.23) * 0.06 * breathe, camZ)
     camera.lookAt(0, 0, camZ - 10)
@@ -377,15 +360,17 @@ function Journey({
     const mat = matRef.current
     if (three && mat) {
       const zz = lerp(0, THREE_END_Z, easeInOut(flight))
-      // ch4: steps up and back while the answers take the stage;
+      // ch4: steps up and back while the DOM field takes the stage;
       // ch5: leans back in as the taste shift becomes the subject.
+      // phone: the 3 retires to the empty band BELOW the field (top is
+      // headline + filter chips); desktop: up and to the side as before.
       const upX = isPhone ? 0.0 : 1.7
-      const upY = isPhone ? 1.95 : 1.15
-      three.position.set(upX * splitT, upY * splitT, zz)
+      const upY = isPhone ? -2.1 : 1.15
+      three.position.set(upX * recedeT, upY * recedeT, zz)
       three.rotation.y = POSTER_ROT_Y + t * 0.15 + p * 3.2
       three.rotation.x = Math.sin(t * 0.2) * 0.06
-      updateLacquer(mat, { ignite, flight, burst, split: splitT, taste: tasteT })
-      let scale = (1 + burst * 0.18) * lerp(1, isPhone ? 0.42 : 0.5, splitT) * lerp(1, 1.22, tasteT)
+      updateLacquer(mat, { ignite, flight, burst, split: recedeT, taste: tasteT })
+      let scale = (1 + burst * 0.18) * lerp(1, isPhone ? 0.3 : 0.5, recedeT) * lerp(1, 1.22, tasteT)
 
       // ch6: park top-right as a corner element while the demo runs
       if (parkE > 0) {
@@ -426,7 +411,7 @@ function Journey({
 
       if (glowRef.current) {
         glowRef.current.position.copy(three.position)
-        const g = (1.5 * lerp(0.1, 1, ignite) * lerp(1, 0.5, flight) + burst * 4.5) * lerp(1, 0.55, splitT) * lerp(1, 1.5, tasteT) * lerp(1, 0.4, parkE) * (1 - glideE)
+        const g = (1.5 * lerp(0.1, 1, ignite) * lerp(1, 0.5, flight) + burst * 4.5) * lerp(1, 0.55, recedeT) * lerp(1, 1.5, tasteT) * lerp(1, 0.4, parkE) * (1 - glideE)
         glowRef.current.scale.set(g, g, 1)
         const smat = glowRef.current.material as THREE.SpriteMaterial
         smat.opacity = (0.26 * lerp(0.05, 1, ignite) * lerp(1, 0.55, flight) + burst * 0.4 + tasteT * 0.1) * (1 - parkE * 0.55) * (1 - glideE)
@@ -449,61 +434,7 @@ function Journey({
       m.scale.set(1.6 * sc, 0.9 * sc, 1)
       const cm = m.material as THREE.MeshBasicMaterial
       cm.opacity = p < P1 ? clamp01((p - P1 + 0.03) / 0.03) : 1 - ct * 0.9
-      m.visible = ct < 0.995 && p > P1 - 0.05 && p < SPLIT_END
-    }
-
-    // --- ch4: the three answers — split out, orbit, settle onto the DOM ---
-    const showPicks = p > P3 - 0.01 && handoffT < 0.999
-    // Re-measure the HTML twins while approaching/at the settle (the frame
-    // is sticky-pinned there, so viewport rects are stable). Every ~12
-    // frames is plenty and keeps layout reads off the hot path.
-    if (showPicks && settleT > 0 && handoffT < 1 && measureTick.current++ % 12 === 0) {
-      const els = rects.els
-      if (els[0] && els[1] && els[2]) {
-        const wpp = worldPerPxAt(Math.abs(camZ - PICK_PLANE_Z), 50, window.innerHeight)
-        domTargets.current = els.map((el) => {
-          const r = el!.getBoundingClientRect()
-          return {
-            x: (r.left + r.width / 2 - window.innerWidth / 2) * wpp,
-            y: -(r.top + r.height / 2 - window.innerHeight / 2) * wpp,
-            w: r.width * wpp,
-            h: r.height * wpp,
-          }
-        })
-      }
-    }
-
-    const orbitR = isPhone ? 1.15 : 2.5
-    const baseW = isPhone ? 1.5 : 2.3
-    for (let i = 0; i < pickRefs.current.length; i++) {
-      const m = pickRefs.current[i]
-      if (!m) continue
-      if (!showPicks) {
-        m.visible = false
-        continue
-      }
-      m.visible = true
-      const angle = i * 2.0944 + 1.25 + (p - P3) * 9 * (1 - settleT)
-      const ox = Math.cos(angle) * orbitR * easeOut(splitT)
-      const oy = Math.sin(angle) * orbitR * 0.5 * easeOut(splitT) - 0.35
-      const oz = PICK_PLANE_Z + Math.sin(angle) * 0.9 * (1 - settleT)
-      const dom = domTargets.current?.[i]
-      const tx = dom ? dom.x : (i - 1) * (isPhone ? 0 : 2.4)
-      const ty = dom ? dom.y : isPhone ? (1 - i) * 1.05 - 0.2 : -0.45
-      const px = lerp(ox, tx, settleT)
-      const py = lerp(oy, ty, settleT)
-      const pz = lerp(oz, PICK_PLANE_Z, settleT)
-      // during the split the cards emerge FROM the 3 (origin = its chest)
-      const emerge = easeOut(splitT)
-      m.position.set(lerp(0, px, emerge), lerp(0, py, emerge), lerp(THREE_END_Z + 0.4, pz, emerge))
-      const w = dom ? lerp(baseW, dom.w, settleT) : baseW
-      const h = dom ? lerp(baseW * 0.4531, dom.h, settleT) : baseW * 0.4531
-      const es = lerp(0.12, 1, emerge)
-      m.scale.set(w * es, h * es, 1)
-      m.rotation.y = (1 - settleT) * Math.sin(angle) * 0.32
-      m.rotation.z = (1 - settleT) * Math.cos(angle) * 0.06
-      const pm = m.material as THREE.MeshBasicMaterial
-      pm.opacity = easeOut(splitT) * (1 - handoffT)
+      m.visible = ct < 0.995 && p > P1 - 0.05 && p < P3 + 0.03
     }
   })
 
@@ -529,31 +460,20 @@ function Journey({
         </mesh>
       ))}
 
-      {picks.map((_, i) => (
-        <mesh key={'pick' + i} ref={(el) => { pickRefs.current[i] = el }} visible={false}>
-          <planeGeometry args={[1, 1]} />
-          <meshBasicMaterial map={pickTextures[i]} transparent opacity={0} toneMapped={false} depthWrite={false} />
-        </mesh>
-      ))}
-
       <AtmosphereVideos fx={fx} />
     </>
   )
 }
 
 export default function JourneyCanvas({
-  picks,
   wall,
   progress,
-  rects,
   post,
   isPhone,
   onReady,
 }: {
-  picks: LivePick[]
   wall: LivePick[]
   progress: { current: number }
-  rects: CardRectTargets
   post: PostJourneyEls
   isPhone: boolean
   onReady: () => void
@@ -566,7 +486,7 @@ export default function JourneyCanvas({
       gl={{ antialias: false, powerPreference: 'high-performance', alpha: false }}
       style={{ position: 'absolute', inset: 0 }}
     >
-      <Journey picks={picks} wall={wall} progress={progress} rects={rects} post={post} isPhone={isPhone} fx={fx} onReady={onReady} />
+      <Journey wall={wall} progress={progress} post={post} isPhone={isPhone} fx={fx} onReady={onReady} />
       <Studio isPhone={isPhone} />
       {/* Bloom's high threshold keeps it selective in this black scene; the
           phone drops grain and (via props below) runs a lighter bloom. */}
