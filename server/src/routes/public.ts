@@ -74,7 +74,10 @@ const store = (key: string, data: unknown) => cache.set(key, { at: Date.now(), d
 
 /* ---- the anonymous engine run ---- */
 
-async function anonymousDecision(coords?: { lat: number; lng: number }) {
+async function anonymousDecision(
+  coords?: { lat: number; lng: number },
+  excludeIds?: string[],
+) {
   // Marketing-surface rule: no bars, lounges, pubs or clubs as picks —
   // "Jou3an decides restaurants". The APP's own pools are untouched.
   const candidates = (await prisma.restaurant.findMany()).filter((r) => !isBarLike(r))
@@ -88,6 +91,10 @@ async function anonymousDecision(coords?: { lat: number; lng: number }) {
         // Hour-of-day nonce: the picks rotate through the day without a
         // per-request reshuffle (and stay stable under the response cache).
         refreshNonce: new Date().getUTCHours(),
+        // The landing page's ch4 Refresh — same mechanism as the app's:
+        // already-shown rows come off the pool before selection, and the
+        // engine reports `cycled` when honouring them would break "exactly 3".
+        excludeIds: excludeIds ?? [],
       },
       null,
       new Date(),
@@ -178,6 +185,39 @@ router.get('/showcase', async (_req, res) => {
     // longer, and a dead API would keep "answering" from disk cache.
     res.setHeader('Cache-Control', 'public, max-age=120')
     res.json(payload)
+  } catch {
+    res.status(500).json({ error: 'Unavailable' })
+  }
+})
+
+/** A client-sent restaurant id: cuid-shaped, nothing else reaches Prisma. */
+const ID_RE = /^[a-z0-9]{10,40}$/i
+/** Matches the app's own cap-in-spirit (300 there, but a marketing visitor
+ *  refreshing needs far less headroom) — keeps the query string honest. */
+const EXCLUDE_CAP = 30
+
+/**
+ * GET /api/public/refresh?exclude=id1,id2 — the landing page's "Refresh"
+ * under the three answers: a fresh anonymous engine run with the rows the
+ * visitor has already seen removed from the pool first, exactly like the
+ * app's own Refresh. READ-ONLY like everything here — no DecisionSession,
+ * no DecisionLog, no taste events. Not cached (the exclusion set is the
+ * whole point); the router-wide per-IP limiter is the guard.
+ */
+router.get('/refresh', async (req, res) => {
+  try {
+    const exclude = String(req.query.exclude ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => ID_RE.test(s))
+      .slice(0, EXCLUDE_CAP)
+    const decision = await anonymousDecision(undefined, exclude)
+    res.setHeader('Cache-Control', 'no-store')
+    res.json({
+      picks: decision.picks.map(publicPick),
+      cycled: decision.cycled,
+      generatedAt: new Date().toISOString(),
+    })
   } catch {
     res.status(500).json({ error: 'Unavailable' })
   }
